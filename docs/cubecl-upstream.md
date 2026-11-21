@@ -15,7 +15,7 @@ observations, not decisions: anything that changes tetraloma's design still need
 - **Status:** `open` (not reported), `reported` (with the issue or PR link), `fixed in <version>`,
   or `dropped` (with the reason).
 
-Never put user ids, host names or project codes in an entry (CLAUDE.md).
+Never put user ids, host names or project codes in an entry (AGENTS.md, rule 11).
 
 ## Entries
 

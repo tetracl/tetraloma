@@ -37,7 +37,7 @@ For developers of tetraloma:
 - [docs/design.md](docs/design.md): the design, the source of truth for the implementation.
 - [docs/adr/](docs/adr/): architecture decision records.
 - [docs/dev-environment.md](docs/dev-environment.md): toolchain, test targets and how to run the tests.
-- [IMPLEMENTATION.md](IMPLEMENTATION.md): how the milestones are planned, implemented and reviewed.
+- [WORKFLOW.md](WORKFLOW.md) and [AGENTS.md](AGENTS.md): how milestones are planned, implemented and reviewed by agents (ADR-0069).
 - [docs/README.md](docs/README.md): which folder of `docs/` holds what.
 
 Build and test on the CubeCL CPU runtime with the pinned toolchain (`rust-toolchain.toml`):

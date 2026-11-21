@@ -122,7 +122,7 @@ fn restrict(
         }
     }
     let pos = exclusive_scan(&keep)?;
-    // The count read of the compaction (CLAUDE.md, ADR-0039 item 18).
+    // The count read of the compaction (design "Conventions", ADR-0039 item 18).
     let total = if len > 0 {
         reduce(&keep, ReduceOp::Sum)?.to_host()?[0] as usize
     } else {
@@ -174,7 +174,7 @@ fn restrict(
                     launch.items_per_unit,
                 );
             }
-            // The per-group count read of the compaction (CLAUDE.md, ADR-0039 item 18).
+            // The per-group count read of the compaction (design "Conventions", ADR-0039 item 18).
             reduce(&flags, ReduceOp::Sum)?.to_host()?[0] as usize
         } else {
             0

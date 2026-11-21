@@ -456,7 +456,7 @@ fn children(
         }
     }
     // The agreed TooLarge flag, with the parent blocks present for the agreed element check
-    // (CLAUDE.md, ADR-0039 items 8 and 18); the caller agrees both.
+    // (design "Conventions", ADR-0039 items 8 and 18); the caller agrees both.
     let (overflowed, present) = if n > 0 {
         let s = status.to_host()?;
         (s[0] != 0, s[1..].iter().map(|&w| w != 0).collect())

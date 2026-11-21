@@ -17,7 +17,7 @@ use tetraloma_testing::test_client;
 const LENGTHS: [usize; 6] = [0, 1, 15, 16, 17, 1_000_003];
 
 /// A precision the test runs in. Host arithmetic goes through f64, never through `Self`'s
-/// own methods (CLAUDE.md, "Host maths").
+/// own methods (design "Conventions", host maths).
 trait TestFloat: Float + CubeElement + Copy + std::fmt::Debug {
     const NAME: &'static str;
     /// Relative tolerance on GPUs.

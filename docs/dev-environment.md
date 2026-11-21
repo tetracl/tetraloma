@@ -1,6 +1,6 @@
 # Development environment
 
-This file records the development and test targets of tetraloma: how to reach them, how jobs run there, and the versions found on them. Milestone E0 fills in every field marked *(E0)* and keeps the file current afterwards. The rules for when each target is used are in `docs/design.md`, section "Development environment and test targets", and in `CLAUDE.md`.
+This file records the development and test targets of tetraloma: how to reach them, how jobs run there, and the versions found on them. Milestone E0 fills in every field marked *(E0)* and keeps the file current afterwards. The rules for when each target is used are in `docs/design.md`, section 17, "Development environment and test targets", and in `AGENTS.md`, rule 11.
 
 Personal details (user ids, host names that are not public, project codes) never go in this file. They live in `scripts/hpc/targets.env`, which git ignores.
 
@@ -321,6 +321,24 @@ Fixed by M0; the verify skill, the test-runner and the hpc-test skill use them.
 
   Hosted CI runs the same script in the `docs` job, and the `pages` workflow deploys the site from `main` (D1 T2; docs/design.md, "CI matrix").
 
+## Troubleshooting
+
+From `IMPLEMENTATION.md` of the earlier workflow (ADR-0069).
+
+| Symptom | Fix |
+| --- | --- |
+| The skills are missing in Claude Code | `ls -l .claude/skills` must show one link per skill to `../../.agents/skills/<name>`; a link created during a session needs `/reload-skills` or a restart |
+| A subagent is not found | Restart Claude Code; a new `agents` directory is only picked up at session start |
+| A subagent's worktree lacks recent commits | Check that `.claude/settings.json` still sets `worktree.baseRef` to `"head"` |
+| An agent stops following a skill late in a long session | Start a fresh session and say "Continue."; compaction keeps only the start of an invoked skill |
+| Too many permission prompts | Add allow rules to `.claude/settings.local.json` (personal) or `.claude/settings.json` (shared) |
+| A test needs a tool you do not have | The test-runner reports it as unavailable; CI or a remote target covers it |
+| A remote run hangs at SSH or asks for a password | The shared connection is closed or the VPN is down: run `ssh myriad true` (or the target's alias) in a terminal |
+| `CUDA_ERROR_UNSUPPORTED_PTX_VERSION` on a remote target | Only with `cuda-cpp` (NVRTC): the CUDA toolkit is newer than the node's driver; use the toolkit recorded above (ADR-0001) |
+| A V100 build or load failure after loading a CUDA 13 toolkit | V100 jobs need CUDA 12.x |
+| Remote jobs left in the queue | `scripts/hpc/status.sh`, then `scripts/hpc/cancel.sh <job id>` |
+| The plan and the code disagree | The pull requests' deviations and the ADRs explain why (for milestones before M11, the plan's Deviations log); if they do not, ask a reviewer to compare them |
+
 ## Change history
 
 | Date | Change |
@@ -355,3 +373,4 @@ Fixed by M0; the verify skill, the test-runner and the hpc-test skill use them.
 | 2026-11-20 | E2 (ADR-0068): the MPICH jobs run on `ubuntu-26.04` (MPICH 4.3.2, parallel HDF5 1.14.6), since Ubuntu 24.04's MPICH starts every process as a singleton (Launchpad bug 2072338); the rank-count guard (`TETRALOMA_EXPECT_RANKS`, `scripts/check-rank-guard.sh`); the MPI jobs run `halo_exchange` on 1–4 ranks; the runner image is part of the mpi jobs' cargo cache keys and of the apt `.deb` cache keys. |
 | 2026-11-20 | D1 T1 (ADR-0067): User documentation (D1): the pinned book tools (mdBook 0.5.3, mdbook-katex 0.10.0), local flags, output and commands of the book and its checks; local tools row. |
 | 2026-11-21 | E3: `high_order_invariance::vector_size_invariance` at p = 4 moves from shard 11 to a shard 12 of `scripts/ci-tetraloma-shard.sh`, with a job vulkan-12: p = 3 and p = 4 in one process on lavapipe took 885 s on main's run 44833612710 and over 30 min on the next, 44833632046, whose vulkan-11 hit the 40-min limit (kept, so a runaway job ends with its log). cpu-tetraloma runs shards 11 and 12 in one job (7 min together), followed by `scripts/check-ci-shards.sh`, which lists the shards' tests through the script's listing mode (`TETRALOMA_SHARD_LIST=1`) and fails on a test in no shard or in two, and on a CI matrix that lacks a shard; cpu runs shellcheck on the two shard scripts. |
+| 2026-11-21 | Agent workflow (ADR-0069): rules now in `AGENTS.md`; the troubleshooting table moved here from `IMPLEMENTATION.md`. |

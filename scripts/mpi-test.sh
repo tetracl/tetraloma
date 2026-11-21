@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs every tetraloma-mpi-tests target at each rank count (docs/design.md, "Testing and
-# validation"; CLAUDE.md, MPI tests).
+# validation"; docs/design.md, "Conventions", MPI tests).
 #
 # Usage: scripts/mpi-test.sh [RANKS...]
 #   Rank counts from the arguments, else from TETRALOMA_RANKS (set by scripts/hpc for --ranks N),

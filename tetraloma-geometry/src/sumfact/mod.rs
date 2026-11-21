@@ -10,7 +10,7 @@
 //! z: the kernel contracts the triangle factor, then z ([`prism`]).
 //!
 //! The kernels read one table per (element, point set) ([`TensorFactors::table`]), uploaded once
-//! under CLAUDE.md's clause for tabulations: a header describing the tensor blocks of the point
+//! under the design Conventions' clause for tabulations: a header describing the tensor blocks of the point
 //! set, the 1D tabulations of each direction, and the lexicographic-to-tetraloma node permutation,
 //! all as values of the scalar type (integers below 2^24, exact in f32), so no kernel binds a
 //! sixth buffer (ADR-0042, item 5).

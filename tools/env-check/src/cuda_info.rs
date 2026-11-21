@@ -1,5 +1,5 @@
 //! CUDA toolkit, driver and compute capability, by subprocess and file reads only
-//! (no FFI; CLAUDE.md).
+//! (no FFI; design "Conventions").
 
 use std::path::Path;
 use std::process::Command;

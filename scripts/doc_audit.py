@@ -154,7 +154,7 @@ OUTLINE = [
 
 # Developer citations (check c), searched in the prose of rendered doc blocks (code excluded),
 # except DOC_PATH and FULL_CITATIONS, which are searched in code (inline and blocks) too.
-DOC_PATH = re.compile(r"\bdocs/[\w./-]+|\b(?:IMPLEMENTATION|CLAUDE)\.md\b|\bdesign\.md\b")
+DOC_PATH = re.compile(r"\bdocs/[\w./-]+|\b(?:IMPLEMENTATION|CLAUDE|AGENTS|WORKFLOW)\.md\b|\bdesign\.md\b")
 FULL_CITATIONS = [
     ("ADR", re.compile(r"\bADR[- ]?\d+\b")),
     ("design listing", re.compile(r"\bListings?\s+[A-Z]\d+[a-z]?\b")),
