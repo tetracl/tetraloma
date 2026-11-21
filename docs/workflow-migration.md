@@ -86,7 +86,7 @@ unavailable Locust run is recorded, not counted as missing.
 | draft-adr: apply only the named sections, `adr: NNNN apply`; update the milestone issue | Superseded: decision skill steps 6–7; the issue update in `docs/adr/README.md` (plan-milestone skill's rule for a changed plan) |
 | design-reviewer: scope, acceptance coverage, tests first | Superseded: fidelity and gate-architecture briefs |
 | design-reviewer: public API against the listings | Superseded: fidelity and gate-architecture briefs (interfaces against the design) |
-| design-reviewer: crate rules, kernel rules, precision, conventions (Appendix A, map direction), safety, user documentation, host↔device copies | `AGENTS.md` rule 11, Review focus, citing design 22 and the sections named there |
+| design-reviewer: crate rules, kernel rules, precision, conventions (Appendix A, map direction), safety, user documentation, host↔device copies | `AGENTS.md` rule 11, Review focus, citing design 22 and the sections named there; its outdated "cube counts from `calculate_cube_count_elemwise`" reads "from `LaunchPlan`", as design 22 and ADR-0010 require |
 | design-reviewer: may run `scripts/check-user-docs.sh --no-build` | Dropped for reviewers (template reviewers need no tools beyond git); `check-user-docs.sh` runs in the `full` and `milestone` tiers |
 | verify skill | Kept as a project skill (`.agents/skills/verify`): the `quick` tier; its pre-M0 step dropped |
 | hpc-test skill | Kept as a project skill (`.agents/skills/hpc-test`); "plan's verification line" reads "task's plan section, Verification set or check tier"; pre-M0 and pre-E0 steps dropped; the description names Kathleen first for CPU runs |

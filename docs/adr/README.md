@@ -8,9 +8,10 @@ How a decision is asked for, recorded and applied is in
 (`.agents/skills/decision/references/adr-template.md`). Numbers have four digits and are never
 reused. ADR-0001 to ADR-0068 were written under the earlier workflow (ADR-0069); they name design
 sections by title, and the titles have not changed: section numbers were added by ADR-0069.
-An ADR that replaces an earlier one sets the earlier one's status to "Superseded by ADR-NNNN" in
-the same pull request. When an accepted ADR changes a planned milestone's scope or acceptance,
-bring its issues in line as the plan-milestone skill describes for a changed plan.
+An ADR that replaces an earlier one sets the earlier one's status to "Superseded by ADR-NNNN", in
+the earlier ADR's file and in this table, in the same pull request. When an accepted ADR changes a
+planned milestone's scope or acceptance, bring its issues in line after the ADR pull request is
+merged, as the plan-milestone skill describes for a changed plan.
 
 | ADR | Title | Status | Design sections changed |
 | --- | --- | --- | --- |

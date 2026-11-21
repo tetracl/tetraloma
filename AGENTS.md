@@ -89,7 +89,7 @@ Project skills (tetraloma's own; not part of the template):
       Every task adds, besides its acceptance tests, the unit tests, property tests and rustdoc
       examples its code needs. At the gate, a test that is skipped or ignored on a required
       backend counts as missing, whatever the reason (an early return, an environment switch, an
-      `#[ignore]` without a `pending` marker); the one exception is an unavailable Locust run
+      `#[ignore]`, with or without a `pending` marker); the one exception is an unavailable Locust run
       (Test targets, below).
     - **Runs.** Only the runs that show the code works and the timings a decision needs
       (ADR-0057). The standing matrix stays (design section 25). Beyond it: no exhaustive sweeps
@@ -120,19 +120,21 @@ Project skills (tetraloma's own; not part of the template):
     - **Worktrees.** A new worktree lacks the git-ignored `.venv` (pinned Python oracles) and
       `scripts/hpc/targets.env`: run `scripts/setup-worktree.sh` outside the sandbox before
       testing.
-    - **Delegated work.** A subagent or child agent gets the task text, the design sections it
-      depends on and this rule: "If the design is ambiguous or an API must change, stop and return
+    - **Delegated work.** A subagent or child agent that implements part of a task (not a
+      reviewer, whose input the review skill fixes, and not a test runner) gets the task text, the
+      design sections it depends on and this rule: "If the design is ambiguous or an API must change, stop and return
       an ADR draft instead of deviating." Subagents cannot ask the maintainer questions.
-    - **Reviewers.** Task reviews and both gate passes use Gemini 4 Neon (Antigravity) at high
+    - **Reviewers.** Task reviews, plan reviews and both gate passes use Gemini 4 Neon (Antigravity) at high
       effort, a model from another vendor than the one that writes the code. If it cannot be
       started, use the strongest read-only reviewer available and say that the review was not
       independent. A plan pull request is reviewed with the brief
       `.agents/skills/review/references/gate-architecture.md` in its plan scope, one round, posted
-      as in task mode.
+      as in task mode; the plan pull request stays a draft until that round and its fixes are
+      done, then you tell the maintainer it is ready.
     - **Review focus.** Besides the briefs, reviewers check: dependencies follow design
       section 18, "Dependency rules" (runtime types only in tetraloma-device, no MPI without the
-      `mpi` feature, ndelement only in `conformance/`); cube counts from
-      `calculate_cube_count_elemwise` and the device limits of section 7; reference-cell tables
+      `mpi` feature, ndelement only in `conformance/`); launch shapes and cube counts from
+      `LaunchPlan` (section 22) and the device limits of section 7; reference-cell tables
       and node orders as in section 20 (Appendix A), with the map direction
       `internal[map[k]] = file[k]`; tests in f32 and f64 with the tolerances of section 16; no
       host↔device copy on a library path except those section 22 allows; every public item
@@ -148,8 +150,9 @@ Project skills (tetraloma's own; not part of the template):
       - CUDA runs go through `scripts/hpc/remote-test.sh` only (skill: hpc-test). Never run GPU
         work on a login node, and never submit jobs with hand-written `qsub` or `ssh` commands.
       - Locust (`locust`) is the CUDA platform for every run: after every task that changes
-        kernels, at every gate, and for benchmarks (ADR-0014). A required Locust run that could
-        not run because Locust was unavailable is recorded, not counted as missing.
+        kernels, at every gate, and for benchmarks (ADR-0014). When Locust is unavailable, use the
+        fallbacks below first; a required CUDA run that none of them could take is recorded, not
+        counted as missing.
       - The A4000 workstation (`a4000`, one RTX A4000, sm_86; ADR-0037) is the first CUDA
         fallback: when Locust is unreachable or a run fails because another user occupies its
         GPU, and to compare architecture-dependent results. Never CPU benchmarks there (its CPU
@@ -202,7 +205,7 @@ each once per change; repeat only for a stated reason. `docs/dev-environment.md`
 | Tier | Command |
 | --- | --- |
 | quick | The verify skill (`.agents/skills/verify/SKILL.md`): `cargo fmt --all -- --check`; for each touched crate `cargo clippy -p <crate> --all-targets -- -D warnings` and `cargo test -p <crate>`; conformance and shell checks when they are touched |
-| full | `cargo fmt --all -- --check`; `cargo clippy --workspace --all-targets -- -D warnings`; `cargo test --workspace`; `TETRALOMA_TEST_DEVICE=metal cargo test --workspace --features tetraloma-testing/metal`. When the change touches kernels, also the affected crates on Locust (CUDA, hpc-test skill). When it touches tetraloma-parallel or a crate that depends on it, also the MPI tests on 1–4 ranks (local Mac: `scripts/mpi-test.sh 1` on the CPU runtime and `TETRALOMA_TEST_DEVICE=metal scripts/mpi-test.sh 1 2 3 4`, as `docs/dev-environment.md` explains; hosted CI runs both flavours). When it touches `conformance/` or tetraloma-refcell, also `cargo test --manifest-path conformance/Cargo.toml`. When it adds or changes public items or the book, also `scripts/check-user-docs.sh`. Hosted CI must pass on the pull request |
+| full | `cargo fmt --all -- --check`; `cargo clippy --workspace --all-targets -- -D warnings`; `cargo test --workspace`; `TETRALOMA_TEST_DEVICE=metal cargo test --workspace --features tetraloma-testing/metal`. When the change touches kernels, also the affected crates on Locust (CUDA, hpc-test skill). When it touches tetraloma-parallel or a crate that depends on it, also the MPI tests on 1–4 ranks (local Mac: `scripts/mpi-test.sh 1` on the CPU runtime and `TETRALOMA_TEST_DEVICE=metal scripts/mpi-test.sh 1 2 3 4`, as `docs/dev-environment.md` explains; hosted CI runs both flavours). When it touches `conformance/` or tetraloma-refcell, also `cargo test --manifest-path conformance/Cargo.toml`. When it adds or changes public items or the book, also `scripts/check-user-docs.sh`. Hosted CI must pass on the pull request before it is marked ready |
 | milestone | Once, at the gate (it cites the last standing-matrix run instead while only documentation changed after it; rule 11, Runs): the standing matrix (design section 25) and the targets of the plan's Verification set. Lint; `cargo test --workspace` on the CPU runtime with `TETRALOMA_VECTOR_SIZE=scalar` and `=widest`; Metal; CUDA on Locust in f32 and f64; the MPI tests locally (Open MPI, as in `full`) and in hosted CI (MPICH and Open MPI); the MPI tests on two Kathleen nodes; conformance; `scripts/check-workspace-deps.sh`; `scripts/check-name.sh`; `scripts/check-user-docs.sh`; hosted CI green on the main branch |
 
 If a tier is not filled in, stop and ask. Do not invent the checks.
