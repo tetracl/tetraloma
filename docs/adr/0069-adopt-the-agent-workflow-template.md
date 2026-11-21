@@ -1,6 +1,6 @@
 # ADR-0069: Adopt the agent workflow template
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-21
 - **Raised in:** between milestones (E3 merged; no milestone open), by the maintainer
 - **Design sections affected:** the title block and "Summary" (Audience, Status); every `##`
@@ -132,9 +132,9 @@ changes no design text and follows in a separate pull request after this ADR is 
 
       | Path | What must not change | Check |
       | --- | --- | --- |
-      | `tetraloma-device/vector-policy.toml`, `tetraloma-geometry/degree-policy.toml` | the four generic sets; entries change only with benchmark records in `docs/perf/` (ADR-0058) | `cargo test -p tetraloma-device --test policy`; `cargo test -p tetraloma-bench --test perf_record` |
-      | `tetraloma-refcell/tests/fixtures/`, the ndelement pin in `conformance/Cargo.toml` | the reference-cell conventions exported from ndelement | `cargo test -p tetraloma-refcell --test fixtures`; `cargo test --manifest-path conformance/Cargo.toml` |
-      | `tetraloma-io/tests/fixtures/` | the committed Gmsh and VTK corpus written by the pinned tools | `cargo test -p tetraloma-io --test gmsh_corpus`; `cargo test -p tetraloma-io --test vtk_fixtures` |
+      | `tetraloma-device/vector-policy.toml`, `tetraloma-geometry/degree-policy.toml` | the four generic sets; entries change only with benchmark records in `docs/perf/` (ADR-0058) | `cargo test -p tetraloma-device --test integration policy::`; `cargo test -p tetraloma-bench --test perf_record` |
+      | `tetraloma-refcell/tests/fixtures/`, the ndelement pin in `conformance/Cargo.toml` | the reference-cell conventions exported from ndelement | `cargo test -p tetraloma-refcell --test integration fixtures::`; `cargo test --manifest-path conformance/Cargo.toml` |
+      | `tetraloma-io/tests/fixtures/` | the committed Gmsh and VTK corpus written by the pinned tools | `cargo test -p tetraloma-io --test integration gmsh_corpus::`; `cargo test -p tetraloma-io --test integration vtk_fixtures::` |
       | `rust-toolchain.toml`, the `cubecl` pin in `Cargo.toml` | Rust 1.99; `cubecl = "=0.11.0"`; a default build free of ndelement, BLAS and MPI | `scripts/check-workspace-deps.sh` |
       | `scripts/mpi-test.sh`, `scripts/run-examples.sh` | every MPI run checks the world size (ADR-0068) | `scripts/check-rank-guard.sh` |
       | names in tracked paths and content | the project name and its allowlist (ADR-0066) | `scripts/check-name.sh` |
@@ -169,4 +169,12 @@ changes no design text and follows in a separate pull request after this ADR is 
 
 ## Decision record
 
-<Filled by the maintainer: accepted or rejected, date, and any conditions.>
+Accepted by the maintainer on 2026-11-21, said to the agent in the session: "Accept ADR 69".
+
+Applied in commit `adr: 0069 apply` as listed above, with three details of wording: the
+inline marker (ADR-0069) stands in the first sentence of sections 22–25, not in their headings;
+section 24 opens with one sentence saying what it is for; and in the revision history moved into
+section 21, "The last section maps every review finding" reads "The table below maps every
+review finding". The check commands of section 23 name the `integration` test targets of
+tetraloma-device, tetraloma-refcell and tetraloma-io with a module filter (these crates bundle
+their tests into one target); all of them pass on the CPU runtime.

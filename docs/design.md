@@ -1,14 +1,13 @@
 # tetraloma — Design B: typed dimensions, runtime cells (revised design)
 
-As of 17 October 2026. Markdown export of the revised design document; this file is `docs/design.md`, the design reference for implementation.
+The design reference for implementation. It changes only through ADRs; `docs/adr/README.md` lists them.
 
-## Summary
+## 1. Summary
 
 tetraloma is a GPU-resident mesh library in Rust built on CubeCL 0.11. It serves as the foundation for strongly typed FEM and BEM crates. It encodes the topological and geometric dimensions in the type system as `Mesh<F, TD, GD, C>`, and keeps cell types and geometry degree as runtime values stored per block. Methods that make sense only for some embeddings (normals, inverse Jacobians, boundaries) exist only where their trait bounds hold, so misuse is a compile error. CubeCL comptime parameters then recover full kernel specialisation from the runtime values.
 
 - **Scope:** 1D–3D meshes with D_TOP ≤ D_GEO ≤ 3, all standard cells including hybrid meshes, arbitrary geometry degree (device kernels verified and optimised for p ≤ 8; pyramids p ≤ 3; ADR-0041), and device residency on CUDA, HIP, Vulkan, Metal and the CubeCL CPU runtime. It also covers MPI distribution with partitioning, Gmsh MSH 4.1 import and export, and VTK export.
-- **Audience:** library architects and the implementation agent (Claude Code). Convert this document to `docs/design.md`.
-- **Status:** revised design, 17 October 2026. It supersedes the draft "tetraloma Design B — Typed dimensions, runtime cells" of October 2026 and incorporates the consolidated design review of the same date. The last section maps every review finding to the place where it is fixed. Revision 2 of the same date adds the development environment: the development and test targets and milestone E0. Revision 3 adds SIMD vectorization of kernels through CubeCL vectors, with a benchmark milestone (M3s) that decides where vectors are used.
+- **Audience:** library architects and the coding agents that implement it.
 - **Name:** tetraloma, the project's permanent name, which replaced the placeholder of the earlier milestones in E1 (ADR-0066).
 
 **Main changes from the draft:**
@@ -23,7 +22,7 @@ tetraloma is a GPU-resident mesh library in Rust built on CubeCL 0.11. It serves
 
 **API caveat.** Code sketches follow the released CubeCL 0.11.0 API (crates.io, 6 October 2026), checked against its source but not compiled. That API has a runtime-erased `Client` obtained from `cubecl::Device`, slice kernel arguments, `Vector<F, N>` lanes whose size is given at launch, `BufferArg::from_raw_parts(handle, len)`, runtime scalars passed as plain values, and `#[comptime]` parameters. CubeCL is alpha and announces breaking changes between minor versions, so pin `cubecl = "=0.11.0"`.
 
-## Requirements and decisions
+## 2. Requirements and decisions
 
 The requirements are unchanged from the draft, apart from the development targets and CPU performance. Eleven design decisions are fixed, two topics are out of scope, and the review settled five open questions.
 
@@ -69,7 +68,7 @@ The requirements are unchanged from the draft, apart from the development target
 | Q4: prism and pyramid node layouts | Defined by tetraloma from the DefElement paper's conventions (Scroggs et al., [arXiv:2506.20188](https://arxiv.org/html/2506.20188)) | Reference cells and conventions; A.5 |
 | Q5: orientation scope | Manifold surfaces only. Non-manifold surfaces and interior-interface submeshes are not supported. | Geometry; tags, regions and submeshes |
 
-## Design rationale
+## 3. Design rationale
 
 Design B types the six valid (D_TOP, D_GEO) pairs and leaves everything else to runtime values. This catches the dimension and codimension errors that matter for FEM and BEM, at small cost. CubeCL compiles kernels just in time and accepts host values as comptime constants, so a kernel launched with cell type, degree and dimensions as comptime parameters is specialised as if they were Rust generics. Moving more information into the host type system therefore buys type safety and ergonomics, but almost no device performance.
 
@@ -102,7 +101,7 @@ Design B therefore takes the data model of DOLFINx and the device-memory discipl
 
 ndelement at f8cbffe has no Lagrange elements on prisms or pyramids. For those cells tetraloma defines the layout itself, from the same DefElement conventions.
 
-## Architecture
+## 4. Architecture
 
 The pair (D_TOP, D_GEO) is typed; cell type and geometry degree are runtime values stored per block. The pair determines the shape of almost everything a FEM or BEM code computes from a mesh:
 
@@ -610,7 +609,7 @@ This mirrors the mesh traits of ndmesh but returns device views instead of per-e
 
 `DeviceGrid` lives in tetraloma-geometry, because `QuadRule::for_grid` and the block functions of Listing B5 (tetraloma-geometry) are generic over it; tetraloma re-exports it. `create_entities(d)` accepts 0 ≤ d < tdim, and dimension 0 gives one `Point` block of the vertices. `create_connectivity` supports (tdim, d), which is downward and filled by entity creation, and (d, tdim), which is upward, for 0 ≤ d < tdim; d → 0 is `EntityBlock::vertices` and tdim → 0 is `CellBlock::vertices` (ADR-0012).
 
-## API walkthrough
+## 5. API walkthrough
 
 The file decides the dimensions at run time, the program fixes them once, and the compiler checks everything after that.
 
@@ -738,7 +737,7 @@ VtkWriter::vtu("out/scalp2").write_any(AnyMeshRef::Surface(&scalp))?; // erased 
 
 `VtkWriter` (tetraloma) writes Lagrange cells by default (`.lagrange(false)` writes linear cells), appended raw data unless `.base64(true)`, and zlib with `.zlib(true)`; `.point_data(name, &buffer, components)` and `.cell_data(…)` attach device buffers of f32, f64, i32 or u32, indexed by geometry node and by flat cell index in block order. On more than one rank, `vtu` gathers the owned cells to rank 0, and `pvtu` and `vtkhdf` (feature `hdf5`) write one piece per rank with a `vtkGhostType` cell array; `.origin_ids(true)` adds the cell array `OriginId`. Writes are collective (ADR-0024, ADR-0035).
 
-## Reference cells and conventions
+## 6. Reference cells and conventions
 
 tetraloma uses the DefElement conventions (Conventions 1–2 and Definitions 8–9 of Scroggs et al., [arXiv:2506.20188](https://arxiv.org/html/2506.20188), published 2026). ndelement main at f8cbffe implements them. tetraloma-refcell holds its own copy of every table and depends only on tetraloma-dims, so the tables are usable on the host, inside `comptime!` blocks and in tests. Agreement with ndelement is checked by the separate tetraloma-conformance crate (A.10).
 
@@ -766,7 +765,7 @@ tetraloma uses the DefElement conventions (Conventions 1–2 and Definitions 8�
 - **Node families.** Equispaced points on every cell are required for Gmsh and VTK interoperability. Gauss–Lobatto–Legendre (GLL) points are offered on intervals, quadrilaterals and hexahedra only, matching ndelement. Requesting GLL on any other cell returns `GridError::UnsupportedNodeFamily`. Conversion between families is an interpolation applied on the device; writers always convert to equispaced. Both writers call `tetraloma_geometry::equispaced_nodes`; a node shared by several cells takes its value from its first cell in flat order, so the result is deterministic (ADR-0024).
 - **DOF transformations.** The base transformations of Scroggs, Dokken, Richardson and Wells (ACM TOMS 48(2), 2022, doi 10.1145/3524456) depend only on the sub-entity type. They are therefore identical in the DefElement and Basix numberings; only the block of the cell transformation that each one lands in moves.
 
-## Device model and backends
+## 7. Device model and backends
 
 Every large array is a typed wrapper around a CubeCL `Handle`, and host access is always explicit. The same code serves every backend; capability and limit checks happen when a mesh is created, not at JIT time.
 
@@ -1021,7 +1020,7 @@ The primitives are re-exported at the root of tetraloma-device, together with `C
 
 A CubeCL `Client` uses a thread-local stream by default, so launches from different host threads land on different streams. tetraloma's model is one host thread per MPI rank: every launch and transfer for a mesh comes from the thread that created it. `Mesh<…, Mpi>` is not `Send` (the communicator is held in an `Rc`), which enforces this. MPI is initialised with `Threading::Single`. Tests run on separate threads but never share a mesh between threads.
 
-## Vectorization and CPU execution
+## 8. Vectorization and CPU execution
 
 CubeCL expresses SIMD in the kernel language, so tetraloma writes a vectorized kernel once and each backend lowers it: the CPU runtime to the host's SIMD instructions, GPU backends to wide loads and stores. tetraloma writes no host-side SIMD code. Which kernels use vectors, and how wide, is decided by the benchmarks of milestone M3s; until then every kernel runs at vector size 1.
 
@@ -1227,7 +1226,7 @@ tetraloma-bench, an unpublished workspace crate, measures where vectors help.
 - **Record:** the choices — vector sizes, QuadField tiles per element size, CPU block sizes per kind and element size in units of 4 KiB, and CPU units per kind and element size — go to `tetraloma-device/vector-policy.toml`; the measured speedups, choices and reasons go to `docs/perf/vectorization.md`, with the raw JSON under `docs/perf/data/`. The study is re-run with the candidate protocol in M10 for every kernel family, and after any CubeCL pin bump (ADR-0057); the `[Cpu]` vector set is re-derived in M10c (ADR-0065). From M10, `vector-policy.toml` holds `[Cpu]` and `[Gpu]` with 4- and 8-byte entries, and nothing else (ADR-0058).
 - **Degree sweep (M9h):** the degree-dependent families (EVector, the geometric factors, the pull-back and the device basis evaluator) are measured at p = 1–8 for each strategy of "Geometric factors" (`direct` not on hexahedra, prisms and tetrahedra at p ≥ 5, where T3's drift baseline gives its cost; ADR-0050), with the protocol and conditions above, except that vector size, tile and CPU block come from `vector-policy.toml`. Sizes are 10^5, 10^6 and 10^7 quadrature points (Gauss degree 2p); a CPU run over 600 s or a compile over 300 s is recorded as too slow. Each record carries the time per cell and per point and the first-use compile and load time (one new kernel per warm-up, `CUDA_CACHE_DISABLE=1`); on CUDA, registers, spill and local memory per thread come from `ncu` or `ptxas -v` of the driver's CUDA version, and failing driver calls are named by `compute-sanitizer`, without FFI. A strategy is adopted over the baseline (`direct`, or `loops` where `direct` is not selectable) only if it is at least 10% faster at 10^6 and 10^7 points; on the CPU classes the sweep times `direct`, `loops` and the sum-factorised strategy only, at 10^5 and 10^6 points with medians of five runs, and the rule uses 10^6 points (ADR-0052); among those within 3% of the fastest the simplest wins (direct < loops < sum-factorised < shared < cooperative); classes with several devices use the geometric mean; degree ranges are maximal runs of equal choices. A strategy that fails, or takes over 30 s to compile and load on a device swept for a class, is not selectable for that class (ADR-0056); bullet 2's bound is Locust's. The choices go to `tetraloma-geometry/degree-policy.toml`, and the costs, choices and reasons to `docs/perf/high-order.md`, with the raw JSON under `docs/perf/data/` (ADR-0042); `docs/perf/high-order.md` reports the p = 8 / p = 4 ratios of ADR-0042 item 1 and the speedup over M9 at p = 8 (ADR-0053); rule 11's paired runs interleave the policy's and `direct`'s timed runs on CPUs, and at p ≤ 4 the CPU classes' strategies are timed interleaved (ADR-0055). In M10, and after a CubeCL pin bump, the degree-dependent families are measured at p = 1, 4 and 8 only, with the candidate protocol (ADR-0057). FacetNormals on intervals in f32 is measured at 10^5 and 10^6 points at p = 4–6 and at 10^4 and 10^5 points at p = 7–8, where 10^6 or 10^7 equispaced points exceed f32's resolution (ADR-0063). `degree-policy.toml` then holds `[Cpu.<family>]` and `[Gpu.<family>]` only, chosen by the generic rule. The choices at the degrees in between come from M9h's per-degree records, and Grace votes at p = 1, 4 and 8. A family and cell type whose check misses the bound, or whose time at 10^6 points moves by more than 10% from M9h's record, is re-measured with candidates only at the inner degrees next to each boundary of its range (ADR-0058, ADR-0060).
 
-## Topology construction on the device
+## 9. Topology construction on the device
 
 Cells and their vertices come from the input. Edges and faces are created on demand by `create_entities(dim)`, as in DOLFINx, with one sort per entity type across all cell blocks. The algorithm uses only the primitives of tetraloma-device, and its result does not depend on the number of ranks.
 
@@ -1288,7 +1287,7 @@ All exchanges use the neighbourhood communicator and touch only process-boundary
 
 One unit per cell computes the cell's orientation word (A.6) from its vertices' origin ids, compared as (hi, lo) pairs, and from the comptime sub-entity tables. The word does not depend on entity creation or on the partition. It is computed at mesh creation for every cell with D_TOP ≥ 2, and the conformance suite checks it against `ndelement::orientation::compute_orientation`.
 
-## Geometry
+## 10. Geometry
 
 Geometry is a vector-valued Lagrange field of arbitrary degree, evaluated by device kernels from host-tabulated bases. Manifold orientation is supported for manifold surfaces and curves only.
 
@@ -1350,7 +1349,7 @@ Physical-to-reference mapping by Newton iteration, for point location and interp
 - Results are bitwise identical across vector sizes on the CPU runtime and agree to 10^−12 (f64) and 10^−5 (f32) on GPUs (ADR-0039).
 - The pull-back runs the same strategies. On quadrilaterals and hexahedra, the sum-factorised pull-back forms each cell's coefficients over the tensor Legendre basis once, a = (C₁′ ⊗ C₁′ ⊗ C₁′)x by sum factorisation, then evaluates the 1D Legendre polynomials at ξ by their recurrences and contracts a one dimension at a time; prisms use C′_tri ⊗ C₁′ with the Dubiner set (ADR-0042, ADR-0049).
 
-## Distributed mesh model
+## 11. Distributed mesh model
 
 Cells are partitioned without overlap, and each rank also holds a configurable ghost layer: `GhostMode::None`, `SharedFacet` or `SharedVertex { layers }`. Every cell block, entity block and the vertex and node sets carry an IndexMap in the DOLFINx sense. Serial meshes use the same code with `Serial`, whose IndexMaps have no ghosts.
 
@@ -1559,7 +1558,7 @@ Locality ordering happens before any numbering, so global numbers are assigned o
 | 9 Upload | device | Upload cells, dofmaps, nodes (relative to the global origin) and origin ids; compute permutation info. | device-resident mesh |
 | 10 Entities | device + small MPI | On demand: sort-based entity creation and boundary ownership exchange. | entity IndexMaps, connectivity |
 
-## Partitioning
+## 12. Partitioning
 
 Every supported backend partitions the distributed dual graph, so the `Partitioner` trait takes a graph only. PT-Scotch is the production default. The CI default is the built-in block partitioner for pipeline tests, plus vendored METIS on rank 0 for partition-quality tests.
 
@@ -1609,7 +1608,7 @@ impl Partitioner for PtScotch { /* ... */ }              // name(): "ptscotch", 
 - **Reproducibility:** PT-Scotch and Scotch on rank 0 run each call in a `SCOTCH_Context` with `SCOTCH_OPTIONNUMDETERMINISTIC` set and a private random generator seeded with the fixed seed (`SCOTCH_contextRandomSeed`, then `SCOTCH_contextRandomReset`), under a process-wide mutex; threaded Scotch builds are otherwise not deterministic (ADR-0031). Scotch 7.0.18's threaded build is not deterministic even in this context; the verified versions are listed in the backend table (ADR-0034). METIS uses `METIS_OPTION_SEED` under the same mutex; ParMETIS takes the seed in `options`. Results are reproducible for a fixed number of ranks only.
 - **Checks and balance:** every external partitioner validates the graph (ranges, self-loops, symmetry, non-negative weights, totals within the library's index type) before calling the library, returns zeros for one part, and targets 3% imbalance. PT-Scotch builds with `SCOTCH_PTHREAD_MPI` are not supported (MPI runs at `Threading::Single`). ParMETIS needs every rank to hold a vertex (ADR-0029).
 
-## Import and export
+## 13. Import and export
 
 tetraloma has its own Gmsh MSH 4.1 reader and writer, a VTU/PVTU writer, and a VTKHDF writer. Node orderings are generated from each format's documented rules and checked against fixtures.
 
@@ -1666,7 +1665,7 @@ tetraloma has its own Gmsh MSH 4.1 reader and writer, a VTU/PVTU writer, and a V
     - agree with files written by a pinned Gmsh version;
     - check VTK prisms at p = 3, 5 and 6 against VTK-written fixtures, since DOLFINx has no VTK wedge map above p = 2 and the wedge's triangular faces first differ from the recursive order at p = 5 (one level of recursion) and p = 6 (two levels).
 
-## User documentation
+## 14. User documentation
 
 Users learn tetraloma from a book and from API documentation written for them, published together on one site. This design and the other developer documents are not part of it (ADR-0067).
 
@@ -1710,7 +1709,7 @@ Users learn tetraloma from a book and from API documentation written for them, p
   The audit reads the generated HTML, so it sees exactly the items users see, and fails if it finds no items (a changed rustdoc markup). The `docs` job also runs the book's doctests and `cargo test --doc` of the nine crates with the site's features, and the audit once more for tetraloma-partition with `parmetis`.
 - **Keeping it current.** From D1 on, a milestone that adds or changes public items documents them by the rules above and updates the book in the same task; `/review-milestone` runs `scripts/check-user-docs.sh`.
 
-## Tags, regions and submeshes
+## 15. Tags, regions and submeshes
 
 Tags and submeshes connect the volume mesh to boundary problems; the boundary of a volume mesh becomes the BEM surface mesh with outward orientation.
 
@@ -1723,7 +1722,7 @@ Tags and submeshes connect the volume mesh to boundary problems; the boundary of
     - Facet submeshes accept boundary facets only (`GridError::InteriorFacet` otherwise), and inherit outward orientation from the single parent cell.
     - Interface submeshes for multi-domain coupling are out of scope.
 
-## Testing and validation
+## 16. Testing and validation
 
 Every acceptance test in the roadmap is automated and runs on the targets below.
 
@@ -1769,7 +1768,7 @@ Every acceptance test in the roadmap is automated and runs on the targets below.
     - high-order curved sphere surfaces (icosahedral refinement with nodes projected onto the sphere);
     - curved balls.
 
-## Development environment and test targets
+## 17. Development environment and test targets
 
 Claude Code runs on the local Apple-silicon Mac and tests there on every change; `docs/dev-environment.md` names the current machine (ADR-0034). CUDA work runs on UCL's clusters through a small remote-test runner. Milestone E0 sets this up and records the details in `docs/dev-environment.md`.
 
@@ -1820,7 +1819,7 @@ targets: myriad-v100 | myriad-a100 | myriad-cpu | locust | a4000 | kathleen
 - Home is also scratch, with a 1 TB quota. The runner keeps one tree per branch and removes the trees of merged branches.
 - Myriad runs RHEL 7.9 (glibc 2.17), older than CubeCL's prebuilt LLVM bundle allows (glibc ≥ 2.34). The same LLVM version is built with Spack (`scripts/hpc/spack/`, a CPU batch job) and linked with LLD; it is rebuilt when the bundler version changes (ADR-0004).
 
-## Workspace layout
+## 18. Workspace layout
 
 The crate graph keeps serial builds free of MPI and lets kernels live in the crate that uses them, while CubeCL runtime types stay in one crate.
 
@@ -1879,333 +1878,7 @@ The crate graph keeps serial builds free of MPI and lets kernels live in the cra
 
 The hosted CI provider is not fixed. Without one, the local Mac covers the cpu, MPI and conformance jobs, and Vulkan runs are skipped.
 
-## Implementation roadmap
-
-Each milestone is one Claude Code work package. Every acceptance test is automated and runs on the targets of "Testing and validation", and later milestones depend only on the public interfaces of earlier ones. E0 sets up and checks the development environment before any library code exists. M1a (type layer) precedes M1b (reference cells), because tetraloma-refcell builds on tetraloma-dims. M3s measures where SIMD vectors pay off once the primitives and mesh kernels exist. M9h studies the degree-dependent kernels up to p = 8 before M10 benchmarks the final kernels (ADR-0041).
-
-| Milestone | Depends on |
-| --- | --- |
-| E0 Development environment | – |
-| M0 Workspace and CI | E0 |
-| M1a Type layer | M0 |
-| M1b Reference cells | M1a |
-| M2 Device primitives and communication core | M0 |
-| M3 Serial mesh core | M1b, M2 |
-| M3s SIMD vectorization and benchmarks | M3 |
-| M4 Gmsh I/O (serial) | M3 |
-| M5 VTK output | M3 |
-| M6 Parallel core | M3 |
-| M7 Partitioners | M6 |
-| M8 Parallel I/O | M4, M5, M7 |
-| M9 Submeshes and manifolds | M6 |
-| M9h High-order performance | M9 |
-| M10 Hardening | all |
-| M10c CPU vector policy | M10 |
-| E1 Rename to tetraloma | M10c |
-| E2 Real MPICH runs in hosted CI | E1 |
-| D1 User documentation | E1; E2 for its MPICH acceptance item (ADR-0068) |
-
-### E0 Development environment
-
-**Scope:**
-
-- the targets of "Development environment and test targets": the M3 Max, the Myriad V100 and A100 nodes, and Locust;
-- `rust-toolchain.toml` with Rust 1.99 at the repository root, and a `.gitignore` that covers build output, `target/hpc/` and `scripts/hpc/targets.env`;
-- `tools/env-check/`, a standalone crate outside the future workspace. For each runtime compiled in (`cpu`, `metal`, `cuda`) it:
-    - opens the device and records its name and properties (f64 and u64 support, `max_page_size`, `max_bindings`, `max_cube_count`, plane sizes, `load_width`, `vector_register_count`, `max_units_per_cube`, and `io_optimized_vector_sizes` for f32 and f64);
-    - runs an element-wise add over 10^7 elements in f32 and, where supported, f64, at vector size 1 and at the widest size the device offers, with `calculate_cube_count_elemwise`;
-    - runs a u32 atomic histogram;
-    - with its `mpi` feature, checks an allreduce of rank ids;
-    - checks the results and writes a JSON report;
-- `scripts/hpc/`: `remote-test.sh` with the interface above, one job script per target, `targets.example.env`, `status.sh` and `cancel.sh`;
-- `docs/dev-environment.md`, filled in with everything E0 finds.
-
-**Acceptance:**
-
-- **M3 Max:**
-    - env-check passes on the CPU runtime (f32, f64) and on Metal (f32, with f64 reported as unsupported);
-    - a 4-rank MPI allreduce passes;
-    - `vtk` ≥ 9.2 and `meshio` import in Python;
-    - the output of `gmsh --version` and `claude --version` (≥ 2.1.286) is recorded.
-- **Myriad V100:** `scripts/hpc/remote-test.sh myriad-v100 -- cargo run --release --manifest-path tools/env-check/Cargo.toml --features cuda` runs from the M3 Max without interaction.
-    - The report shows sm_70, a CUDA 12.x toolkit no newer than the driver's CUDA version, and passing f32 and f64 kernels.
-    - With `--gpus 2`, both GPUs pass and a 2-rank MPI allreduce passes within the node.
-    - Whether the MPI is CUDA-aware is recorded.
-- **Myriad A100:** the same, with sm_80 and the newest toolkit the driver supports (CUDA 13 if available).
-- **Locust:** the same, with sm_90 on an aarch64 host; env-check also passes on the CPU runtime on Grace. If Locust is unavailable, this item is recorded as pending and does not block M0.
-- **Runner robustness:**
-    - a deliberately failing command exits non-zero and prints its first error;
-    - a run that exceeds `--max-wait` is deleted and exits with status 124;
-    - no job is left in `qstat` after the acceptance runs.
-- **Turnaround:** queue wait and run time are recorded for each remote target, as the median of three runs.
-- **Record:** `docs/dev-environment.md` has no open fields left, apart from Locust details that ARC cannot provide.
-
-### M0 Workspace and CI
-
-**Scope:** the workspace of "Workspace layout" as skeleton crates; `rust-toolchain.toml` with Rust 1.99; `cubecl = "=0.11.0"` in `[workspace.dependencies]`; tetraloma-testing with `test_client()`; the tetraloma-mpi-tests skeleton; the hosted CI jobs cpu, mpi-mpich, mpi-openmpi and vulkan, plus skeletons for the conformance and ptscotch jobs. tetraloma-testing selects the device from `TETRALOMA_TEST_DEVICE` both locally and inside `scripts/hpc` jobs.
-
-**Acceptance:**
-
-- an element-wise add kernel in the workspace passes on the CPU runtime (f32, f64) and Metal (f32) on the M3 Max, on Vulkan (f32) in hosted CI, and on CUDA (f32, f64) on a Myriad V100 through `scripts/hpc`;
-- a 4-rank MPI smoke test (allreduce of rank ids) passes under MPICH and Open MPI;
-- the conformance job builds and links ndelement at f8cbffe and compares one table (triangle edges);
-- `cargo test --workspace` builds neither ndelement, BLAS nor MPI, checked with `cargo tree`.
-
-### M1a Type layer (tetraloma-dims)
-
-**Scope:** Listings B1 and B2. This includes `CellType`, `Cell1`–`Cell3`, `TopoDim` and the `WrongCellDim` conversions, plus a test-only stub `Mesh` with Listing B4's impl bounds.
-
-**Acceptance:**
-
-- **compile-fail tests:**
-    - `normals()` on a volume mesh gives E0599;
-    - a `Cell3` in a `CellBlock<D2>` gives E0308;
-    - `boundary()` on a curve mesh gives E0599;
-    - the `.stderr` files are generated with `TRYBUILD=overwrite` and reviewed.
-- **compile-pass tests:**
-    - `normals()` on surface and planar-curve meshes;
-    - `boundary()` on volume and surface meshes;
-    - `boundary().boundary()` on a volume mesh.
-- `CellType` ↔ `CellN` round trips for every cell; a wrong dimension returns `WrongCellDim`.
-
-### M1b Reference cells (tetraloma-refcell, tetraloma-conformance)
-
-**Scope:**
-
-- tables A.1–A.4 for the eight cells, generated by the lexicographic rule;
-- Lagrange layouts for any p, including the prism and pyramid rules of A.5;
-- the DefElement pyramid space, with an orthonormal rationomial basis;
-- point families: equispaced on every cell, GLL on tensor cells;
-- quadrature, and tabulation with tetraloma-refcell's own LU;
-- orientation bits (A.6) and the format permutation generators (A.9);
-- the conformance crate with fixture export (A.10).
-
-**Acceptance:**
-
-- node counts match A.4 for p ≤ 10;
-- partition of unity and reproduction of each element's own space to 10^−12 for p ≤ 8 (f64);
-- sub-entity tables equal ndelement's for all eight cells;
-- orientation bits equal `compute_orientation` for 10 000 random vertex numberings per cell type with D_TOP ≥ 2;
-- point sets equal ndelement's node by node for intervals, triangles, quadrilaterals, tetrahedra and hexahedra, p ≤ 4, equispaced and (tensor cells) GLL;
-- the generators reproduce every A.9 row and DOLFINx's Gmsh P3 tables (tet20 after A.11; quad16, hex64, prism40 and pyramid30 unchanged);
-- quadrature integrates monomials (rationomials on pyramids) up to its degree to 10^−13;
-- `cargo test --workspace` still builds neither ndelement nor BLAS.
-
-### M2 Device primitives and communication core (tetraloma-device, tetraloma-parallel)
-
-**Scope:**
-
-- `Real` and the `DeviceBuffer` family with limit checks and `VECTOR_PAD` padding, plus `check_precision`;
-- `LaunchPlan` and `VectorPolicy`, with vector size 1 and tile width 16 everywhere until M3s, and the `TETRALOMA_VECTOR_SIZE` and `TETRALOMA_QUAD_TILE` overrides;
-- scan, radix sort (u32-word keys with u32 payload), unique-by-key, run-length, histogram, gather/scatter, segmented reduce, fill and copy. Fill, copy, reduce, the tile-local scan phase, the digit counting of the sort (SortDigits) and gather are generic over the vector size (ADR-0009);
-- `CommDyn`, `Comm`, `CommExt` and `Serial`, and `IndexMap` without ghosts.
-
-**Acceptance:**
-
-- property tests against CPU references, with sizes up to 10^5 and 256 cases plus fixed sizes of 10^6 and 10^7. They run on the CPU runtime, and on Vulkan and Metal with u32 keys and f32 values;
-- results are bitwise identical across two runs;
-- the throughput of sorting 10^7 two-word keys is recorded per backend;
-- every vector-generic primitive gives the same results at vector size 1 and at every larger power of two up to 16 that the device offers, for lengths 0, 1, 15, 16, 17 and 10^6 + 3: integers bitwise, float reductions within the tolerances;
-- on the CPU runtime, `LaunchPlan` uses one unit per hardware thread and blocks of whole 128-byte lines; with injected device properties, no plan exceeds `max_units_per_cube`, `max_cube_dim` or `max_cube_count` (property test);
-- with an injected limit, an allocation above `max_page_size` returns `AllocationTooLarge`;
-- an f64 request on Metal returns `UnsupportedPrecision`.
-
-### M3 Serial mesh core
-
-**Scope:**
-
-- `Mesh` from host arrays, built with origin ids;
-- device entity creation ("Topology construction"), connectivity and permutation info;
-- geometry blocks, `QuadRule` and `FacetQuadRule`;
-- E-vectors of the geometry nodes, built on demand and cached per geometry block, and the tiled `QuadField`;
-- factor kernels (X, J, det J, K, facet normals, normals), generic over the vector size, and `measure`;
-- `AnyMesh`, `AnyMeshRef`, `with_mesh!` and `DeviceGrid` (change log, BLK-3); `boundary()` is declared and returns `NotYetImplemented` until M9 (ADR-0012);
-- the tetraloma-testing mesh generators;
-- the real `Mesh` replaces the M1a stub in the compile-fail tests.
-
-**Acceptance:**
-
-- closed-form entity counts and Euler characteristic 1 for boxes of every cell type and the mixed box, at three refinements;
-- unit volume for p = 1–4, to 10^−12 in f64 and 10^−5 in f32;
-- sphere-area convergence rate ≥ p+1 − 0.2 for p = 1–4 over four refinements (f64);
-- f32 results agree with f64 to 10^−5 relative;
-- Jacobians on a mixed triangle–quadrilateral surface mesh use one `QuadRule` and match a host reference to 10^−12;
-- permutation info equals the conformance fixtures for every cell;
-- with an injected limit, `QuadField` results are identical with 1 and 7 chunks;
-- factor kernels on E-vectors agree with a scalar L-vector reference kernel at every vector size from 1 up to 16 that the device offers and the tile holds, and at tile widths 1 and 16, bitwise on the CPU runtime, with +0 and −0 equal (ADR-0013), for the direct kernels and for strategies that sum over nodes in node order; within the tolerances for sum-factorised and cooperative kernels (ADR-0054), and within the tolerances on GPUs.
-
-### M3s SIMD vectorization and benchmarks
-
-**Scope:**
-
-- tetraloma-bench, with the protocol of "Vectorization and CPU execution": vector sizes, tile widths, CPU block sizes, problem sizes, medians, compile times and JSON output;
-- benchmarks of every candidate family that exists after M3: Fill, Copy, Reduce, ScanTile, SortDigits, Gather, TopologyKeys, PermutationInfo, EVector and GeomFactors;
-- for TopologyKeys and PermutationInfo, the cell-fastest copy of the connectivity they need, built behind the policy and measured including the transpose;
-- the decision rule applied for every family, device class and scalar type; `vector-policy.toml` and `docs/perf/vectorization.md` written.
-
-**Acceptance:**
-
-- benchmark JSON committed under `docs/perf/data/` for the M3 Max (CPU runtime, Metal), Locust (CPU runtime on Grace, CUDA) and one socket of a whole Kathleen node (CPU runtime on its AVX-512 Xeon; ADR-0020), plus a Myriad D node if Kathleen was unavailable, and Myriad's V100 and A100 nodes if Locust was unavailable (ADR-0014, ADR-0016);
-- `docs/perf/vectorization.md` lists, for every candidate family, device class and scalar type, the measured speedup of each vector size over size 1, the chosen size and the reason;
-- every vector size above 1 in `vector-policy.toml` is at least 10% faster than size 1 at 10^6 and 10^7 items on its device class (the geometric mean over its measured devices), and every chosen configuration (vector size, tile width, block size, CPU units) is within 3% of the fastest one the 10% rule admits (ADR-0015; for a shared 4-byte entry, at a size every type admits, ADR-0019), or, where none is, the closest one, at most 10% slower (25% for a shared 4-byte entry, ADR-0021) and marked in the report (ADR-0018);
-- a test checks that `vector-policy.toml` covers every `KernelKind` and `DeviceClass`, and that every numeric value is a power of two from 1 to 16 and every `cpu_units` value is `all` or `performance` (ADR-0017);
-- with the chosen policy, the whole test suite passes on every target, including the vector-size invariance tests;
-- entities created per second and geometric factors per second are recorded on the M3 Max CPU runtime and one socket of a Kathleen node, with the chosen policy and with every kernel scalar (ADR-0016, ADR-0020).
-
-### M4 Gmsh I/O (serial)
-
-**Scope:** reader and writer, the element table (A.7), serendipity upgrade, MeshTags from physical groups by key matching, D_TOP and D_GEO inference, and origin ids from tags.
-
-**Acceptance:**
-
-- read → write → read gives identical topology (cell types and degrees, cell and vertex origin ids, names and tags keyed by origin ids), and coordinates equal to 10^−15 relative to the largest absolute coordinate (f64; 10^−5 in f32) (ADR-0022);
-- the committed fixture corpus reads without error with correct node counts (file: Gmsh's node count; mesh: the nodes of D_TOP elements). It is written by a pinned Gmsh version and covers every element type up to order 4, pyramids up to order 3;
-- nodes and elements agree with mshio on every fixture mshio can read; mshio 0.4.2 cannot read the 18-node prism (type 13), and the test asserts that it fails on exactly the files that contain it (ADR-0023);
-- tag counts equal Gmsh's physical-group sizes;
-- D_GEO is inferred correctly on 1D, 2D and 3D fixtures, and duplicate node tags are rejected.
-
-### M5 VTK output
-
-**Scope:** VTU (version 2.2) with linear and Lagrange cells, cell and point data, the PVTU skeleton and the pyramid fallback, and the device GLL → equispaced conversion for both writers.
-
-**Acceptance:**
-
-- VTK's Python reader (pinned, ≥ 9.2) reads every fixture;
-- the integrated volume or area of affine P2 and P3 meshes (`vtkIntegrateAttributes`) equals tetraloma's `measure` to 10^−10 (f64); on curved P2 and P3 meshes, VTK's `EvaluateLocation` at Gauss points equals `physical_points` to 10^−10 (f64) (ADR-0024);
-- meshio reads identical raw arrays from the inline-base64 files (with and without zlib), and every appended file parses to the same arrays as its base64 twin (ADR-0025);
-- a P2 pyramid mesh is written as linear cells with one warning.
-
-### M6 Parallel core
-
-**Scope:**
-
-- `Mpi` and the `mpi::ffi` wrappers (distributed graph, neighbourhood all-to-all-v);
-- `IndexMap` with ghosts, and `Scatterer` (host-staged, deterministic reverse); its pack and unpack kernels take their shape from `LaunchPlan` and are generic over the vector size (`KernelKind::Pack`);
-- pipeline stages 1–10 from host arrays with the block partitioner, ghost modes, ownership rules, global numbering and locality ordering.
-
-**Acceptance** on 1–4 ranks under MPICH and Open MPI:
-
-- global entity counts and tag counts are identical to one rank, and total volume agrees to 10^−12 (f64) and 10^−5 (f32) relative (ADR-0026);
-- canonical entity vertex lists (origin ids) and permutation bits per cell origin id are identical to one rank;
-- a forward scatter of global ids reproduces the ghost global ids;
-- a reverse Add of ones equals the number of ranks holding each index;
-- two runs are bitwise identical;
-- on a randomly permuted structured box, locality ordering at least halves the mean over owned cells of (max − min local index of the cell's owned nodes); ghost nodes, ordered by (owner rank, global index), are excluded (ADR-0027).
-
-### M7 Partitioners
-
-**Scope:** vertex weights on M6's distributed dual graph (ADR-0026), ptscotch-sys and its wrapper, parmetis-sys and its wrapper (feature-gated), METIS on rank 0 (vendored) and Scotch on rank 0.
-
-**Acceptance** on a 10^6-cell tetrahedral box and a 2 · 10^5-cell mixed hexahedron/prism/pyramid mesh, at 4 and 8 ranks (8-rank runs on one Kathleen node through `scripts/hpc`; ADR-0016), read as in ADR-0029 (imbalance for every external partitioner; cut(PT-Scotch) ≤ 1.10 · Scotch's and cut(METIS) ≤ 1.25 · Scotch's; reproducibility per partitioner and rank count; ADR-0029, ADR-0032):
-
-- weighted imbalance ≤ 5%;
-- PT-Scotch's edge cut is within 10% of sequential Scotch on the same graph, and METIS's within 25% of Scotch;
-- a fixed seed reproduces the partition for a fixed rank count.
-
-### M8 Parallel I/O
-
-**Scope:** chunked binary Gmsh reading, partitioned writing, PVTU with `vtkGhostType`, and VTKHDF (hdf5-metno with `mpio`).
-
-**Acceptance** (read as in ADR-0035: bullet 1 item 14, bullet 2 item 13, bullet 3 item 15):
-
-- the global mesh, compared by origin ids, is identical for 1–8 ranks;
-- reading a 10^7-cell binary file on 8 ranks of one Kathleen node keeps peak resident memory per rank below twice the rank's final mesh size plus 256 MiB (measured with getrusage);
-- VTKHDF read back by VTK's Python reader equals the PVTU content;
-- after VTK removes ghost cells, every cell appears exactly once.
-
-### M9 Submeshes and manifolds
-
-**Scope:** boundary, facet, edge and cell submeshes with `EntityMap` (`boundary()` replaces M3's `NotYetImplemented`; ADR-0039); distributed manifold orientation (`orient`); the manifold tests of normals, pseudo-inverse and facet normals, whose kernels exist from M3 (ADR-0012); pull-back, generic over the vector size.
-
-**Acceptance:**
-
-- normals on the boundary of a centred ball satisfy n·x > 0 at every quadrature point;
-- ∮ x·n = D_GEO · V to 10^−10 (f64);
-- `orient(Outward)` on a closed sphere with randomly flipped cells recovers outward normals on 1–4 ranks;
-- error cases:
-    - an edge with three cells gives `NonManifold`;
-    - interior facets in `facet_submesh` give `InteriorFacet`;
-    - `Outward` on an open surface gives `NeedsReferencePoint`;
-    - a Möbius strip gives `NonOrientable`;
-- pull-back recovers reference points to 10^−12 for p = 1–3;
-- pull-back gives the same reference points at vector size 1 and at the widest size the device offers, to 10^−12 (read as in ADR-0039 item 14: bitwise on the CPU runtime).
-
-### M9h High-order performance
-
-**Scope (ADR-0041):**
-
-- degree sweeps (p = 1–8) in tetraloma-bench, with the protocol of "Vectorization and CPU execution", for every degree-dependent kernel family: EVector, GeomFactors (points, Jacobian, det J, pseudo-inverse, normals, facet normals), PullBack and the device basis evaluator; with, per kernel and device, the time per cell and per quadrature point, the first-use compile and load time, and on CUDA the registers and local memory per thread;
-- strategies, each compared with M9's direct evaluation: runtime loops instead of full unrolling (bounding code size and JIT time); sum factorisation for quadrilaterals, hexahedra and prisms; tabulations or coefficients in shared memory; a workgroup cooperating on one cell only where these fall short, with fixed-order reductions that do not depend on the plane size;
-- a degree policy: the strategy of each family chosen per degree range and device class from the measurements, recorded in `docs/perf/high-order.md`, with an override for tests (as `TETRALOMA_VECTOR_SIZE` is for vector sizes);
-- C18 closed: its cause isolated with the CUDA kernel attributes, and reported upstream if it is CubeCL's.
-
-**Acceptance** (read as in ADR-0042: bullet 1 item 2, bullet 2 item 7, bullet 3 item 1, bullet 4 item 11, bullet 5 items 2, 8 and 9, bullet 6 item 12, and ADR-0050 to ADR-0053 and ADR-0055):
-
-- every cell type except pyramids, at p = 1–8 and with both node families where offered: physical points, Jacobians, det J, pseudo-inverses, normals and facet normals from the device match the host reference (tetraloma-refcell's f64 tabulation) to 10^−12 (f64) and 10^−5 (f32), and the pull-back recovers reference points to the same tolerances; on the CPU runtime, Metal (f32) and CUDA (Locust); pyramids as before (p ≤ 3, experimental above 2);
-- every kernel variant up to p = 8 compiles, loads and launches on each backend, and the first-use compile and load time of each is at most 30 s on Locust;
-- for quadrilaterals and hexahedra, the time per quadrature point of geometric factors and of a pull-back Newton step at p = 8 over that at p = 4 is measured and reported per device class against a target of 3 (direct evaluation: about 5.8 times), with the speedup over M9 at p = 8 (ADR-0053);
-- no policy family is more than 5% slower than in M9 at p ≤ 4 on any device class, in a paired comparison where M9's direct kernel is selectable (ADR-0055);
-- the determinism, vector-size invariance and parallel invariance tests pass at p = 1–8: bitwise on the CPU runtime, to 10^−12 (f64) and 10^−5 (f32) on GPUs;
-- `docs/perf/high-order.md` lists, for every family, device class and degree range, the measured cost of each strategy, the chosen one and the reason, with benchmark JSON under `docs/perf/data/` from the targets of M3s (Locust's Grace CPU: the drift baseline and the paired check only, ADR-0051).
-
-### M10 Hardening
-
-**Scope:** a hardened host-staged halo exchange and `local_gpu_index` (ADR-0026, ADR-0059), benchmarks (including a re-run of the M3s vectorization study for every kernel family and a check of M9h's degree policy, both with the candidate protocol of "Benchmarks"; ADR-0057), ending with four generic parameter sets, CPU and GPU for f32 and f64 (ADR-0058), documentation and examples.
-
-**Acceptance** (read as in ADR-0057, ADR-0058, ADR-0059 and ADR-0060):
-
-- the host-staged halo exchange (`forward` and `reverse`, halos of 10^3, 10^4 and 10^5 nodes with block 3) is recorded on the local Mac (CPU runtime, Metal) and Locust (CUDA, 1 and 2 ranks); for 10^5 nodes, its host-to-device copy takes at most 1.5 times its device-to-host copy on Metal and on CUDA with one process per GPU (on the CPU runtime, whose read returns a view of the runtime's storage, and on CUDA with two ranks sharing one GPU, both are recorded and docs/perf/halo-exchange.md reports the ratio with its cause; ADR-0061, ADR-0062), and `reverse` at most twice `forward` on each, and results stay bitwise identical to M9h's (ADR-0059);
-- for quadrilaterals and hexahedra, the time per point of geometric factors and of a pull-back Newton step at p = 8 is at most 3 times that at p = 4 on every benchmark platform under the generic degree policy, each degree under its own choice (ADR-0042 item 1 as amended by ADR-0064, ADR-0053, ADR-0058), or the gap is reported with its cause;
-- benchmarks (entities created per second, geometric factors per second at p = 1, 4 and 8; ADR-0041) are recorded on the local Mac (CPU runtime, Metal), Locust and one socket of a whole Kathleen node (AVX-512; ADR-0020), plus a Myriad D node if Kathleen was unavailable, and Myriad's V100 and A100 nodes if Locust was unavailable (ADR-0014, ADR-0016);
-- the M3s study covers every candidate `KernelKind`, including Pack, PullBack and any kernel family M9h adds (ADR-0041), and the degree-dependent families are measured at p = 1, 4 and 8, each with the candidate protocol of "Benchmarks" (ADR-0057); `vector-policy.toml`, `degree-policy.toml`, `docs/perf/vectorization.md` and `docs/perf/high-order.md` are updated from these runs on the benchmark platforms, and from M9h's records between those degrees;
-- `DeviceClass` has exactly the variants `Cpu` and `Gpu`. A test checks that `vector-policy.toml` and `degree-policy.toml` hold exactly four sets, Cpu and Gpu for 4-byte and 8-byte scalars, and that each entry follows the generic decision rule of "Benchmarks": no platform is more than 25% slower than its own best candidate, unless the report marks the entry with its worst case (ADR-0058);
-- every example runs on the CPU runtime and on at least one GPU backend;
-- rustdoc builds without warnings, and every public item is documented.
-
-### M10c CPU vector policy
-
-**Scope (ADR-0065):** the `[Cpu]` vector set re-derived with interleaved timing in two processes over a grid of widths, blocks and units; the generic rule's fallback without the admission gate, applied to all four sets.
-
-**Acceptance:**
-
-- every `[Cpu]` vector entry is measured on the three Cpu platforms with the protocol and grid of "Benchmarks", and the records carry both processes; `docs/perf/vectorization.md` gives each platform's noise between processes;
-- `vector-policy.toml` and `degree-policy.toml` follow the generic decision rule, with the fallback of ADR-0065, on the committed records; every entry that misses the bound is marked with its worst case and the cause;
-- the standing matrix passes with the new sets.
-
-### E1 Rename to tetraloma
-
-**Scope (ADR-0066):** the project's permanent name, tetraloma, throughout: crate names and directories, Rust paths, environment variables (`TETRALOMA_*`), scripts, CI, documentation and the Claude Code configuration; the repository moves to github.com/tetracl/tetraloma. No type, function or behaviour changes.
-
-**Acceptance:**
-
-- `scripts/check-name.sh` passes, in CI: no old name in tracked paths or content outside the allowlist of ADR-0066, every workspace crate except the two `-sys` crates is named `tetraloma` or `tetraloma-*`, the workspace manifest names the repository, and only `TETRALOMA_*` variables are read;
-- the standing matrix passes unchanged.
-
-### E2 Real MPICH runs in hosted CI
-
-**Scope (ADR-0068):** hosted CI's MPICH jobs start every rank as a singleton (Ubuntu 24.04's MPICH 4.2.0 is built with PMIx, which its hydra launcher does not serve; Launchpad bug 2072338), so the MPICH half of "under both MPICH and Open MPI" has not run on more than one rank. E2 adds a rank-count guard: `scripts/mpi-test.sh` and `scripts/run-examples.sh` pass the requested rank count to every rank (`TETRALOMA_EXPECT_RANKS`), and `tetraloma_mpi_tests::run` and the MPI examples fail at once if the world size differs. The jobs `mpi-mpich` and `mpi-mpich-hdf5` move to `ubuntu-26.04` with Ubuntu's MPICH 4.3.2 and its parallel HDF5 (within the supported 1.10.10–2.2.0); the other jobs stay on `ubuntu-24.04`. Failures that real multi-rank MPICH runs expose are fixed in E2. Fallback if `ubuntu-26.04` breaks those jobs: Debian's fixed MPICH `4.2.0-5.1` on `ubuntu-24.04`. No public API changes; tetraloma-mpi-tests and tetraloma-examples (unpublished) gain the check.
-
-**Acceptance:**
-
-- the guard fails a singleton launch (checked once under Ubuntu 24.04's MPICH);
-- `scripts/mpi-test.sh 1 2 3 4` and the hdf5 targets pass under MPICH in CI with the guard;
-- the MPI examples pass on 1–4 ranks under MPICH in CI with the guard;
-- the Open MPI jobs pass unchanged, with the guard, in CI and locally.
-
-### D1 User documentation
-
-**Scope (ADR-0067):** the user documentation of "User documentation": the book in `docs/user/` with the contents listed there, its figures and its programs in tetraloma-examples; the doc tools; the site at `https://tetracl.github.io/tetraloma/` with the API of the nine published library crates, built and deployed by CI; the API documentation of those crates rewritten for users; and the checks of `scripts/check-user-docs.sh`. No public item, signature or behaviour changes; only doc comments change in the library crates.
-
-**Acceptance:**
-
-- `scripts/check-user-docs.sh` passes in CI;
-- the book's doctests pass on the CPU runtime;
-- the book's programs pass on the CPU runtime, Metal and CUDA in f32 and, where supported, f64, and the MPI programs on 1–4 ranks under MPICH and Open MPI;
-- the library sources differ from the base commit only in comments;
-- the site is deployed from `main`;
-- the hosted CI jobs pass.
-
-## Risks and mitigations
+## 19. Risks and mitigations
 
 The largest risks are CubeCL churn, the capability gaps of wgpu and Metal, and the external partitioner and MPI bindings that must be written from scratch.
 
@@ -2236,121 +1909,7 @@ The largest risks are CubeCL churn, the capability gaps of wgpu and Metal, and t
 | CubeCL's vector API may change between releases | Pinned at `=0.11.0`; vector handling confined to `LaunchPlan`, `DeviceBuffer::vector_arg` and the kernels of the candidate list. |
 | A tiled `QuadField` is a less familiar layout for downstream crates | The index formula is documented; `to_host_cell_major` gives the plain layout; tile width 1 stays available. |
 
-## Handing this design to Claude Code
-
-Convert this document to `docs/design.md` in the repository, add the working agreement below as `CLAUDE.md`, and run one milestone per session. Ask for failing tests from the acceptance list first, then the implementation.
-
-**Listing H1 — CLAUDE.md**
-
-```markdown
-# tetraloma - working agreement
-
-- Design reference: docs/design.md (tetraloma Design B, revised design, October 2026).
-  Public types in "Architecture" and "API walkthrough" change only via an ADR in docs/adr/.
-- Toolchain: stable Rust 1.99, pinned in rust-toolchain.toml.
-- CubeCL: cubecl = "=0.11.0" in [workspace.dependencies].
-  - Crates that define or launch kernels may depend on cubecl without runtime features.
-  - Runtime types (runtime structs, get_resource, cubecl-runtime) only in tetraloma-device.
-  - Never add a Runtime type parameter to a public type; use cubecl::prelude::Client.
-  - Runtime features only in tetraloma-testing, examples, benches and binaries
-    (`gpu-aware-cuda` is reserved; ADR-0059).
-- Kernels:
-  - launch shape (cube count, cube dim, vector size, items per unit) only from LaunchPlan;
-    usize arithmetic with overflow checks;
-  - at most six buffers; no 64-bit atomics; no float atomics;
-  - no assumption of forward progress between workgroups (no decoupled look-back);
-  - never assume a plane size; correct for plane size 1;
-  - results bitwise deterministic.
-- SIMD only through CubeCL Vector<F, N> in kernels; never intrinsics or std::simd.
-  - kernels on the candidate list are generic over N: Size and correct for N = 1;
-  - lanes are independent items (cells, elements); no cross-lane operations except
-    fixed-order reductions and fixed-order in-vector prefixes; no branches on lane values
-    (use arithmetic masks);
-  - vector sizes come from VectorPolicy (vector-policy.toml), changed only with benchmark
-    data in docs/perf/vectorization.md;
-  - from M10, vector-policy.toml and degree-policy.toml hold four generic sets (Cpu and Gpu,
-    for f32 and f64), good enough on every benchmark platform, never one set per platform
-    (ADR-0058).
-- Precision: every kernel test runs in f32 and, where supported, f64.
-  Tolerances: 1e-12 relative (f64), 1e-5 (f32).
-- Host maths generic over F: Real uses widen()/narrow() or f64, never F's own methods.
-- Orientation always uses origin ids, never local or post-partition global ids.
-- Tests: cargo test --workspace must pass on the CPU runtime.
-  GPU runs: TETRALOMA_TEST_DEVICE=vulkan | metal | cuda.
-- MPI tests: crate tetraloma-mpi-tests ([[test]] targets, harness = false),
-  run via scripts/mpi-test.sh 1 2 3 4 under MPICH and Open MPI; the scripts check that
-  the world size equals the rank count requested (ADR-0068).
-- Run plans: only the runs that show the code works and the timings a decision needs
-  (ADR-0057). The standing matrix stays (CPU runtime and Metal on every change, Locust after
-  kernel tasks, MPI on 1-4 ranks under both flavours, f32 and f64, scalar and widest vector
-  sizes, the review targets). Beyond it: no exhaustive sweeps over parameters, sizes, degrees
-  or targets, no repeats of passing runs, and after review fixes only the runs they reach.
-  Benchmarks use the candidate protocol of docs/design.md, "Benchmarks".
-- ndelement is a dependency of conformance/ only (outside the workspace). Never add it to a
-  library crate, and never add `version =` to its git dependency. After bumping its pin, run
-  cargo test --manifest-path conformance/Cargo.toml and re-export the fixtures with
-  cargo run --manifest-path conformance/Cargo.toml --bin export-fixtures.
-- Host<->device copies in library code only for I/O (including the upload of input arrays
-  at mesh creation, and of quadrature points and tabulations when a rule is created or a
-  tabulation is first cached, including the 1D tabulations and lexicographic node
-  permutations of sum-factorised kernels), explicit to_host()/read_node(), the count read
-  of run-length and unique-by-key, the per-block read that finishes measure in f64, the
-  debug-build index checks of gather and scatter, the host-staged halo exchange, the
-  boundary-entity ownership exchange of entity creation (the candidate count, keys and the
-  local indices of owned candidates to the host; owners, global numbers and ghost
-  placements back), the upload of an IndexMap's send and receive index lists when its first
-  scatterer is created, and of a scatterer's reverse lists when it is created, and the
-  vertex shared flags at mesh creation (ADR-0026, ADR-0028); in submesh creation, the
-  per-block count reads of compaction (and of each physical group of the child's tags), the
-  agreed TooLarge, NonManifold and InteriorFacet flags (with the parent blocks that hold a
-  child's parent cell, read in the same transfer), the child ghost lists for
-  IndexMap::with_ghosts, the child sharer rows of shared vertices and the node-owner
-  candidates of shared nodes to the host, their owners, child global numbers and ghost
-  placements back, the upload of the closure node maps and the child's vertex shared flags;
-  in orient, the per-round change flag, the agreed error flags, the per-component (label,
-  sum, open) records and the flip decisions back; and the upload of a geometry block's
-  expansion coefficients, or of the coefficient factors and node permutation of a
-  sum-factorised pull-back, when the pull-back first uses it (ADR-0039, ADR-0040,
-  ADR-0042, ADR-0049).
-- FFI declarations only in *-sys crates. FFI calls only in tetraloma-parallel (MPI),
-  tetraloma-device (GPU-aware; the macOS performance-core count, ADR-0017) and tetraloma-partition
-  (Scotch, PT-Scotch, ParMETIS; ADR-0029), behind safe wrappers; a -sys crate's own tests
-  and examples may call its declarations (ADR-0039). Every unsafe block needs a SAFETY comment.
-- User documentation (ADR-0067): the book lives in docs/user/. Public items of the nine
-  published library crates are documented for users:
-  - no developer citations (docs/ paths, ADR numbers, plan questions, milestone ids) in
-    `///` or `//!`; the provenance goes in a `//` comment directly above the doc comment;
-  - a link to a book section (absolute URL under the site) on each crate root, public
-    module, type, trait, constant, static, function and macro, inherent method and method
-    of a trait defined in these crates;
-  - a running `# Example` doctest (not ignore, not no_run) on each such function and method,
-    or an entry with a reason in docs/user/doc-audit-allow.toml;
-  - maths in Unicode with the book's symbols, linking to the book for derivations.
-- A milestone that adds or changes public items documents them so and updates the book in
-  the same task; scripts/check-user-docs.sh passes at the review.
-- Each milestone: acceptance tests first (failing), then implementation, unit tests,
-  property tests and rustdoc examples.
-- If an API deviation is unavoidable, stop and draft an ADR.
-```
-
-The repository's `CLAUDE.md` extends this listing with workflow rules (plans, ADRs, commits) and test-target rules (when to use the Myriad V100 and A100 nodes and Locust).
-
-**Listing H2 — example milestone prompt**
-
-```text
-Implement milestone M3 ("Serial mesh core") from docs/design.md.
-Scope: tetraloma-topology, tetraloma-geometry, the Mesh facade in tetraloma, and the mesh
-generators in tetraloma-testing. Use the types from the "Architecture" section exactly, and
-replace the M1a stub Mesh in the compile-fail tests.
-Start by writing the M3 acceptance tests so that they fail: entity counts and Euler
-characteristic, unit volume for p = 1..4 in f64 and f32, sphere-area convergence,
-f32-vs-f64 agreement, mixed-surface Jacobians, permutation info against the fixtures, and
-QuadField chunking. Then implement until they pass on the CPU runtime, and run them with
-TETRALOMA_TEST_DEVICE=vulkan and TETRALOMA_TEST_DEVICE=metal.
-If an API deviation is unavoidable, stop and draft an ADR.
-```
-
-## Appendix A — Reference cells and element tables
+## 20. Appendix A — Reference cells and element tables
 
 tetraloma follows the DefElement conventions as implemented by ndelement on the main branch of nd-project/nd (commit f8cbffe, 1 October 2026; GitHub mirror bempp/nd). Vertex coordinates, and the sub-entity numbering of quadrilaterals, hexahedra, prisms and pyramids, are identical in ndelement, Basix, Symfem and DefElement. For triangles and tetrahedra, ndelement, Symfem and DefElement number edges and faces in sorted (lexicographic) order, while Basix and DOLFINx use the reverse order; A.11 gives the conversion.
 
@@ -2609,7 +2168,9 @@ extern crate openblas_src;
 - **Orientation bits:** DOLFINx stores faces first, with the reflection in the low bit, and defines its rotation count relative to both the local and the global minimum. Recompute DOLFINx bits from the vertex ids with DOLFINx's rule, rather than translating bit fields.
 - **DOF transformations:** the base transformations of Scroggs, Dokken, Richardson and Wells (ACM TOMS 48(2), 2022, doi 10.1145/3524456) depend only on the sub-entity type, so they are identical in both numberings. Only the block of the cell transformation each one lands in moves.
 
-## Change log from the October 2026 draft
+## 21. Change log from the October 2026 draft
+
+Revision history: revised design, 17 October 2026. It supersedes the draft "tetraloma Design B — Typed dimensions, runtime cells" of October 2026 and incorporates the consolidated design review of the same date. The table below maps every review finding to the place where it is fixed. Revision 2 of the same date adds the development environment: the development and test targets and milestone E0. Revision 3 adds SIMD vectorization of kernels through CubeCL vectors, with a benchmark milestone (M3s) that decides where vectors are used. ADR-0069 moved the implementation roadmap to `docs/roadmap.md` and retired Listing H1 (the working agreement for the earlier workflow); its code rules are in section 22, Conventions, and its operating rules in `AGENTS.md`. The rows below that cite Listing H1 or the roadmap are history.
 
 All 44 findings of the consolidated design review are addressed. The table gives each finding's fix and the section that now contains it.
 
@@ -2684,3 +2245,108 @@ All 44 findings of the consolidated design review are addressed. The table gives
 - New section "Vectorization and CPU execution": CubeCL's vector model, how the CPU runtime runs kernels, `LaunchPlan` and `VectorPolicy` (Listing S2), padding and tiles, the candidate list, determinism across vector sizes and the benchmark protocol.
 - `DeviceBuffer` padding and `vector_arg` (Listing S1); the tiled `QuadField` (Listing B4b); the vectorized Jacobian kernel (Listing B5).
 - New milestone M3s (SIMD vectorization and benchmarks) and the tetraloma-bench crate; E-vectors move from M9 to M3; updated M2, M3, M6, M9 and M10, the testing section, the CI matrix, the working agreement and the risks.
+
+## 22. Conventions
+
+These rules apply to all code in the workspace (ADR-0069). They were the code rules of the working agreement (Listing H1 and `CLAUDE.md`); where the two differed, this text follows `CLAUDE.md`. Operating rules (test targets, runs, remote runs, procedures) are in `AGENTS.md`.
+
+- Toolchain: stable Rust 1.99, pinned in rust-toolchain.toml.
+- CubeCL: cubecl = "=0.11.0" in [workspace.dependencies].
+  - Crates that define or launch kernels may depend on cubecl without runtime features.
+  - Runtime types (runtime structs, get_resource, cubecl-runtime) only in tetraloma-device.
+  - Never add a Runtime type parameter to a public type; use cubecl::prelude::Client.
+  - Runtime features only in tetraloma-testing, examples, benches and binaries
+    (`gpu-aware-cuda` is reserved; ADR-0059).
+- Kernels:
+  - launch shape (cube count, cube dim, vector size, items per unit) only from LaunchPlan;
+    usize arithmetic with overflow checks;
+  - at most six buffers; no 64-bit atomics; no float atomics;
+  - no assumption of forward progress between workgroups (no decoupled look-back);
+  - never assume a plane size; correct for plane size 1;
+  - results bitwise deterministic.
+- SIMD only through CubeCL Vector<F, N> in kernels; never intrinsics or std::simd.
+  - kernels on the candidate list are generic over N: Size and correct for N = 1;
+  - lanes are independent items (cells, elements); no cross-lane operations except
+    fixed-order reductions and fixed-order in-vector prefixes; no branches on lane values
+    (use arithmetic masks);
+  - vector sizes come from VectorPolicy (vector-policy.toml), changed only with benchmark
+    data in docs/perf/vectorization.md;
+  - from M10, vector-policy.toml and degree-policy.toml hold four generic sets (Cpu and Gpu,
+    for f32 and f64), good enough on every benchmark platform, never one set per platform
+    (ADR-0058).
+- Precision: every kernel test runs in f32 and, where supported, f64.
+  Tolerances: 1e-12 relative (f64), 1e-5 (f32).
+- Host maths generic over F: Real uses widen()/narrow() or f64, never F's own methods.
+- Orientation always uses origin ids, never local or post-partition global ids.
+- MPI tests: crate tetraloma-mpi-tests ([[test]] targets, harness = false),
+  run via scripts/mpi-test.sh 1 2 3 4 under MPICH and Open MPI; the scripts check that
+  the world size equals the rank count requested (ADR-0068).
+- ndelement is a dependency of conformance/ only (outside the workspace). Never add it to a
+  library crate, and never add `version =` to its git dependency.
+- Host<->device copies in library code only for I/O (including the upload of input arrays
+  at mesh creation, and of quadrature points and tabulations when a rule is created or a
+  tabulation is first cached, including the 1D tabulations and lexicographic node
+  permutations of sum-factorised kernels), explicit to_host()/read_node(), the count read
+  of run-length and unique-by-key, the per-block read that finishes measure in f64, the
+  debug-build index checks of gather, scatter, pack and unpack, the host-staged halo exchange, the
+  boundary-entity ownership exchange of entity creation (the candidate count, keys and the
+  local indices of owned candidates to the host; owners, global numbers and ghost
+  placements back), the upload of an IndexMap's send and receive index lists when its first
+  scatterer is created, and of a scatterer's reverse lists when it is created, and the
+  vertex shared flags at mesh creation (ADR-0026, ADR-0028); in submesh creation, the
+  per-block count reads of compaction (and of each physical group of the child's tags), the
+  agreed TooLarge, NonManifold and InteriorFacet flags (with the parent blocks that hold a
+  child's parent cell, read in the same transfer), the child ghost lists for
+  IndexMap::with_ghosts, the child sharer rows of shared vertices and the node-owner
+  candidates of shared nodes to the host, their owners, child global numbers and ghost
+  placements back, the upload of the closure node maps and the child's vertex shared flags;
+  in orient, the per-round change flag, the agreed error flags, the per-component (label,
+  sum, open) records and the flip decisions back; and the upload of a geometry block's
+  expansion coefficients, or of the coefficient factors and node permutation of a
+  sum-factorised pull-back, when the pull-back first uses it (ADR-0039, ADR-0040,
+  ADR-0042, ADR-0049).
+- FFI declarations only in *-sys crates. FFI calls only in tetraloma-parallel (MPI),
+  tetraloma-device (GPU-aware; the macOS performance-core count, ADR-0017) and tetraloma-partition
+  (Scotch, PT-Scotch, ParMETIS; ADR-0029), behind safe wrappers; a -sys crate's own tests
+  and examples may call its declarations (ADR-0039). Every unsafe block needs a SAFETY comment.
+- User documentation (ADR-0067): the book lives in docs/user/ (docs/README.md says which
+  documents are for users and which for developers). Public items of the nine published
+  library crates are documented for users:
+  - no developer citations (docs/ paths, ADR numbers, plan questions, milestone ids) in
+    `///` or `//!`; the provenance goes in a `//` comment directly above the doc comment;
+  - a link to a book section (absolute URL under the site) on each crate root, public
+    module, type, trait, constant, static, function and macro, inherent method and method
+    of a trait defined in these crates;
+  - a running `# Example` doctest (not ignore, not no_run) on each such function and method,
+    or an entry with a reason in docs/user/doc-audit-allow.toml;
+  - maths in Unicode with the book's symbols, linking to the book for derivations.
+- A milestone that adds or changes public items documents them so and updates the book in
+  the same task; scripts/check-user-docs.sh passes at the review.
+
+## 23. Protected paths
+
+A change of behaviour in these paths stops a task until the maintainer decides (ADR-0069). Each row names the check that guards it.
+
+| Path | What must not change | Check |
+| --- | --- | --- |
+| `tetraloma-device/vector-policy.toml`, `tetraloma-geometry/degree-policy.toml` | the four generic sets; entries change only with benchmark records in `docs/perf/` (ADR-0058) | `cargo test -p tetraloma-device --test integration policy::`; `cargo test -p tetraloma-bench --test perf_record` |
+| `tetraloma-refcell/tests/fixtures/`, the ndelement pin in `conformance/Cargo.toml` | the reference-cell conventions exported from ndelement | `cargo test -p tetraloma-refcell --test integration fixtures::`; `cargo test --manifest-path conformance/Cargo.toml` |
+| `tetraloma-io/tests/fixtures/` | the committed Gmsh and VTK corpus written by the pinned tools | `cargo test -p tetraloma-io --test integration gmsh_corpus::`; `cargo test -p tetraloma-io --test integration vtk_fixtures::` |
+| `rust-toolchain.toml`, the `cubecl` pin in `Cargo.toml` | Rust 1.99; `cubecl = "=0.11.0"`; a default build free of ndelement, BLAS and MPI | `scripts/check-workspace-deps.sh` |
+| `scripts/mpi-test.sh`, `scripts/run-examples.sh` | every MPI run checks the world size (ADR-0068) | `scripts/check-rank-guard.sh` |
+| names in tracked paths and content | the project name and its allowlist (ADR-0066) | `scripts/check-name.sh` |
+
+## 24. Open questions
+
+What the design leaves undecided; an agent that meets one stops and asks (ADR-0069).
+
+None.
+
+## 25. Glossary
+
+The terms and symbols of the user book's glossary (`docs/user/src/glossary.md`) apply here (ADR-0069). Terms used only in the design and the agent rules:
+
+- **Standing matrix:** the runs every milestone keeps (ADR-0057): the CPU runtime and Metal on every change, Locust after kernel tasks, MPI on 1–4 ranks under both flavours, f32 and f64, scalar and widest vector sizes, the review targets.
+- **Candidate protocol:** how benchmarks time and choose among candidates; section 8, "Benchmarks".
+- **Benchmark platform:** a machine and backend the policies are measured on; sections 8 ("Benchmarks") and 17.
+- **Cpu and Gpu device classes:** the two `DeviceClass` variants the vector and degree policies are keyed on; section 8 (ADR-0058).
