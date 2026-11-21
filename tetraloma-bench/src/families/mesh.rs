@@ -167,7 +167,7 @@ fn device_error(e: tetraloma::GridError) -> String {
     e.to_string()
 }
 
-/// The check tolerance of `F`: 1e-5 relative in f32, 1e-12 in f64 (CLAUDE.md).
+/// The check tolerance of `F`: 1e-5 relative in f32, 1e-12 in f64 (design "Conventions").
 fn tolerance<F: Real>() -> f64 {
     if size_of::<F>() == 4 { 1e-5 } else { 1e-12 }
 }

@@ -1,20 +1,15 @@
 ---
 name: hpc-test
-description: Run tetraloma tests on the UCL remote targets through scripts/hpc/remote-test.sh — Locust for every CUDA run (kernel tasks, milestone reviews, benchmarks); the A4000 workstation as the first CUDA fallback; Myriad V100/A100 only for multi-GPU tests, architecture comparisons and as the fallback after it; Myriad CPU-only D nodes for AVX-512 CPU benchmarks. Use for every CUDA test run and for 8-rank MPI runs.
+description: Run tetraloma tests on the UCL remote targets through scripts/hpc/remote-test.sh — Locust for every CUDA run (kernel tasks, milestone gates, benchmarks); the A4000 workstation as the first CUDA fallback; Myriad V100/A100 only for multi-GPU tests, architecture comparisons and as the fallback after it; Kathleen for CPU-only remote runs and AVX-512 CPU benchmarks (Myriad CPU-only D nodes as its fallback). Use for every CUDA test run and for 8-rank MPI runs.
 argument-hint: "[target] [-- command]"
 ---
 
 Run a test command on a remote target and report the result. Arguments: $ARGUMENTS
 
-## 1. Check that the runner exists
-
-`scripts/hpc/remote-test.sh` is created in milestone E0. If it does not exist, say that CUDA
-tests cannot run until E0 is merged, and stop.
-
-## 2. Choose the target
+## 1. Choose the target
 
 - **`locust`** unless one of the cases below applies. It is the CUDA platform for every run:
-  after kernel changes, at every milestone review, and for benchmarks. No queue, and a build
+  after kernel changes, at every milestone gate, and for benchmarks. No queue, and a build
   takes about a minute (ADR-0014).
 - **`a4000`** (one RTX A4000, sm_86, x86-64; no scheduler, shared CPU; ADR-0037), the first
   fallback:
@@ -37,7 +32,7 @@ tests cannot run until E0 is merged, and stop.
   State the reason in one line when you choose `myriad-v100` or `myriad-a100`.
 - **`kathleen`** (Slurm; whole nodes of 2 × 20-core Xeon Gold 6248, AVX-512) for every
   CPU-only remote run (x86-64 AVX-512 CPU benchmarks, which Locust cannot provide;
-  the CPU runtime on x86-64) and for MPI runs beyond 4 ranks; from M6 on, every milestone review
+  the CPU runtime on x86-64) and for MPI runs beyond 4 ranks; every milestone gate
   also runs the MPI tests on two Kathleen nodes (ADR-0016). Never more than two nodes per job:
   `--nodes 1` (default, QoS `singlenode`, at most 6 h) or `--nodes 2` (`test` up to 1 h, else
   `small`); `--ranks N` on two nodes spreads the ranks over both. If its jobs stay pending
@@ -50,11 +45,12 @@ tests cannot run until E0 is merged, and stop.
 
 If the user named a target, use it.
 
-## 3. Choose the command and resources
+## 2. Choose the command and resources
 
-- Before M0 is merged: `cargo run --release --manifest-path tools/env-check/Cargo.toml --features cuda`.
-- After M0: the command from the plan's verification line or acceptance-coverage table. The job
-  sets `TETRALOMA_TEST_DEVICE=cuda`; add `--features tetraloma-testing/cuda` as recorded in docs/plans/M0.md.
+- The command from the task's plan section, the plan's acceptance table or Verification set, or
+  the check tier of `AGENTS.md` that asks for the run. The job sets `TETRALOMA_TEST_DEVICE=cuda`;
+  add `--features tetraloma-testing/cuda` (docs/dev-environment.md, "Test commands").
+  `tools/env-check/` runs with `cargo run --release --manifest-path tools/env-check/Cargo.toml --features cuda`.
   On `myriad-cpu` (and `kathleen`) the job sets `TETRALOMA_TEST_DEVICE=cpu`; add no CUDA feature.
 - `myriad-cpu`: always `--cores 36`. The CPU runtime's threads follow the job's slots, so a
   smaller request runs the CPU runtime on fewer threads (and shares the node with other jobs).
@@ -63,7 +59,7 @@ If the user named a target, use it.
 - Benchmarks (tetraloma-bench, from M3s) on Myriad: `--cores 36` so the node's CPU is not shared,
   and a longer `--time`; never draw SIMD conclusions from a job with fewer slots (the prologue's
   `slots:` and `cpus:` lines show what the job had). Copy the JSON results from `target/hpc/<target>/<job id>/` to `docs/perf/data/`
-  only when the plan's task asks for it.
+  only when the task's plan section asks for it.
 - Benchmarks on Kathleen (ADR-0020): one whole node, but bind the benchmark binary to socket 0
   and its memory: build it first, then run it under `numactl --physcpubind=0-19 --membind=0`
   (20 threads, one per core). Across both sockets the timings depend on thread placement.
@@ -82,7 +78,7 @@ If the user named a target, use it.
   the run; otherwise discard it and repeat the run later (ADR-0002, ADR-0037). Benchmark records
   come from Locust (Myriad as its fallback), never from `a4000`.
 
-## 4. Run
+## 3. Run
 
 ```sh
 scripts/hpc/remote-test.sh <target> [options] -- <command>
@@ -99,13 +95,13 @@ scripts/hpc/remote-test.sh <target> [options] -- <command>
 - Cancel jobs you no longer need with `scripts/hpc/cancel.sh <job id>`, and leave none queued
   at the end of a session.
 
-## 5. Report
+## 4. Report
 
 Report the target, job id, commit (and whether the tree was dirty), the command, the result, and
 the first failure from the runner's summary. On Locust and `a4000` also report the `node load:` line. The full logs are in `target/hpc/<target>/<job id>/`;
 read them only as far as needed to locate a failure.
 
-## 6. When it goes wrong
+## 5. When it goes wrong
 
 | Symptom | Meaning and action |
 | --- | --- |

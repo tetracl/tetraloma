@@ -28,7 +28,6 @@
       "Bash(git rev-parse *)",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git merge --no-ff *)",
       "Bash(git push *)",
       "Bash(git worktree list)",
       "Bash(scripts/mpi-test.sh *)",
@@ -39,7 +38,14 @@
       "Bash(scripts/hpc/status.sh *)",
       "Bash(scripts/hpc/cancel.sh *)",
       "Bash(cargo run --release -p tetraloma-bench *)",
-      "Bash(cargo bench *)"
+      "Bash(cargo bench *)",
+      "Bash(gh issue view *)",
+      "Bash(gh issue list *)",
+      "Bash(gh pr view *)",
+      "Bash(gh pr checks *)",
+      "Bash(gh pr list *)",
+      "Bash(gh pr diff *)",
+      "Bash(git worktree add *)"
     ],
     "deny": [
       "Bash(git push *--force*)",
@@ -51,7 +57,13 @@
       "Bash(git push * -d *)",
       "Bash(git reset --hard *)",
       "Bash(git rebase *)",
-      "Bash(cargo publish *)"
+      "Bash(cargo publish *)",
+      "Bash(git push origin main*)",
+      "Bash(git push * HEAD:main*)",
+      "Bash(git push * HEAD:refs/heads/main*)",
+      "Bash(git commit --no-verify*)",
+      "Bash(git commit * --no-verify*)",
+      "Bash(git push --no-verify*)"
     ]
   }
 }

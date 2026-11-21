@@ -6,12 +6,10 @@ allowed-tools: Bash(cargo fmt *) Bash(cargo clippy *) Bash(cargo test *) Bash(gi
 
 # Pre-commit checks
 
-1. Before milestone M0 there is no `Cargo.toml` at the repository root. Then check only what E0
-   adds: `tools/env-check/` with the commands of step 3 and `--manifest-path tools/env-check/Cargo.toml`,
-   and the shell scripts as in step 3.5. If neither changed, report "nothing to verify yet" and stop.
+1. This is the `quick` tier of `AGENTS.md`, run before each commit of code changes.
 2. Find the touched crates: list the changed paths with `git status --porcelain` and
    `git diff --name-only HEAD`, and map each path to the workspace crate that contains it.
-   Changes only under `docs/`, `.claude/` or to `*.md` files need no checks.
+   Changes only under `docs/`, `.agents/`, `.claude/` or to `*.md` files need no checks.
 3. Run, stopping at the first failure:
     1. `cargo fmt --all -- --check`. If it fails, run `cargo fmt --all` and include the result in
        the commit.
@@ -27,5 +25,5 @@ allowed-tools: Bash(cargo fmt *) Bash(cargo clippy *) Bash(cargo test *) Bash(gi
    Do not commit when a check fails; fix it first, or explain why it cannot be fixed in this task.
 
 GPU backends, MPI, remote targets and the full workspace run are not part of this check; they
-run through the test-runner subagent and the hpc-test skill at the end of a task that changed
-kernels, and at the end of a milestone.
+belong to the `full` tier before a pull request (CUDA when the task changed kernels) and to the
+`milestone` tier at the gate (`AGENTS.md`, Checks).

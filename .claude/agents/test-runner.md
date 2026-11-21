@@ -22,7 +22,7 @@ Run exactly the commands the delegating prompt asks for. When it only names a sc
 | CPU runtime on Locust | `scripts/hpc/remote-test.sh locust -- env TETRALOMA_TEST_DEVICE=cpu cargo test --release --workspace` |
 | MPI | `scripts/mpi-test.sh 1 2 3 4` |
 | CPU runtime on Kathleen (AVX-512) | `scripts/hpc/remote-test.sh kathleen -- cargo test --release --workspace` (one whole node; ADR-0016) |
-| MPI on two Kathleen nodes (reviews from M6) | `scripts/hpc/remote-test.sh kathleen --nodes 2 --ranks 16 -- scripts/mpi-test.sh 2 4 8 16` (never more than two nodes) |
+| MPI on two Kathleen nodes (every gate) | `scripts/hpc/remote-test.sh kathleen --nodes 2 --ranks 16 -- scripts/mpi-test.sh 2 4 8 16` (never more than two nodes) |
 | MPI on CUDA (Myriad V100) | `scripts/hpc/remote-test.sh myriad-v100 --gpus 2 --ranks 2 -- scripts/mpi-test.sh` |
 | dependency check | `scripts/check-workspace-deps.sh` |
 | vector sizes | `TETRALOMA_VECTOR_SIZE=scalar cargo test --workspace` and `TETRALOMA_VECTOR_SIZE=widest cargo test --workspace` |
@@ -30,17 +30,15 @@ Run exactly the commands the delegating prompt asks for. When it only names a sc
 | lint | `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets -- -D warnings` |
 
 For CUDA, T is `locust` (ADR-0014) unless the delegating prompt names `a4000` (ADR-0037), `myriad-v100` or `myriad-a100`.
-Before M0, the CUDA command is `cargo run --release --manifest-path tools/env-check/Cargo.toml --features cuda`.
 Remote runs can wait in a queue; let them finish (the runner enforces its own time limit).
 
-Milestone M0 fixed the exact backend and MPI commands in `docs/dev-environment.md`,
-"Test commands". If that section records different ones, use those.
+The exact backend and MPI commands are in `docs/dev-environment.md`, "Test commands"; if that
+section records different ones, use those. The check tiers are in `AGENTS.md`, Checks.
 
 Before a backend run, check that the backend is usable on this machine (for example, that
 `TETRALOMA_TEST_DEVICE=B` tests do not fail with `DeviceUnavailable`). If it is not, report
 "backend B unavailable here" instead of a failure. Do the same for a missing MPI
-installation, a missing `scripts/mpi-test.sh` (created in M0), a missing
-`scripts/hpc/remote-test.sh` (created in E0) or an unreachable remote target.
+installation or an unreachable remote target.
 
 ## How to report
 

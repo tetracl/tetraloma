@@ -478,7 +478,7 @@ impl<F: Real> Factors<F> {
         box_cells(self.cell.into(), self.side)
     }
 
-    /// The tolerance of K J = I: 1e-12 in f64 and 1e-5 in f32 (CLAUDE.md), times the box side
+    /// The tolerance of K J = I: 1e-12 in f64 and 1e-5 in f32 (design "Conventions"), times the box side
     /// for the conditioning of J (entries 1/side). At 10^6 points the errors stay below 10^-2
     /// of it at p = 1, 4 and 8 on both cells (measured in M10 T2a on the CPU runtime).
     fn tolerance(&self) -> f64 {

@@ -97,7 +97,7 @@ fn sum<F: Real>(mut x: DeviceBuffer<F>) -> Result<f64> {
         }
         x = out;
     }
-    // The per-block read that finishes measure in f64 (CLAUDE.md).
+    // The per-block read that finishes measure in f64 (design "Conventions").
     Ok(x.to_host()?[0].widen())
 }
 
@@ -106,7 +106,7 @@ fn fit(x: usize) -> Result<u32> {
     u32::try_from(x).map_err(|_| GridError::TooLarge)
 }
 
-// Design: "Geometric factors", Listing B11; CLAUDE.md (the per-block read).
+// Design: "Geometric factors", Listing B11; design "Conventions" (the per-block read).
 /// The measure (length, area or volume) of the owned cells of block `b` of `g`, Σ_c Σ_q
 /// det J(ξ_q) w_q, with the pseudo-determinant on a curve or surface.
 ///

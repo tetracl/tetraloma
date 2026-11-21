@@ -355,7 +355,7 @@ pub(crate) fn child_items(
     }
     let (pos_s, pos_u) = (exclusive_scan(&s)?, exclusive_scan(&u)?);
     drop((s, u));
-    // The count read of the compaction (CLAUDE.md, ADR-0039 item 18).
+    // The count read of the compaction (design "Conventions", ADR-0039 item 18).
     let (num_shared, num_unshared) = if nv > 0 {
         let out = DeviceBuffer::<u32>::uninit(client, 2)?;
         let one = plan(client, 1)?;
@@ -410,7 +410,7 @@ pub(crate) fn child_items(
             );
         }
         // The child sharer rows of shared vertices, or the node-owner candidates of shared
-        // nodes, to the host (CLAUDE.md, ADR-0039 item 18).
+        // nodes, to the host (design "Conventions", ADR-0039 item 18).
         for row in shared_rows.to_host()?.as_chunks::<5>().0 {
             list.push(Shared {
                 parent: row[0],
@@ -431,7 +431,7 @@ pub(crate) fn child_items(
     let num_local = num_owned + decided.ghosts.len();
     fit(num_local)?;
 
-    // The ghost places back to the device (CLAUDE.md, ADR-0040).
+    // The ghost places back to the device (design "Conventions", ADR-0040).
     let ghost = DeviceBuffer::<u32>::zeros(client, nv)?;
     if num_shared > 0 {
         let place = DeviceBuffer::from_host(client, &decided.places)?;

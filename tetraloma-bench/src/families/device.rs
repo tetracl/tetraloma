@@ -68,7 +68,7 @@ pub(crate) trait Elem: DeviceScalar + Copy + PartialEq + Debug + 'static {
     /// A summand of the Reduce input from the random word `r`: `r` itself in u32, its low bit
     /// in floats, so that every partial sum is exact.
     fn summand(r: u32) -> Self;
-    /// Whether `got` is the sum of `x` within the tolerance of CLAUDE.md (1e-5 relative in f32,
+    /// Whether `got` is the sum of `x` within the tolerance of design "Conventions" (1e-5 relative in f32,
     /// 1e-12 in f64; wrapping and exact in u32). Float sums are formed in f64 with `widen`.
     fn sum_matches(x: &[Self], got: Self) -> bool;
 }

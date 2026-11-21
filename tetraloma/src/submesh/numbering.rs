@@ -64,7 +64,7 @@ fn ghost_numbers_kernel(
 /// (owned first, `num_owned` of them), in the parent block with index map `parent_map` and
 /// first flat index `offset`. One rank: `IndexMap::new`. More ranks: the ghost children's
 /// numbers come from their owners by a forward scatter, and their (parent index, number) rows
-/// go to the host for `IndexMap::with_ghosts` (CLAUDE.md, the child ghost lists). Collective.
+/// go to the host for `IndexMap::with_ghosts` (design "Conventions", the child ghost lists). Collective.
 ///
 /// # Errors
 ///
@@ -141,7 +141,7 @@ pub(crate) fn cell_map(
                 launch.items_per_unit,
             );
         }
-        // The child ghost lists for IndexMap::with_ghosts (CLAUDE.md, ADR-0039 item 18).
+        // The child ghost lists for IndexMap::with_ghosts (design "Conventions", ADR-0039 item 18).
         let parent_owners = parent_map.ghost_owners();
         let parent_owned = parent_map.num_owned();
         for row in out.to_host()?.as_chunks::<3>().0 {

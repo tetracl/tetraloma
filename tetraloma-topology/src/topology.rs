@@ -611,7 +611,7 @@ impl<TD: TopoDim> Topology<TD> {
         }
         ranks.sort_unstable();
         ranks.dedup();
-        // The vertex shared flags at mesh and submesh creation (CLAUDE.md, ADR-0026, ADR-0039).
+        // The vertex shared flags at mesh and submesh creation (design "Conventions", ADR-0026, ADR-0039).
         let flags = DeviceBuffer::from_host(&self.client, &flags)?;
         self.vertex_sharers = s;
         self.vertex_shared = Some(flags);

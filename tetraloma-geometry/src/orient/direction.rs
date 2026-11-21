@@ -319,7 +319,7 @@ where
 
     let flat = DeviceBuffer::<u32>::zeros(client, num_cells)?;
     if let Some(sorted) = sorted {
-        // The flip decisions back (CLAUDE.md, copy list).
+        // The flip decisions back (design "Conventions", copy list).
         let flips = DeviceBuffer::from_host(client, &flips)?;
         let launch = plan(client, owned)?;
         debug_assert_bindings(client, 5);
@@ -543,7 +543,7 @@ fn per_label<F: Real, TD: TopoDim>(
     }
     let (sorted, slots) = radix_sort(&keys, &slots)?;
     drop(keys);
-    // The count read of unique-by-key (CLAUDE.md).
+    // The count read of unique-by-key (design "Conventions").
     let (unique, offsets) = unique_by_key_runs(&sorted, &slots)?;
     let num_labels = unique.first.len();
     let sums = DeviceBuffer::<F>::uninit(client, num_labels * width)?;
@@ -567,7 +567,7 @@ fn per_label<F: Real, TD: TopoDim>(
         );
     }
     let open = segmented_reduce(&gather(&open, &slots)?, &offsets, ReduceOp::Max)?;
-    // The per-component (label, sum, open) records (CLAUDE.md, copy list).
+    // The per-component (label, sum, open) records (design "Conventions", copy list).
     let records = Records {
         labels: decode_origin_ids(&unique.keys.to_host()?),
         sums: sums.to_host()?.into_iter().map(Real::widen).collect(),

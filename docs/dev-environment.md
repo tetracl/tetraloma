@@ -1,6 +1,6 @@
 # Development environment
 
-This file records the development and test targets of tetraloma: how to reach them, how jobs run there, and the versions found on them. Milestone E0 fills in every field marked *(E0)* and keeps the file current afterwards. The rules for when each target is used are in `docs/design.md`, section "Development environment and test targets", and in `CLAUDE.md`.
+This file records the development and test targets of tetraloma: how to reach them, how jobs run there, and the versions found on them. Milestone E0 fills in every field marked *(E0)* and keeps the file current afterwards. The rules for when each target is used are in `docs/design.md`, section 17, "Development environment and test targets", and in `AGENTS.md`, rule 11.
 
 Personal details (user ids, host names that are not public, project codes) never go in this file. They live in `scripts/hpc/targets.env`, which git ignores.
 
@@ -12,8 +12,8 @@ Personal details (user ids, host names that are not public, project codes) never
 | Myriad V100 | E and F nodes: 36 cores (Xeon Gold 6140 or 6240), 192 GB RAM, 2 × V100 (compute capability 7.0) | SGE: `-l gpu=N` with `-ac allow=EF` | multi-GPU tests, architecture comparisons and the fallback (ADR-0014) |
 | Myriad A100 | L nodes: 36 cores, 192 GB RAM, 4 × A100 40 GB (compute capability 8.0) | SGE: `-l gpu=N` with `-ac allow=L` | second CUDA architecture; comparisons and fallback (no CUDA 13: Myriad's driver supports CUDA 12.4) |
 | Myriad CPU (`myriad-cpu`) | D nodes: 36 cores (Xeon Gold 6240, AVX-512), 192 GB RAM, no GPU | SGE: `-ac allow=D`, no `-l gpu`; `--cores 36` for the whole node; the job sets `TETRALOMA_TEST_DEVICE=cpu` | fallback for CPU-only runs when Kathleen is unavailable (ADR-0014, ADR-0016) |
-| Kathleen (`kathleen`) | 190 diskless nodes: 2 × 20 cores (Xeon Gold 6248, Cascade Lake, AVX-512), 192 GB RAM, Omni-Path; RHEL 9.6 | Slurm (runner kind `slurm`), whole nodes, at most two per job (`--nodes 1` or `2`); QoS `singlenode`, `test` or `small`; the job sets `TETRALOMA_TEST_DEVICE=cpu` | CPU-only runs and CPU benchmarks (CpuSimd512); MPI beyond 4 ranks; two-node MPI at every review from M6 (ADR-0016) |
-| Locust | NVIDIA GH200 Grace Hopper: Grace aarch64 CPU, Hopper GPU (compute capability 9.0) | UCL ARC experimental system; SSH to the node itself (alias `locust`, keys); open multi-user node without a scheduler (runner kind `direct`) | CUDA platform for every run: after every task that changes kernels, at every milestone review, and for benchmarks (ADR-0014); aarch64 host and Hopper GPU |
+| Kathleen (`kathleen`) | 190 diskless nodes: 2 × 20 cores (Xeon Gold 6248, Cascade Lake, AVX-512), 192 GB RAM, Omni-Path; RHEL 9.6 | Slurm (runner kind `slurm`), whole nodes, at most two per job (`--nodes 1` or `2`); QoS `singlenode`, `test` or `small`; the job sets `TETRALOMA_TEST_DEVICE=cpu` | CPU-only runs and CPU benchmarks (CpuSimd512); MPI beyond 4 ranks; two-node MPI at every milestone gate (ADR-0016) |
+| Locust | NVIDIA GH200 Grace Hopper: Grace aarch64 CPU, Hopper GPU (compute capability 9.0) | UCL ARC experimental system; SSH to the node itself (alias `locust`, keys); open multi-user node without a scheduler (runner kind `direct`) | CUDA platform for every run: after every task that changes kernels, at every milestone gate, and for benchmarks (ADR-0014); aarch64 host and Hopper GPU |
 | A4000 workstation (`a4000`) | Departmental workstation: one NVIDIA RTX A4000 16 GB (compute capability 8.6), AMD Ryzen Threadripper 3970X (32 cores, 64 threads, AVX2), 251 GB RAM; Ubuntu 22.04 | SSH to the node (alias in `targets.env`, keys); open multi-user node without a scheduler (runner kind `direct`) | first CUDA fallback and fourth architecture (ADR-0037); no benchmarks, no MPI |
 | Hosted CI | GitHub Actions, `ubuntu-24.04` x86-64 runners (the MPICH jobs: `ubuntu-26.04`) | automatic | CPU runtime, Vulkan (software), MPICH and Open MPI, conformance |
 
@@ -75,6 +75,7 @@ The project was renamed to tetraloma in E1 (ADR-0066). The directories on the re
     | The M5 Python oracles, pinned: `vtk==9.7.1` and `meshio==5.3.5` (ADR-0024) | in `.venv`, see below (`scripts/check-local-tools.sh` checks the pins) | `scripts/oracles/vtk_oracle.py` (the M5 VTK tests) and `scripts/fixtures/vtk/generate.py` (the VTK-written reference cells) |
     | HDF5 built with MPI, 1.10.10 to 2.2.0 | Homebrew (`hdf5-mpi`, 2.2.0 on the Mac mini); builds with the `hdf5` feature set `HDF5_DIR=/opt/homebrew/opt/hdf5-mpi` (`scripts/check-local-tools.sh` checks it) | M8 VTKHDF output (Parallel I/O (M8)) |
     | Scotch with PT-Scotch 7.0.14, and METIS (5.1.0) | Scotch: `scripts/hpc/build-partition-libs.sh <prefix>` (`<prefix>/scotch-7.0.14`); Homebrew's `scotch` (7.0.18 on the Mac mini) may stay installed but is not used (ADR-0034); METIS: Homebrew (`metis`) | M7's `scotch` and `ptscotch` features; the `metis` feature builds its own METIS |
+    | Accelerate (macOS; OpenBLAS on Linux), and network access to codeberg.org | with the Xcode command-line tools; Linux: `libopenblas-dev` | the conformance crate (`conformance/`, the pinned ndelement commit) |
     | mdBook 0.5.3 and mdbook-katex 0.10.0 | `scripts/install-doc-tools.sh` (`cargo install --locked` into `~/.cargo/bin`) | the user book and its checks (User documentation (D1)) |
 
     **Python environment.** One virtual environment at the repository root, `.venv` (git-ignored), holds every pinned Python package:
@@ -241,7 +242,7 @@ Fixed by M0; the verify skill, the test-runner and the hpc-test skill use them.
 | CPU runtime on Locust | `scripts/hpc/remote-test.sh locust -- env TETRALOMA_TEST_DEVICE=cpu cargo test --release --workspace` |
 | CPU runtime on a Kathleen node (AVX-512; the runner sets `TETRALOMA_TEST_DEVICE=cpu`) | `scripts/hpc/remote-test.sh kathleen -- cargo test --release --workspace` |
 | CPU runtime on a Myriad D node (fallback; the runner sets `TETRALOMA_TEST_DEVICE=cpu`) | `scripts/hpc/remote-test.sh myriad-cpu --cores 36 -- cargo test --release --workspace` |
-| MPI on two Kathleen nodes (reviews from M6) | `scripts/hpc/remote-test.sh kathleen --nodes 2 --ranks 16 -- 'TETRALOMA_MPIRUN_FLAGS="--map-by node:PE=5 --bind-to core" scripts/mpi-test.sh 2 4 8 16'` |
+| MPI on two Kathleen nodes (every gate) | `scripts/hpc/remote-test.sh kathleen --nodes 2 --ranks 16 -- 'TETRALOMA_MPIRUN_FLAGS="--map-by node:PE=5 --bind-to core" scripts/mpi-test.sh 2 4 8 16'` |
 | MPI | `scripts/mpi-test.sh 1 2 3 4` |
 | rank-count guard (a singleton launch must fail, and every rank of `-n N` with `TETRALOMA_EXPECT_RANKS=N+1`; default N = 2) | `scripts/check-rank-guard.sh [--ranks N]` |
 | rank-count guard on two Kathleen nodes (the variable reaches the second node) | `scripts/hpc/remote-test.sh kathleen --nodes 2 --ranks 16 -- 'TETRALOMA_MPIRUN_FLAGS="--map-by node:PE=5 --bind-to core" scripts/check-rank-guard.sh --ranks 16'` (16 ranks of 5 cores need both 40-core nodes) |
@@ -321,6 +322,24 @@ Fixed by M0; the verify skill, the test-runner and the hpc-test skill use them.
 
   Hosted CI runs the same script in the `docs` job, and the `pages` workflow deploys the site from `main` (D1 T2; docs/design.md, "CI matrix").
 
+## Troubleshooting
+
+From `IMPLEMENTATION.md` of the earlier workflow (ADR-0069).
+
+| Symptom | Fix |
+| --- | --- |
+| The skills are missing in Claude Code | `ls -l .claude/skills` must show one link per skill to `../../.agents/skills/<name>`; a link created during a session needs `/reload-skills` or a restart |
+| A subagent is not found | Restart Claude Code; a new `agents` directory is only picked up at session start |
+| A subagent's worktree lacks recent commits | Check that `.claude/settings.json` still sets `worktree.baseRef` to `"head"` |
+| An agent stops following a skill late in a long session | Start a fresh session and say "Continue."; compaction keeps only the start of an invoked skill |
+| Too many permission prompts | Add allow rules to `.claude/settings.local.json` (personal) or `.claude/settings.json` (shared) |
+| A test needs a tool you do not have | The test-runner reports it as unavailable; CI or a remote target covers it |
+| A remote run hangs at SSH or asks for a password | The shared connection is closed or the VPN is down: run `ssh myriad true` (or the target's alias) in a terminal |
+| `CUDA_ERROR_UNSUPPORTED_PTX_VERSION` on a remote target | Only with `cuda-cpp` (NVRTC): the CUDA toolkit is newer than the node's driver; use the toolkit recorded above (ADR-0001) |
+| A V100 build or load failure after loading a CUDA 13 toolkit | V100 jobs need CUDA 12.x |
+| Remote jobs left in the queue | `scripts/hpc/status.sh`, then `scripts/hpc/cancel.sh <job id>` |
+| The plan and the code disagree | The pull requests' deviations and the ADRs explain why (for milestones before M11, the plan's Deviations log); if they do not, ask a reviewer to compare them |
+
 ## Change history
 
 | Date | Change |
@@ -355,3 +374,4 @@ Fixed by M0; the verify skill, the test-runner and the hpc-test skill use them.
 | 2026-11-20 | E2 (ADR-0068): the MPICH jobs run on `ubuntu-26.04` (MPICH 4.3.2, parallel HDF5 1.14.6), since Ubuntu 24.04's MPICH starts every process as a singleton (Launchpad bug 2072338); the rank-count guard (`TETRALOMA_EXPECT_RANKS`, `scripts/check-rank-guard.sh`); the MPI jobs run `halo_exchange` on 1–4 ranks; the runner image is part of the mpi jobs' cargo cache keys and of the apt `.deb` cache keys. |
 | 2026-11-20 | D1 T1 (ADR-0067): User documentation (D1): the pinned book tools (mdBook 0.5.3, mdbook-katex 0.10.0), local flags, output and commands of the book and its checks; local tools row. |
 | 2026-11-21 | E3: `high_order_invariance::vector_size_invariance` at p = 4 moves from shard 11 to a shard 12 of `scripts/ci-tetraloma-shard.sh`, with a job vulkan-12: p = 3 and p = 4 in one process on lavapipe took 885 s on main's run 44833612710 and over 30 min on the next, 44833632046, whose vulkan-11 hit the 40-min limit (kept, so a runaway job ends with its log). cpu-tetraloma runs shards 11 and 12 in one job (7 min together), followed by `scripts/check-ci-shards.sh`, which lists the shards' tests through the script's listing mode (`TETRALOMA_SHARD_LIST=1`) and fails on a test in no shard or in two, and on a CI matrix that lacks a shard; cpu runs shellcheck on the two shard scripts. |
+| 2026-11-21 | Agent workflow (ADR-0069): rules now in `AGENTS.md`; the troubleshooting table moved here from `IMPLEMENTATION.md`. |

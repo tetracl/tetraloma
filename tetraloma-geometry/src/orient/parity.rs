@@ -44,7 +44,7 @@ pub(crate) fn plan(client: &Client, len: usize) -> Result<LaunchPlan> {
 }
 
 /// `NonManifold` if any facet has more than two owned cells globally (step 1); one read of
-/// the local maximum, combined by `comm.max` (the agreed error flag, CLAUDE.md).
+/// the local maximum, combined by `comm.max` (the agreed error flag, design "Conventions").
 pub(crate) fn manifold_check(comm: &dyn CommDyn, counts: &DeviceBuffer<u32>) -> Result<()> {
     let local = if counts.len() > 0 {
         reduce(counts, ReduceOp::Max)?.to_host()?[0]

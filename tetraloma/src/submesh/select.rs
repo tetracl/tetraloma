@@ -314,7 +314,7 @@ pub(crate) fn facet_mask(
             );
         }
     }
-    // The agreed NonManifold and InteriorFacet flags (CLAUDE.md, ADR-0039 item 18).
+    // The agreed NonManifold and InteriorFacet flags (design "Conventions", ADR-0039 item 18).
     let local = if n > 0 {
         reduce(&status, ReduceOp::Max)?.to_host()?[0]
     } else {
@@ -408,7 +408,7 @@ pub(crate) fn select(
                     fit(n)?,
                 );
             }
-            // The per-block count read of compaction (CLAUDE.md, ADR-0039 item 18).
+            // The per-block count read of compaction (design "Conventions", ADR-0039 item 18).
             let c = counts.to_host()?;
             let (owned, total) = (c[0] as usize, c[1] as usize);
             let parents = DeviceBuffer::<u32>::uninit(client, total)?;
@@ -460,7 +460,7 @@ pub(super) struct RowSource<'a> {
 /// How [`restrict_rows`] gives the tables to its kernel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Tables {
-    /// Uploaded: the closure node maps (CLAUDE.md, ADR-0039 item 18).
+    /// Uploaded: the closure node maps (design "Conventions", ADR-0039 item 18).
     Upload,
     /// At comptime: the reference-cell tables, such as the facet vertex lists.
     Comptime,
@@ -492,7 +492,7 @@ pub(super) fn restrict_rows(
             let launch = plan(client, n)?;
             match tables {
                 Tables::Upload => {
-                    // The upload of a closure node map (CLAUDE.md, ADR-0039 item 18).
+                    // The upload of a closure node map (design "Conventions", ADR-0039 item 18).
                     let table = DeviceBuffer::from_host(client, table)?;
                     debug_assert_bindings(client, 5);
                     // SAFETY: children i < n read cells[i] and facets[i] (n words each);
@@ -633,7 +633,7 @@ pub(crate) fn facet_children<TD: TopoDim>(
         cell_begin = cell_end;
     }
     // The agreed TooLarge flag, with the parent blocks present for the agreed element check
-    // (CLAUDE.md, ADR-0039 items 8 and 18); the caller agrees both.
+    // (design "Conventions", ADR-0039 items 8 and 18); the caller agrees both.
     let (overflowed, present) = if n > 0 {
         let s = status.to_host()?;
         (s[0] != 0, s[1..].iter().map(|&w| w != 0).collect())
