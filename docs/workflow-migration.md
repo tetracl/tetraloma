@@ -41,7 +41,7 @@ dropped. The old files are at the tag `pre-agent-workflow`.
 | Commit messages `<milestone> T<n>: …`, `plan:`, `adr:`, `review:` | Dropped: titles are set by the skills (`<task id>: …`, `Plan M<n>`, `ADR-<NNNN>: …`); squash merges |
 | Design not edited during implementation; changes need an accepted ADR | Superseded: `AGENTS.md` rule 4; decision skill |
 | CubeCL upstream log (`C<n>` entries) | `AGENTS.md` rule 11, CubeCL upstream log |
-| Delegated work: task text, design sections, the ADR-draft rule | `CLAUDE.md`, Claude Code only |
+| Delegated work: task text, design sections, the ADR-draft rule | `AGENTS.md` rule 11, Delegated work |
 | Test-runner subagent for full-suite, multi-backend and MPI runs | `CLAUDE.md`, Claude Code only |
 | Design-reviewer subagent before plan approval and the milestone PR | Superseded: review skill (task mode, gate mode with gate-architecture); its checklist below |
 | New worktree: `scripts/setup-worktree.sh` | `AGENTS.md` rule 11, Worktrees |
@@ -61,12 +61,13 @@ unavailable Locust run is recorded, not counted as missing.
 | Old step | New place |
 | --- | --- |
 | plan-milestone: dependencies merged; branch and clean tree; existing plan | Superseded: plan-milestone skill preconditions |
-| plan-milestone: read the roadmap entry, design sections, ADRs, the code, earlier plans' deviations | Superseded: plan-milestone skill, Write the plan, step 1 |
+| plan-milestone: read the roadmap entry, design sections, ADRs | Superseded: plan-milestone skill, Write the plan, step 1 |
+| plan-milestone: read the public API of the crates built on, note differences from the design; read earlier plans' deviations | `AGENTS.md` rule 11, Plans (with pull requests and `docs/reviews/` for M11 on) |
 | plan-milestone: T0 with stubs and `todo!()`; tasks under ~600 lines; per-task fields | Superseded: plan-milestone skill and plan template |
 | plan-milestone: runs planned at the minimum; benchmark tasks name targets, candidates, sizes, runs, wall time | `AGENTS.md` rule 11, Runs and Plans |
-| plan-milestone: acceptance table with targets and backends; vector-size invariance test for every candidate kernel | `AGENTS.md` rule 11, Plans |
+| plan-milestone: acceptance table with targets and backends; vector-size invariance test for every candidate kernel | `AGENTS.md` rule 11, Plans (an extra column "Targets and backends" in the template's table) |
 | plan-milestone: "Parallel with" only without shared files | Dropped: one task per pull request; independent tasks run as separate tasks |
-| plan-milestone: design-reviewer critique for M3, M6, M7, M9 or more than ten tasks | Superseded: the template caps a milestone at about eight tasks; plan pull requests can be reviewed with the review skill |
+| plan-milestone: design-reviewer critique for M3, M6, M7, M9 or more than ten tasks | The template caps a milestone at about eight tasks; every plan pull request is reviewed with the gate-architecture brief in plan scope (`AGENTS.md` rule 11, Reviewers) |
 | plan-milestone: issue creation with label `enhancement` | Superseded: plan-milestone skill, Create the issues |
 | implement-milestone: plan approved, branch, clean tree, `setup-worktree.sh` | Superseded: implement-task skill, Start; `AGENTS.md` rule 11, Worktrees |
 | implement-milestone: T0 tests compile and fail with `not yet implemented` | Superseded: implement-task skill, Tests first |
@@ -76,18 +77,19 @@ unavailable Locust run is recorded, not counted as missing.
 | implement-milestone: final acceptance run through the test-runner | Superseded: the gate runs the `milestone` tier once (review skill, gate mode) |
 | review-milestone: design review of `main...HEAD` | Superseded: gate-record and gate-architecture passes |
 | review-milestone: full run, standing matrix, once | `AGENTS.md` Checks, `milestone` tier |
-| review-milestone: every acceptance row against a passing test; skipped counts as missing; Locust exception | Superseded: review skill, gate step 3; Locust exception in `AGENTS.md` rule 11 |
-| review-milestone: fix Blockers and Majors; re-run only what fixes reach, proposed as a table with what each cut loses | Superseded: gate triage with the maintainer; the re-run rule in `AGENTS.md` rule 11, Runs |
+| review-milestone: every acceptance row against a passing test | Superseded: review skill, gate step 3 |
+| review-milestone: a test skipped or ignored on a required backend counts as missing; Locust exception | `AGENTS.md` rule 11, Tests and Test targets |
+| review-milestone: fix Blockers and Majors; re-run only what fixes reach, proposed as a table with what each cut loses; record each cut and the earlier run that covers it | Superseded: gate triage with the maintainer; the re-run rule in `AGENTS.md` rule 11, Runs |
 | review-milestone: Review section in the plan; PR description; tick acceptance boxes | Superseded: `docs/reviews/M<n>.md` and the milestone issue |
 | draft-adr: number, template, options with "keep the design", consequences, stop | Superseded: decision skill, ADR |
 | draft-adr: link from the plan's open questions | Superseded: a `decision` issue blocks the affected tasks |
-| draft-adr: apply only the named sections, `adr: NNNN apply`; update the milestone issue | Superseded: decision skill steps 6–7 |
+| draft-adr: apply only the named sections, `adr: NNNN apply`; update the milestone issue | Superseded: decision skill steps 6–7; the issue update in `docs/adr/README.md` (plan-milestone skill's rule for a changed plan) |
 | design-reviewer: scope, acceptance coverage, tests first | Superseded: fidelity and gate-architecture briefs |
 | design-reviewer: public API against the listings | Superseded: fidelity and gate-architecture briefs (interfaces against the design) |
 | design-reviewer: crate rules, kernel rules, precision, conventions (Appendix A, map direction), safety, user documentation, host↔device copies | `AGENTS.md` rule 11, Review focus, citing design 22 and the sections named there |
 | design-reviewer: may run `scripts/check-user-docs.sh --no-build` | Dropped for reviewers (template reviewers need no tools beyond git); `check-user-docs.sh` runs in the `full` and `milestone` tiers |
 | verify skill | Kept as a project skill (`.agents/skills/verify`): the `quick` tier; its pre-M0 step dropped |
-| hpc-test skill | Kept as a project skill (`.agents/skills/hpc-test`); "plan's verification line" reads "task's plan section, Verification set or check tier"; pre-M0 command kept for env-check only |
+| hpc-test skill | Kept as a project skill (`.agents/skills/hpc-test`); "plan's verification line" reads "task's plan section, Verification set or check tier"; pre-M0 and pre-E0 steps dropped; the description names Kathleen first for CPU runs |
 | test-runner agent | Kept (`.claude/agents/test-runner.md`); pre-M0 and pre-E0 notes dropped |
 
 ## Other files
@@ -95,11 +97,11 @@ unavailable Locust run is recorded, not counted as missing.
 | Old file or part | New place |
 | --- | --- |
 | `IMPLEMENTATION.md`: archive contents, one-time setup, the loop, parallel milestones, one-off prompts | Superseded: `WORKFLOW.md` |
-| `IMPLEMENTATION.md`: tool table | Already in `docs/dev-environment.md`, One-time setup |
+| `IMPLEMENTATION.md`: tool table | `docs/dev-environment.md`, One-time setup (the conformance row added; the rest was already there) |
 | `IMPLEMENTATION.md`: milestone notes (E0–M10) | Dropped: history of finished milestones; the plans hold it |
 | `IMPLEMENTATION.md`: troubleshooting | `docs/dev-environment.md`, Troubleshooting |
 | `docs/plans/TEMPLATE.md` | Superseded: `.agents/skills/plan-milestone/references/plan-template.md` |
-| `docs/adr/TEMPLATE.md`, `docs/adr/README.md` process | Superseded: decision skill and its ADR template; `docs/adr/README.md` is now the index |
+| `docs/adr/TEMPLATE.md`, `docs/adr/README.md` process | Superseded: decision skill and its ADR template; `docs/adr/README.md` is now the index, and keeps the rule "Superseded by ADR-NNNN" |
 | `docs/adr/README.md`: a choice private to one crate needs no ADR, only a Deviations-log row | Superseded: a deviation from the plan is listed in the pull request (rule 5) |
 | Design: "Handing this design to Claude Code", Listing H1 | Retired by ADR-0069; rules in design 22 and `AGENTS.md` |
 | Design: "Implementation roadmap" | `docs/roadmap.md` |
@@ -126,9 +128,18 @@ unavailable Locust run is recorded, not counted as missing.
 | Local partition-library paths | Machine-specific: stays in memory; the procedure is in `docs/dev-environment.md` |
 | Rename to tetraloma; CPU-policy follow-up | History: ADR-0066, ADR-0065 and the plans hold it |
 
-## Known gap
+## Known gaps in the design
 
-Design section 14, "Keeping it current", still says "`/review-milestone` runs
-`scripts/check-user-docs.sh`". ADR-0069 did not list that sentence. In the new workflow the gate's
-`milestone` tier runs the script (`AGENTS.md`, Checks). The sentence changes with the next ADR that
-touches section 14, or with a one-line ADR if the maintainer wants it sooner.
+Found after ADR-0069 was accepted (independent review of this migration). They change design
+text, so they need an ADR (ADR-0070 is proposed for them):
+
+- Section 23, first row: the listed checks do not read `tetraloma-geometry/degree-policy.toml`.
+  The checks that do are `cargo test -p tetraloma-geometry --test integration
+  strategy::degree_policy_has_four_sets` and `cargo test -p tetraloma-bench --test
+  high_order_record`.
+- Section 23, fourth row: `scripts/check-workspace-deps.sh` checks the forbidden dependencies
+  only, not the Rust and CubeCL pins.
+- Section 9, "Mark and number": "its count read is the one `CLAUDE.md` allows" now means section
+  22.
+- Section 14, "Keeping it current": "`/review-milestone` runs `scripts/check-user-docs.sh`"; in
+  the new workflow the gate's `milestone` tier runs it (`AGENTS.md`, Checks).

@@ -1,17 +1,12 @@
 ---
 name: hpc-test
-description: Run tetraloma tests on the UCL remote targets through scripts/hpc/remote-test.sh — Locust for every CUDA run (kernel tasks, milestone gates, benchmarks); the A4000 workstation as the first CUDA fallback; Myriad V100/A100 only for multi-GPU tests, architecture comparisons and as the fallback after it; Myriad CPU-only D nodes for AVX-512 CPU benchmarks. Use for every CUDA test run and for 8-rank MPI runs.
+description: Run tetraloma tests on the UCL remote targets through scripts/hpc/remote-test.sh — Locust for every CUDA run (kernel tasks, milestone gates, benchmarks); the A4000 workstation as the first CUDA fallback; Myriad V100/A100 only for multi-GPU tests, architecture comparisons and as the fallback after it; Kathleen for CPU-only remote runs and AVX-512 CPU benchmarks (Myriad CPU-only D nodes as its fallback). Use for every CUDA test run and for 8-rank MPI runs.
 argument-hint: "[target] [-- command]"
 ---
 
 Run a test command on a remote target and report the result. Arguments: $ARGUMENTS
 
-## 1. Check that the runner exists
-
-`scripts/hpc/remote-test.sh` is created in milestone E0. If it does not exist, say that CUDA
-tests cannot run until E0 is merged, and stop.
-
-## 2. Choose the target
+## 1. Choose the target
 
 - **`locust`** unless one of the cases below applies. It is the CUDA platform for every run:
   after kernel changes, at every milestone gate, and for benchmarks. No queue, and a build
@@ -50,7 +45,7 @@ tests cannot run until E0 is merged, and stop.
 
 If the user named a target, use it.
 
-## 3. Choose the command and resources
+## 2. Choose the command and resources
 
 - The command from the task's plan section, the plan's acceptance table or Verification set, or
   the check tier of `AGENTS.md` that asks for the run. The job sets `TETRALOMA_TEST_DEVICE=cuda`;
@@ -83,7 +78,7 @@ If the user named a target, use it.
   the run; otherwise discard it and repeat the run later (ADR-0002, ADR-0037). Benchmark records
   come from Locust (Myriad as its fallback), never from `a4000`.
 
-## 4. Run
+## 3. Run
 
 ```sh
 scripts/hpc/remote-test.sh <target> [options] -- <command>
@@ -100,13 +95,13 @@ scripts/hpc/remote-test.sh <target> [options] -- <command>
 - Cancel jobs you no longer need with `scripts/hpc/cancel.sh <job id>`, and leave none queued
   at the end of a session.
 
-## 5. Report
+## 4. Report
 
 Report the target, job id, commit (and whether the tree was dirty), the command, the result, and
 the first failure from the runner's summary. On Locust and `a4000` also report the `node load:` line. The full logs are in `target/hpc/<target>/<job id>/`;
 read them only as far as needed to locate a failure.
 
-## 6. When it goes wrong
+## 5. When it goes wrong
 
 | Symptom | Meaning and action |
 | --- | --- |

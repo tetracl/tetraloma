@@ -87,20 +87,28 @@ Project skills (tetraloma's own; not part of the template):
     - **Tests.** `cargo test --workspace` must pass on the CPU runtime.
       GPU runs: `TETRALOMA_TEST_DEVICE=vulkan | metal | cuda`.
       Every task adds, besides its acceptance tests, the unit tests, property tests and rustdoc
-      examples its code needs.
+      examples its code needs. At the gate, a test that is skipped or ignored on a required
+      backend counts as missing, whatever the reason (an early return, an environment switch, an
+      `#[ignore]` without a `pending` marker); the one exception is an unavailable Locust run
+      (Test targets, below).
     - **Runs.** Only the runs that show the code works and the timings a decision needs
       (ADR-0057). The standing matrix stays (design section 25). Beyond it: no exhaustive sweeps
       over parameters, sizes, degrees or targets, no repeats of passing runs, and after review
       fixes only the runs they reach. Propose that set first, as a table of job, time and what
-      each cut loses, and record each cut in the pull request or the review record. The gate cites
+      each cut loses, and record each cut, and the earlier run that covers it, in the pull request
+      or the review record. The gate cites
       the last standing-matrix run instead of repeating it while only documentation changed after
       it. Benchmarks use the candidate protocol of design section 8, "Benchmarks".
-    - **Plans.** The acceptance table names, for every row, the targets and backends it runs on
-      (local Mac: CPU runtime and Metal; hosted CI: Vulkan and both MPI flavours; Locust for CUDA;
-      Kathleen and Myriad where design section 17 requires them). Every kernel on the candidate
-      list of design section 8 has a vector-size invariance test. Every benchmark or remote-run
-      task names its targets, candidate set, sizes and number of runs, and an estimate of the wall
-      time.
+    - **Plans.** Before writing a plan, also read the public API of the crates the milestone
+      builds on, as it exists in the code (note every place where it differs from the design), and
+      the deviations and follow-ups of the milestones it builds on (their plans before M11, their
+      pull requests and `docs/reviews/` after). tetraloma's plans add a column "Targets and
+      backends" to the template's acceptance table, naming for every row where it runs (local Mac:
+      CPU runtime and Metal; hosted CI: Vulkan and both MPI flavours; Locust for CUDA; Kathleen and
+      Myriad where design section 17 requires them). Every kernel on the candidate list of design
+      section 8 has a vector-size invariance test: a row of its own when an acceptance bullet asks
+      for it, otherwise a test the enabling task lists. Every benchmark or remote-run task names
+      its targets, candidate set, sizes and number of runs, and an estimate of the wall time.
     - **ndelement.** After bumping its pin, run `cargo test --manifest-path conformance/Cargo.toml`
       and re-export the fixtures with
       `cargo run --manifest-path conformance/Cargo.toml --bin export-fixtures`.
@@ -112,10 +120,15 @@ Project skills (tetraloma's own; not part of the template):
     - **Worktrees.** A new worktree lacks the git-ignored `.venv` (pinned Python oracles) and
       `scripts/hpc/targets.env`: run `scripts/setup-worktree.sh` outside the sandbox before
       testing.
+    - **Delegated work.** A subagent or child agent gets the task text, the design sections it
+      depends on and this rule: "If the design is ambiguous or an API must change, stop and return
+      an ADR draft instead of deviating." Subagents cannot ask the maintainer questions.
     - **Reviewers.** Task reviews and both gate passes use Gemini 4 Neon (Antigravity) at high
       effort, a model from another vendor than the one that writes the code. If it cannot be
       started, use the strongest read-only reviewer available and say that the review was not
-      independent.
+      independent. A plan pull request is reviewed with the brief
+      `.agents/skills/review/references/gate-architecture.md` in its plan scope, one round, posted
+      as in task mode.
     - **Review focus.** Besides the briefs, reviewers check: dependencies follow design
       section 18, "Dependency rules" (runtime types only in tetraloma-device, no MPI without the
       `mpi` feature, ndelement only in `conformance/`); cube counts from
@@ -124,7 +137,9 @@ Project skills (tetraloma's own; not part of the template):
       `internal[map[k]] = file[k]`; tests in f32 and f64 with the tolerances of section 16; no
       host↔device copy on a library path except those section 22 allows; every public item
       added or changed in the nine published library crates documented as section 22 requires,
-      and the book updated in the same task.
+      and the book updated in the same task. Sections without an `### Interface` part (all before
+      M11) state their public interfaces in the listings of sections 4, 5, 7–9, 11 and 12; the
+      briefs' "Interface part" means those listings.
     - **Test targets.** Targets and site details are in `docs/dev-environment.md`; the policy is
       in design section 17.
       - This machine is the local Mac (currently the M6 Mac mini, `docs/dev-environment.md`;
@@ -187,8 +202,8 @@ each once per change; repeat only for a stated reason. `docs/dev-environment.md`
 | Tier | Command |
 | --- | --- |
 | quick | The verify skill (`.agents/skills/verify/SKILL.md`): `cargo fmt --all -- --check`; for each touched crate `cargo clippy -p <crate> --all-targets -- -D warnings` and `cargo test -p <crate>`; conformance and shell checks when they are touched |
-| full | `cargo fmt --all -- --check`; `cargo clippy --workspace --all-targets -- -D warnings`; `cargo test --workspace`; `TETRALOMA_TEST_DEVICE=metal cargo test --workspace --features tetraloma-testing/metal`. When the change touches kernels, also the affected crates on Locust (CUDA, hpc-test skill). When it touches tetraloma-parallel or a crate that depends on it, also `scripts/mpi-test.sh 1 2 3 4`. When it touches `conformance/` or tetraloma-refcell, also `cargo test --manifest-path conformance/Cargo.toml`. When it adds or changes public items or the book, also `scripts/check-user-docs.sh`. Hosted CI must pass on the pull request |
-| milestone | Once, at the gate: the standing matrix (design section 25) and the targets of the plan's Verification set. Lint; `cargo test --workspace` on the CPU runtime with `TETRALOMA_VECTOR_SIZE=scalar` and `=widest`; Metal; CUDA on Locust in f32 and f64; `scripts/mpi-test.sh 1 2 3 4` locally (Open MPI) and in hosted CI (MPICH and Open MPI); the MPI tests on two Kathleen nodes; conformance; `scripts/check-workspace-deps.sh`; `scripts/check-name.sh`; `scripts/check-user-docs.sh`; hosted CI green on the main branch |
+| full | `cargo fmt --all -- --check`; `cargo clippy --workspace --all-targets -- -D warnings`; `cargo test --workspace`; `TETRALOMA_TEST_DEVICE=metal cargo test --workspace --features tetraloma-testing/metal`. When the change touches kernels, also the affected crates on Locust (CUDA, hpc-test skill). When it touches tetraloma-parallel or a crate that depends on it, also the MPI tests on 1–4 ranks (local Mac: `scripts/mpi-test.sh 1` on the CPU runtime and `TETRALOMA_TEST_DEVICE=metal scripts/mpi-test.sh 1 2 3 4`, as `docs/dev-environment.md` explains; hosted CI runs both flavours). When it touches `conformance/` or tetraloma-refcell, also `cargo test --manifest-path conformance/Cargo.toml`. When it adds or changes public items or the book, also `scripts/check-user-docs.sh`. Hosted CI must pass on the pull request |
+| milestone | Once, at the gate (it cites the last standing-matrix run instead while only documentation changed after it; rule 11, Runs): the standing matrix (design section 25) and the targets of the plan's Verification set. Lint; `cargo test --workspace` on the CPU runtime with `TETRALOMA_VECTOR_SIZE=scalar` and `=widest`; Metal; CUDA on Locust in f32 and f64; the MPI tests locally (Open MPI, as in `full`) and in hosted CI (MPICH and Open MPI); the MPI tests on two Kathleen nodes; conformance; `scripts/check-workspace-deps.sh`; `scripts/check-name.sh`; `scripts/check-user-docs.sh`; hosted CI green on the main branch |
 
 If a tier is not filled in, stop and ask. Do not invent the checks.
 
