@@ -1238,7 +1238,7 @@ Cells and their vertices come from the input. Edges and faces are created on dem
     - the payload is e;
     - padding positions (c ≥ n_b) write an all-ones sentinel key, which sorts last and forms one group that is dropped from the entity count and from the decode (ADR-0012).
 3. **Sort (device).** Stable LSD radix sort of all keys of type T with their payloads, all blocks together. A face shared by a hexahedron and a prism is therefore found once.
-4. **Mark and number.** flag[i] = 1 if i = 0 or key[i] ≠ key[i−1], else 0. The provisional id is id[i] = inclusive_scan(flag)[i] − 1, and the entity count is id[last] + 1. `unique_by_key` computes exactly this: its `group` is the provisional id, and its count read is the one CLAUDE.md allows (ADR-0012).
+4. **Mark and number.** flag[i] = 1 if i = 0 or key[i] ≠ key[i−1], else 0. The provisional id is id[i] = inclusive_scan(flag)[i] − 1, and the entity count is id[last] + 1. `unique_by_key` computes exactly this: its `group` is the provisional id, and its count read is the one section 22 allows (ADR-0012, ADR-0070).
 5. **Provisional connectivity.** Each sorted position i decodes its payload e into (block, cell, local index) using the emission ranges, then writes cell→entity[block][cell][local index] = id[i]. Each head position also writes entity→vertex from its own occurrence, rewritten into canonical orientation using vertex origin ids (A.6 storage slots).
 6. **Ownership** (parallel only; see below). Each entity is marked owned or ghost, and every ghost gets its owner rank.
 7. **Renumber.** Owned entities come first, ordered by the smallest local cell index that touches them (a segmented minimum over the sorted runs), which preserves locality. Ghosts follow, ordered by (owner rank, global index). The permutation is applied to entity→vertex, and cell→entity is rewritten by a gather.
@@ -1707,7 +1707,7 @@ Users learn tetraloma from a book and from API documentation written for them, p
     - while D1 is open, a difference from D1's base commit in the sources (`src/**/*.rs`) of the nine library crates other than in comments. A stdlib tokenizer strips `//`, `///`, `//!` and block comments, respecting strings, raw strings, characters and lifetimes, and compares the remaining tokens file by file.
 
   The audit reads the generated HTML, so it sees exactly the items users see, and fails if it finds no items (a changed rustdoc markup). The `docs` job also runs the book's doctests and `cargo test --doc` of the nine crates with the site's features, and the audit once more for tetraloma-partition with `parmetis`.
-- **Keeping it current.** From D1 on, a milestone that adds or changes public items documents them by the rules above and updates the book in the same task; `/review-milestone` runs `scripts/check-user-docs.sh`.
+- **Keeping it current.** From D1 on, a milestone that adds or changes public items documents them by the rules above and updates the book in the same task; `scripts/check-user-docs.sh` runs in the `full` check tier of every such task and in the gate's `milestone` tier (`AGENTS.md`, Checks; ADR-0070).
 
 ## 15. Tags, regions and submeshes
 
@@ -2329,10 +2329,10 @@ A change of behaviour in these paths stops a task until the maintainer decides (
 
 | Path | What must not change | Check |
 | --- | --- | --- |
-| `tetraloma-device/vector-policy.toml`, `tetraloma-geometry/degree-policy.toml` | the four generic sets; entries change only with benchmark records in `docs/perf/` (ADR-0058) | `cargo test -p tetraloma-device --test integration policy::`; `cargo test -p tetraloma-bench --test perf_record` |
+| `tetraloma-device/vector-policy.toml`, `tetraloma-geometry/degree-policy.toml` | the four generic sets; entries change only with benchmark records in `docs/perf/` (ADR-0058) | `cargo test -p tetraloma-device --test integration policy::`; `cargo test -p tetraloma-geometry --test integration strategy::degree_policy_has_four_sets`; `cargo test -p tetraloma-bench --test perf_record`; `cargo test -p tetraloma-bench --test high_order_record` (ADR-0070) |
 | `tetraloma-refcell/tests/fixtures/`, the ndelement pin in `conformance/Cargo.toml` | the reference-cell conventions exported from ndelement | `cargo test -p tetraloma-refcell --test integration fixtures::`; `cargo test --manifest-path conformance/Cargo.toml` |
 | `tetraloma-io/tests/fixtures/` | the committed Gmsh and VTK corpus written by the pinned tools | `cargo test -p tetraloma-io --test integration gmsh_corpus::`; `cargo test -p tetraloma-io --test integration vtk_fixtures::` |
-| `rust-toolchain.toml`, the `cubecl` pin in `Cargo.toml` | Rust 1.99; `cubecl = "=0.11.0"`; a default build free of ndelement, BLAS and MPI | `scripts/check-workspace-deps.sh` |
+| `rust-toolchain.toml`, the `cubecl` and `cubecl-runtime` pins in `Cargo.toml` | Rust 1.99; `cubecl` and `cubecl-runtime` at `=0.11.0`; a default build free of ndelement, BLAS and MPI | `scripts/check-workspace-deps.sh` (the forbidden dependencies). The pins have no automated check: a change to them shows in the diff and is a design change (section 2, fixed decision 2; section 22) (ADR-0070) |
 | `scripts/mpi-test.sh`, `scripts/run-examples.sh` | every MPI run checks the world size (ADR-0068) | `scripts/check-rank-guard.sh` |
 | names in tracked paths and content | the project name and its allowlist (ADR-0066) | `scripts/check-name.sh` |
 

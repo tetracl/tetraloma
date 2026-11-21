@@ -130,8 +130,8 @@ unavailable Locust run is recorded, not counted as missing.
 
 ## Known gaps in the design
 
-Found after ADR-0069 was accepted (independent review of this migration). They change design
-text, so they need an ADR (ADR-0070 is proposed for them):
+Found after ADR-0069 was accepted (independent review of this migration). ADR-0070 corrects all
+four:
 
 - Section 23, first row: the listed checks do not read `tetraloma-geometry/degree-policy.toml`.
   The checks that do are `cargo test -p tetraloma-geometry --test integration

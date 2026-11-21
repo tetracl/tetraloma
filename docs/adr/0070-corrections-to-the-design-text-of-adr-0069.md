@@ -1,6 +1,6 @@
 # ADR-0070: Corrections to the design text of ADR-0069
 
-Status: Proposed
+Status: Accepted
 Date: 2026-11-21
 Decision issue: #58
 Raised by: independent review of the workflow migration (#57, findings W1, W3 and W5)
@@ -87,4 +87,7 @@ updates row 4.
 
 ## Decision
 
-> <the maintainer's words, verbatim>, <date>
+> Accept the ADR, 2026-11-21, said to the agent in a session.
+
+The answer names no option, so the ADR is accepted as proposed: its recommendation, option 2,
+with the changes listed under "Changes if accepted".

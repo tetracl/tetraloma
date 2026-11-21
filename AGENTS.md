@@ -215,8 +215,8 @@ If a tier is not filled in, stop and ask. Do not invent the checks.
 A change of behaviour here stops the task; ask first. The table is section 23
 of `docs/design.md`, Protected paths: the vector and degree policies, the
 reference-cell fixtures and the ndelement pin, the Gmsh and VTK fixture corpus,
-the toolchain and CubeCL pins, the MPI rank guard, and the name check, each with
-the command that checks it.
+the toolchain and CubeCL pins (no automated check: a change to them is a design
+change), the MPI rank guard, and the name check, each with its check (ADR-0070).
 
 ## Lessons
 
