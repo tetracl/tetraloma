@@ -43,8 +43,14 @@ proptest.workspace = true
 serde_json = { workspace = true, features = ["float_roundtrip"] }
 trybuild.workspace = true
 
-# The test files are modules of one test executable (tests/main.rs): one link of the
-# dependencies instead of one per file (disk space and link time).
+# The integration test files are modules of one test executable (tests/main.rs): one link of the
+# dependencies instead of one per file (disk space and link time). The trybuild UI test sits in its
+# own target so its nested `cargo check` does not run concurrently with CubeCL tests inside
+# `integration` and can be invoked or skipped independently (`--test compile`).
 [[test]]
 name = "integration"
 path = "tests/main.rs"
+
+[[test]]
+name = "compile"
+path = "tests/compile.rs"

@@ -20,7 +20,7 @@
 # the next, which hit vulkan's 40-min job limit.
 #   1-3. io_threads: the global_mesh_identical tests of $gmi;
 #   4.   the rest of io_threads, gmsh and parallel_threads;
-#   5.   compile (trybuild) and the doc tests;
+#   5.   compile (trybuild, --test compile) and the doc tests;
 #   6.   the library and the other modules;
 #   7.   submesh_threads;
 #   8.   orient_threads;
@@ -73,8 +73,8 @@ ho=(
     [11]="$sizes::p3"
     [12]="$sizes::p4"
 )
-# The modules of shards 4, 5, 7, 8 and 10.
-named=(io_threads gmsh parallel_threads compile submesh_threads submesh orient_threads)
+# The modules of shards 4, 7, 8 and 10 (shard 5 runs the separate `compile` test target).
+named=(io_threads gmsh parallel_threads submesh_threads submesh orient_threads)
 run() {
     echo "+ cargo test -p tetraloma $*"
     if [ -z "${TETRALOMA_SHARD_LIST:-}" ]; then
@@ -102,7 +102,7 @@ for k in $shards; do
             --skip io_threads::global_mesh_identical --skip "$parallel"
         ;;
     5)
-        run "$@" --test integration -- compile::
+        run "$@" --test compile
         run "$@" --doc
         ;;
     6)
