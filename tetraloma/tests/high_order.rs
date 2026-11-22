@@ -70,7 +70,8 @@ impl MeshVisitor for Factors<'_> {
             let d_ref = reference::detj(&mesh, b, p).expect("det J");
             let k_ref = reference::pseudo_inverses(&mesh, b, p).expect("K");
             let sk = reference::pinv_scale(&mesh, b, p).expect("K scale");
-            for_each_strategy!(|run| {
+            let sumfact = has_tensor_cell([block.cell.into()]);
+            for_each_strategy!(sumfact, |run| {
                 let mesh = fresh(&mesh);
                 let at = format!("{what}, block {b}, under {run}");
                 let x = field_f64(&physical_points_block(&mesh, b, pts).expect("X")).unwrap();
@@ -94,7 +95,8 @@ impl MeshVisitor for Factors<'_> {
             let want = reference::facet_normals(&mesh, b, fps).expect("facet normals");
             let scale = reference::jacobian_scale(&mesh, b, fps.points().points())
                 .expect("facet normal scale");
-            for_each_strategy!(|run| {
+            let sumfact = has_tensor_cell([block.cell.into()]);
+            for_each_strategy!(sumfact, |run| {
                 let mesh = fresh(&mesh);
                 let n = field_f64(&facet_normals_block(&mesh, b, fps).expect("n")).unwrap();
                 let at = format!("facet normals of {what}, block {b}, under {run}");
@@ -116,7 +118,8 @@ impl MeshVisitor for Factors<'_> {
             let pts = rule.get(block.cell).expect("point set");
             let want = reference::normals(&mesh, b, pts.points()).expect("normals");
             let scale = reference::jacobian_scale(&mesh, b, pts.points()).expect("normal scale");
-            for_each_strategy!(|run| {
+            let sumfact = has_tensor_cell([block.cell.into()]);
+            for_each_strategy!(sumfact, |run| {
                 let mesh = fresh(&mesh);
                 let n = field_f64(&normals_block(&mesh, b, pts).expect("n")).unwrap();
                 let at = format!("normals of {what}, block {b}, under {run}");
@@ -161,7 +164,8 @@ impl MeshVisitor for PullBacks<'_> {
             let scale = reference::pull_back_scale(&mesh, b, pts.points()).expect("scale");
             wants.push((want, scale));
         }
-        for_each_strategy!(|run| {
+        let sumfact = has_tensor_cell(h.blocks.iter().map(|b| b.cell));
+        for_each_strategy!(sumfact, |run| {
             let mesh = fresh(&mesh);
             let x = mesh.physical_points(&rule).expect("X");
             let pb = mesh
@@ -366,5 +370,89 @@ mod open_ended_ranges_launch {
     #[cfg_attr(debug_assertions, ignore = "p ≥ 5 runs in release builds only")]
     fn p10() {
         for_each_precision!(client(), open_ended, 10);
+    }
+}
+
+#[test]
+fn strategy_dedup_covers_every_distinct_strategy() {
+    use tetraloma_geometry::testing::{Strategy, StrategyFamily, StrategyOverride};
+
+    assert_eq!(uniform_strategy(&[]), None);
+    assert_eq!(
+        uniform_strategy(&[
+            (StrategyFamily::EVector, Strategy::Direct),
+            (StrategyFamily::Points, Strategy::Direct),
+        ]),
+        Some(Strategy::Direct)
+    );
+    assert_eq!(
+        uniform_strategy(&[
+            (StrategyFamily::EVector, Strategy::Direct),
+            (StrategyFamily::Points, Strategy::Loops),
+        ]),
+        None
+    );
+
+    assert!(!has_tensor_cell([
+        CellType::Interval,
+        CellType::Triangle,
+        CellType::Tetrahedron,
+        CellType::Pyramid,
+    ]));
+    for tensor in [
+        CellType::Quadrilateral,
+        CellType::Hexahedron,
+        CellType::Prism,
+    ] {
+        assert!(has_tensor_cell([CellType::Triangle, tensor]));
+    }
+
+    if std::env::var_os(GEOM_STRATEGY_VAR).is_some() {
+        return;
+    }
+
+    // On a triangle (non-tensor), `for_each_strategy!` skips `SumFactorised` and any `Fixed(s)`
+    // already executed uniformly by `Policy`, while still running every other distinct strategy.
+    let client = client();
+    let tri = build::<f32, D2, D2>(
+        &tetraloma_testing::square_box(Cell2::Triangle, 1, 1),
+        &client,
+    );
+    let rule = QuadRule::for_grid(&tri, 2).expect("rule");
+    let pts = rule.get(Cell2::Triangle).expect("pts");
+    let mut tri_runs = Vec::new();
+    for_each_strategy!(false, |run| {
+        tri_runs.push(run);
+        let mesh = fresh(&tri);
+        physical_points_block(&mesh, 0, pts).expect("X");
+    });
+    assert!(tri_runs.contains(&StrategyRun::Hook(StrategyOverride::Policy)));
+    assert!(
+        !tri_runs.contains(&StrategyRun::Hook(StrategyOverride::Fixed(
+            Strategy::SumFactorised
+        )))
+    );
+    assert!(tri_runs.len() == 4 || tri_runs.len() == 5);
+
+    // On a quadrilateral (tensor), `SumFactorised` runs (either via Policy or Fixed).
+    let quad = build::<f32, D2, D2>(
+        &tetraloma_testing::square_box(Cell2::Quadrilateral, 1, 1),
+        &client,
+    );
+    let rule = QuadRule::for_grid(&quad, 2).expect("rule");
+    let pts = rule.get(Cell2::Quadrilateral).expect("pts");
+    let mut quad_seen = Vec::new();
+    for_each_strategy!(true, |_run| {
+        let mesh = fresh(&quad);
+        let (_, ran) = tetraloma_geometry::testing::record_strategies(|| {
+            physical_points_block(&mesh, 0, pts).expect("X")
+        });
+        quad_seen.extend(ran);
+    });
+    for s in Strategy::ALL {
+        assert!(
+            quad_seen.contains(&(StrategyFamily::Points, s)),
+            "Points never ran {s:?}: {quad_seen:?}"
+        );
     }
 }
