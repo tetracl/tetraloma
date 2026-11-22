@@ -1,6 +1,6 @@
 # ADR-0071: Finite elements, quadrature extensions and grid functions
 
-Status: Proposed
+Status: Accepted
 Date: 2026-11-21
 Decision issue: #60
 Raised by: the maintainer's request to plan three extensions (elements, quadrature, grid functions), after a design discussion with an agent
@@ -1030,4 +1030,6 @@ Runs: the benchmark platforms of section 8 for p = 1, 4, 8 and 16; MFEM or libCE
 
 ## Decision
 
-> <the maintainer's words, verbatim>, <date>
+> Accept the ADR with Option 3, 2026-11-22, said to the agent in a session.
+
+The answer names option 3, the recommendation, and does not change the numbers proposed under Recommendation, so they apply as written in parts A–C.

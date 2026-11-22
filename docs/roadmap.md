@@ -12,6 +12,8 @@ Rules for new entries (from M11; ids below M11 are not used again):
 - Out of scope names what the milestone leaves out; Runs names the machines or long runs it needs, or `none`.
 - A milestone is roughly four to eight tasks. No status, checkboxes or dates.
 
+In M11–M17 (ADR-0071), the degree ranges and tolerances are those of the design sections cited; "the tolerances of section 16" include its scaling above degree 4.
+
 The milestones before ADR-0069 follow, as the design stated them (E3 had no roadmap entry; its plan is `docs/plans/E3.md`).
 
 ## Milestones before ADR-0069
@@ -339,3 +341,149 @@ Each milestone is one Claude Code work package. Every acceptance test is automat
 - the library sources differ from the base commit only in comments;
 - the site is deployed from `main`;
 - the hosted CI jobs pass.
+
+## M11: Lagrange and DG elements
+
+Depends on: none
+Design: 6, 22, 26
+Acceptance:
+- For `Nodal(Equispaced)` Lagrange on intervals, triangles, quadrilaterals, tetrahedra and hexahedra and `Nodal(Gll)` on intervals, quadrilaterals and hexahedra, p = 1–6, values and first derivatives at the fixture points equal ndelement's to 10^−12.
+- For `Nodal(Gll)` on triangles, tetrahedra and prisms and `Nodal(Equispaced)` on prisms (p = 1–6) and pyramids (p = 1–3), values and first derivatives at the fixture points equal Basix's after the A.11 conversion to 10^−12.
+- Gll points on triangles, tetrahedra and prisms equal Basix's `gll_isaac` points to 10^−14 for p = 1–15.
+- On every sub-entity of a triangle, tetrahedron and prism, the Gll points restricted to it equal that sub-entity's Gll points to 10^−15 for p = 1–15.
+- The Lebesgue constant of Gll points on triangles and tetrahedra, on a sample grid of 10^4 points, is below that of equispaced points for every p = 3–15.
+- For every Lagrange element and variant of section 26 with p ≤ 10 (`Nodal(Equispaced)`: p ≤ 6), applying its interpolation to its basis gives the identity to 10^−12.
+- For `Legendre` on every cell, p = 0–10, the reference mass matrix under a `Gauss` rule of degree 2p is the identity to 10^−12.
+- Every base transformation of every Lagrange element with p ≤ 10 is a permutation without negation.
+- For p ≤ 6, the base transformations of Lagrange elements on intervals, triangles, quadrilaterals, tetrahedra and hexahedra equal ndelement's.
+- On two cells sharing an entity, for every relative orientation and every pair of cell types that can share it, a Lagrange function with random coefficients is continuous across the entity to 10^−12 for p ≤ 6.
+- On quadrilaterals and hexahedra, the product of the tensor factors reproduces the dense construction's values and first derivatives to 10^−12 for p ≤ 8.
+- Degrees outside the table of section 26, and `Nodal(Gll)` on pyramids, return `ElementError::Unsupported`.
+- `scripts/check-workspace-deps.sh` fails if tetraloma-element depends on cubecl.
+
+Out of scope: N1curl and RT (M12); device kernels; element construction on the device.
+Runs: none
+
+## M12: N1curl and RT elements
+
+Depends on: M11
+Design: 26
+Acceptance:
+- For N1curl and RT on triangles, quadrilaterals, tetrahedra and hexahedra, p = 1–8, the number of DOFs on each sub-entity equals Symfem's.
+- For the same elements and degrees, the span of the basis functions associated with each sub-entity closure equals ndelement's (Basix's where ndelement lacks the element), by a rank test at 100 random points with tolerance 10^−10.
+- For the same elements with p ≤ 10, applying the interpolation to the basis gives the identity to 10^−12.
+- For the same elements with p ≤ 10, interpolation reproduces every member of an orthonormal basis of the space to 10^−11.
+- Every base transformation of N1curl and RT on quadrilaterals and hexahedra with p ≤ 10 is classified as a signed permutation.
+- On two cells sharing an entity, for every relative orientation, N1curl functions with random coefficients have tangential components continuous across the entity to 10^−12 for p ≤ 6.
+- On two cells sharing an entity, for every relative orientation, RT functions with random coefficients have normal components continuous across the entity to 10^−12 for p ≤ 6.
+- On each of the four cells and for p ≤ 8, the gradients of Lagrange_p lie in N1curl_p with least-squares residual below 10^−12.
+- On tetrahedra and hexahedra the curl, and on triangles and quadrilaterals the rot, of N1curl_p lies in RT_p or DG_{p−1} respectively, with residual below 10^−12 for p ≤ 8.
+- On each of the four cells and for p ≤ 8, the divergence of RT_p lies in DG_{p−1} with residual below 10^−12.
+- On quadrilaterals and hexahedra, the product of the tensor factors reproduces the dense construction's values to 10^−12 for p ≤ 8.
+
+Out of scope: second-kind families; prisms and pyramids; point-evaluation DOFs.
+Runs: none
+
+## M13: Quadrature rules and point sets
+
+Depends on: M11
+Design: 10, 27
+Acceptance:
+- Every rule of every `QuadratureType` integrates the orthonormal set of its degree with relative error at most 10^−14, for `Symmetric` degree 1–30, `Gauss` degree 0–40 and `GaussLobatto` 2–41 points per direction.
+- Every point of every `Gauss` and `Symmetric` rule lies in the interior of its cell, and every weight is positive.
+- Every `Symmetric` rule on triangles and tetrahedra maps onto itself under every vertex permutation of the cell, with points and weights equal to 10^−15.
+- For every degree 4–30, the `Default` rule on triangles and on tetrahedra has fewer points than the `Gauss` rule.
+- The mass matrix of the `Nodal(Gll)` Lagrange element of degree n − 1 under the n-point `GaussLobatto` rule is diagonal to 10^−14 for n = 2–17 on intervals, quadrilaterals and hexahedra.
+- On meshes with randomly permuted vertex order (tetrahedra, hexahedra, the mixed box and a triangulated sphere), facet points mapped from both cells of every interior facet with `rule_permutation` coincide to 10^−12 in f64 and 10^−5 in f32, on 1–4 ranks.
+- `PointSet::tabulate_element` equals the host tabulation of every element of M11 and M12 with p ≤ 6 to 10^−12 in f64 and 10^−5 in f32.
+- `permute_vertices` agrees with `physical_points` of a cell whose vertices are permuted, to 10^−12, for every cell type and geometry degree 1–3.
+- Every table in `tetraloma-refcell/tables/` has a source and licence entry in `tables/sources.json`.
+
+Out of scope: singular quadrature; adaptive rules; symmetric rules on prisms and pyramids.
+Runs: none
+
+## M14: Function spaces and dofmaps
+
+Depends on: M12
+Design: 28, 29
+Acceptance:
+- Global DOF counts equal closed-form counts for every family of section 26, continuous and discontinuous, with block shapes [] and [3], on boxes of every cell type and the mixed box at three refinements, p = 1–4.
+- Global DOF numbers form a bijection onto [0, N) on 1–4 ranks under MPICH and Open MPI.
+- N is the same on 1, 2, 3 and 4 ranks.
+- Every ghost DOF's global number equals its owner's on 1–4 ranks.
+- For every pair of cells sharing an entity, the global DOFs of that entity agree in number and order, after the folded permutations and signs.
+- `FunctionSpace::new` returns `EntitiesNotCreated(d)` for a mesh that lacks a dimension d the space needs.
+- After `create_entities_for`, `FunctionSpace::new` succeeds and no entity dimension outside `dof_dimensions` exists.
+- A discontinuous space is created on a mesh without created entities.
+- Every owned DOF has exactly one writer slot on its owning rank, on 1–4 ranks.
+- Gather followed by accumulation satisfies ⟨Gu, e⟩ = ⟨u, Gᵀe⟩ to 10^−12 in f64 and 10^−5 in f32.
+- Accumulation is bitwise identical with 1 and 7 chunks on the CPU runtime.
+- The geometry space's dofmaps and IndexMap are the geometry blocks' and the node IndexMap.
+- The halo exchange of a complex function equals the exchanges of its real and imaginary parts bitwise.
+- A `Legendre` Lagrange element, or `map = Some(L2Piola)`, in a continuous space returns `SpaceMismatch`.
+
+Out of scope: evaluation (M15); DOF reordering; product spaces; constraints.
+Runs: none
+
+## M15: Evaluation of grid functions
+
+Depends on: M13, M14
+Design: 8, 29
+Acceptance:
+- For every family, cell and variant of section 26 with p ≤ 6, on affine meshes and on curved meshes of geometry degree 2 and 3, `evaluate` with `Op::Value` matches a host reference to the tolerances of section 16.
+- Under the same conditions, `evaluate` with the family's derivative (`Grad`, `Curl` or `Div`) matches a host reference to the tolerances of section 16.
+- On triangles and quadrilaterals in 3D and intervals in 2D and 3D, `evaluate` with `Value` and the family's derivative matches a host reference to the tolerances of section 16 for p ≤ 6.
+- On meshes with randomly permuted vertex order, at matched facet points, Lagrange values evaluated from both cells agree to 10^−12 in f64 on 1–4 ranks for p ≤ 6.
+- Under the same conditions, N1curl tangential components agree to 10^−12 in f64, including tetrahedra with dense transformations at p = 2–5.
+- Under the same conditions, RT normal components agree to 10^−12 in f64, and on surface meshes the in-plane conormal components agree.
+- The geometry view evaluated at a rule's points equals `physical_points` minus `origin()` to 10^−12 in f64 for geometry degree 1–4.
+- `evaluate` and `integrate_basis` satisfy ⟨Bu, v⟩ = ⟨u, Bᵀv⟩ to 10^−12 in f64 for every family with p ≤ 6.
+- The sum over all DOFs of `integrate_basis` of the constant 1 with `Op::Value` and Lagrange_p equals `measure` to 10^−12 in f64 for p = 1–4.
+- `evaluate_at` with `CellPoints` at a rule's points equals `evaluate` with the rule bitwise on the CPU runtime.
+- A complex function evaluates to its real and imaginary parts evaluated separately, bitwise on the CPU runtime.
+- Evaluation is bitwise identical with 1 and 7 chunks and at vector sizes 1 and widest on the CPU runtime, for every strategy of section 29.
+- The strategies loops, shared and cooperative agree with each other to the tolerances of section 16 for p = 1–8 on every cell type except pyramids (p = 1–3), and with direct for p = 1–4 (pyramids p = 1–3).
+- A test checks that `tetraloma-function/degree-policy.toml` holds the four sets for FunctionGather, DofTransform, FunctionEval, FunctionEvalComplex, FunctionAccumulate and Interpolate, each following the generic decision rule on the committed records of p = 1, 4 and 8.
+
+Out of scope: sum factorisation (M17); interpolation (M16).
+Runs: the benchmark platforms of section 8 (local Mac CPU runtime and Metal, Locust Grace and H100, one Kathleen socket) for the candidate protocol at p = 1, 4 and 8.
+
+## M16: Interpolation and output
+
+Depends on: M15
+Design: 13, 31, 32
+Acceptance:
+- Interpolation from a `DeviceExpression` reproduces every polynomial of the space on affine meshes to 10^−10 in f64 for every family, cell and variant with p ≤ 6.
+- The L2 interpolation error of a smooth field converges at a rate of at least p + 1 − 0.2 for Lagrange and DG of degree p = 1–4, over four refinements on meshes of geometry degree 2, in f64.
+- The L2 interpolation error of a smooth field converges at a rate of at least p − 0.2 for N1curl and RT of degree p = 1–4, over four refinements on meshes of geometry degree 2, in f64.
+- For u with random coefficients in Lagrange_p, p = 1–5, interpolating ∇u into N1curl_p reproduces ∇u at quadrature points to 10^−10 on affine and curved meshes.
+- For u with random coefficients in N1curl_p, p = 1–5, interpolating its curl into RT_p on tetrahedra and hexahedra, and its rot into L2-Piola DG_{p−1} on triangles and quadrilaterals, reproduces it at quadrature points to 10^−10 on affine and curved meshes.
+- For u with random coefficients in RT_p, p = 1–5, interpolating div u into L2-Piola DG_{p−1} reproduces it at quadrature points to 10^−10 on affine and curved meshes.
+- On the boundaries of a box and a ball, the trace of an interpolated polynomial Lagrange field equals the interpolation of its trace to 10^−10 for p = 1–4.
+- On the same boundaries, the tangential trace of an interpolated polynomial N1curl field into surface N1curl equals the interpolation of its tangential trace to 10^−10 for p = 1–4.
+- On the same boundaries, the n× trace of an interpolated polynomial N1curl field into surface RT equals the interpolation of its rotated trace to 10^−10 for p = 1–4.
+- Lifting a boundary function into the parent space and taking its trace returns the boundary function to 10^−12.
+- Interpolating a DG function into continuous Lagrange gives bitwise identical coefficients in two runs and with 1 and 7 chunks on the CPU runtime.
+- After interpolation, every ghost value equals its owner's on 1–4 ranks.
+- `interpolate_host` and the expression path give the same coefficients to 10^−12 in f64 and 10^−5 in f32 on 1–4 ranks.
+- Functions written by `VtkWriter::function` and read back by VTK's Python reader equal the device values at the output points to 10^−12 in f64 and 10^−5 in f32, for Lagrange, DG, N1curl, RT and complex functions in VTU, PVTU and VTKHDF on 1–4 ranks.
+- On the same Gmsh mesh, L2 norms of interpolants of the same expressions agree with DOLFINx's to 10^−10 for Lagrange, N1curl and RT with p = 1–3.
+
+Out of scope: non-matching interpolation; point location; Gmsh output; checkpointing; traces on edge submeshes.
+Runs: none
+
+## M17: Sum-factorised evaluation and comparison benchmarks
+
+Depends on: M15
+Design: 8, 30
+Acceptance:
+- The sumfact strategy agrees with the loops strategy to the tolerances of section 16 for every family on quadrilaterals and hexahedra, every applicable `Op` and p = 1–16, in f32 and f64.
+- The sumfact strategy's `evaluate` and `integrate_basis` satisfy the adjoint identity to 10^−12 in f64 for p = 1–16.
+- For p = 1–16 on every target of the standing matrix, every sumfact plan stays within the device's units per cube and shared-memory limit, as reported by `LaunchPlan`.
+- The sumfact strategy is bitwise identical with 1 and 7 chunks on the CPU runtime for p = 1–16.
+- A test checks that `tetraloma-function/degree-policy.toml` follows the generic decision rule for FunctionEval and FunctionEvalComplex on quadrilaterals and hexahedra on the committed records of p = 1, 4, 8 and 16.
+- `docs/perf/high-order.md` records, for FunctionEval on hexahedra at p = 1, 4, 8 and 16, the time per point of each strategy on every benchmark platform.
+- `docs/perf/function-comparison.md` records BP1 and BP3 throughput at p = 4 and 8 for tetraloma, MFEM or libCEED on Locust's H100, and deal.II on one Kathleen socket, with versions and commands.
+
+Out of scope: sum factorisation on simplices, prisms and pyramids; tensor-core instructions; matrix-free operators beyond `integrate_basis`.
+Runs: the benchmark platforms of section 8 for p = 1, 4, 8 and 16; MFEM or libCEED on Locust; deal.II on one Kathleen socket.

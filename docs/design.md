@@ -6,7 +6,7 @@ The design reference for implementation. It changes only through ADRs; `docs/adr
 
 tetraloma is a GPU-resident mesh library in Rust built on CubeCL 0.11. It serves as the foundation for strongly typed FEM and BEM crates. It encodes the topological and geometric dimensions in the type system as `Mesh<F, TD, GD, C>`, and keeps cell types and geometry degree as runtime values stored per block. Methods that make sense only for some embeddings (normals, inverse Jacobians, boundaries) exist only where their trait bounds hold, so misuse is a compile error. CubeCL comptime parameters then recover full kernel specialisation from the runtime values.
 
-- **Scope:** 1D–3D meshes with D_TOP ≤ D_GEO ≤ 3, all standard cells including hybrid meshes, arbitrary geometry degree (device kernels verified and optimised for p ≤ 8; pyramids p ≤ 3; ADR-0041), and device residency on CUDA, HIP, Vulkan, Metal and the CubeCL CPU runtime. It also covers MPI distribution with partitioning, Gmsh MSH 4.1 import and export, and VTK export.
+- **Scope:** 1D–3D meshes with D_TOP ≤ D_GEO ≤ 3, all standard cells including hybrid meshes, arbitrary geometry degree (device kernels verified and optimised for p ≤ 8; pyramids p ≤ 3; ADR-0041), and device residency on CUDA, HIP, Vulkan, Metal and the CubeCL CPU runtime. It also covers MPI distribution with partitioning, Gmsh MSH 4.1 import and export, and VTK export. It also provides finite elements (Lagrange, DG, N1curl and RT at arbitrary degree; sections 26–27), and device-resident function spaces and grid functions with evaluation, interpolation and output (sections 28–32) (ADR-0071).
 - **Audience:** library architects and the coding agents that implement it.
 - **Name:** tetraloma, the project's permanent name, which replaced the placeholder of the earlier milestones in E1 (ADR-0066).
 
@@ -36,6 +36,7 @@ The requirements are unchanged from the draft, apart from the development target
 - **Development and test targets:** a local Apple-silicon Mac (Claude Code runs here; CubeCL CPU runtime and Metal; ADR-0034), UCL Locust (NVIDIA Grace Hopper GH200) as the CUDA platform for routine runs, milestone reviews and benchmarks, UCL Kathleen (Slurm, Xeon Gold 6248 Cascade Lake with AVX-512) for CPU-only runs and CPU benchmarks (x86-64 AVX-512) and for MPI tests across two nodes, with Myriad's CPU-only D nodes as the fallback, an RTX A4000 workstation (sm_86) as the first CUDA fallback when Locust is unavailable and for architecture comparisons (ADR-0037), and Myriad's V100 and A100 nodes for multi-GPU tests and architecture comparisons, and as the fallback after the workstation (ADR-0014, ADR-0016). See "Development environment and test targets".
 - **Distribution:** MPI-distributed meshes with ownership, ghost layers and parallel partitioning. PT-Scotch is the production default; other partitioners are pluggable.
 - **High order:** geometry of arbitrary polynomial degree, with sub-entity orientation information for later high-order FEM and BEM.
+- **Elements and grid functions:** Lagrange elements for continuous and discontinuous Galerkin methods on every cell; N1curl and RT elements on triangles, quadrilaterals, tetrahedra and hexahedra, at arbitrary degree; push-forwards and pull-backs for D_TOP ≤ D_GEO; high-order quadrature; function spaces and grid functions created, stored, evaluated and interpolated on the device (ADR-0071).
 - **I/O:** Gmsh MSH 4.1 import and export, and VTK export (VTU/PVTU, VTKHDF) including VTK Lagrange cells.
 - **Generic:** no assumption about the discretisation built on top (FEM, BEM, DG, FV).
 
@@ -44,7 +45,7 @@ The requirements are unchanged from the draft, apart from the development target
 1. Design B: compile-time (D_TOP, D_GEO), runtime cell types and degrees. Designs A and C appear only for comparison.
 2. CubeCL is pinned to `=0.11.0`.
 3. Reference-cell conventions follow ndelement main at commit f8cbffe (codeberg.org/nd-project/nd, mirrored at github.com/bempp/nd). Those conventions are the DefElement conventions. ndelement 0.4.0 on crates.io still uses the older Basix simplex order.
-4. tetraloma-refcell holds tetraloma's own tables. ndelement is used only in the unpublished tetraloma-conformance crate.
+4. tetraloma-refcell holds tetraloma's own tables, and tetraloma-element its own element definitions. ndelement is used only in the unpublished tetraloma-conformance crate (ADR-0071).
 5. Edge and face vertex lists are stored in canonical orientation as well as per-cell orientation bits, a deliberate difference from DOLFINx.
 6. High-order pyramids go to VTK only as linear or subdivided cells.
 7. Canonical orientation is keyed on origin vertex ids (decided in review, Q1).
@@ -57,6 +58,7 @@ The requirements are unchanged from the draft, apart from the development target
 
 - **Python bindings.** `AnyMesh` exists for file I/O only.
 - **coupe** is not used.
+- **Singular quadrature for BEM** (Sauter–Schwab, Duffy) belongs to a future BEM crate, which builds on section 27's point sets (ADR-0071).
 
 ### Decisions taken in review
 
@@ -605,7 +607,7 @@ pub trait DeviceGrid {
 }
 ```
 
-This mirrors the mesh traits of ndmesh but returns device views instead of per-entity host iterators. Function spaces, assemblers and BEM operators are generic over `G: DeviceGrid`, so they work unchanged on submeshes and future grid kinds. Accessors create no topology: entities and connectivity are built only by the `&mut self` methods `create_entities` and `create_connectivity`. Derived geometry data (E-vectors) is built on first use and cached (ADR-0012).
+This mirrors the mesh traits of ndmesh but returns device views instead of per-entity host iterators. Function spaces (section 28), assemblers and BEM operators are generic over `G: DeviceGrid` (ADR-0071), so they work unchanged on submeshes and future grid kinds. Accessors create no topology: entities and connectivity are built only by the `&mut self` methods `create_entities` and `create_connectivity`. Derived geometry data (E-vectors) is built on first use and cached (ADR-0012).
 
 `DeviceGrid` lives in tetraloma-geometry, because `QuadRule::for_grid` and the block functions of Listing B5 (tetraloma-geometry) are generic over it; tetraloma re-exports it. `create_entities(d)` accepts 0 ≤ d < tdim, and dimension 0 gives one `Point` block of the vertices. `create_connectivity` supports (tdim, d), which is downward and filled by entity creation, and (d, tdim), which is upward, for 0 ≤ d < tdim; d → 0 is `EntityBlock::vertices` and tdim → 0 is `CellBlock::vertices` (ADR-0012).
 
@@ -762,8 +764,8 @@ tetraloma uses the DefElement conventions (Conventions 1–2 and Definitions 8�
     - Intervals, triangles, quadrilaterals, tetrahedra and hexahedra use exactly ndelement's layout, so the FEM/BEM layer can apply ndelement's DOF transformations without a second convention.
     - ndelement has no Lagrange element on prisms or pyramids. tetraloma defines those layouts in A.5, using the DefElement conventions and the same in-entity rule; Basix's equispaced lattices for these cells coincide with it.
     - The pyramid uses DefElement's Lagrange pyramid space (Definition 9), a rational space of dimension (p+1)(p+2)(2p+3)/6. A FEM layer that needs prism or pyramid elements must supply them itself.
-- **Node families.** Equispaced points on every cell are required for Gmsh and VTK interoperability. Gauss–Lobatto–Legendre (GLL) points are offered on intervals, quadrilaterals and hexahedra only, matching ndelement. Requesting GLL on any other cell returns `GridError::UnsupportedNodeFamily`. Conversion between families is an interpolation applied on the device; writers always convert to equispaced. Both writers call `tetraloma_geometry::equispaced_nodes`; a node shared by several cells takes its value from its first cell in flat order, so the result is deterministic (ADR-0024).
-- **DOF transformations.** The base transformations of Scroggs, Dokken, Richardson and Wells (ACM TOMS 48(2), 2022, doi 10.1145/3524456) depend only on the sub-entity type. They are therefore identical in the DefElement and Basix numberings; only the block of the cell transformation that each one lands in moves.
+- **Node families.** Equispaced points on every cell are required for Gmsh and VTK interoperability. Gauss–Lobatto–Legendre (GLL) points are offered on intervals, quadrilaterals and hexahedra (tensor GLL), on triangles and tetrahedra (Isaac's recursive GLL points, T. Isaac, SIAM J. Sci. Comput. 42(6), 2020, which restrict on every sub-entity to that sub-entity's GLL points), and on prisms (their product). Requesting GLL on a pyramid returns `GridError::UnsupportedNodeFamily`. `NodeFamily` is `#[non_exhaustive]` (ADR-0071). Conversion between families is an interpolation applied on the device; writers always convert to equispaced. Both writers call `tetraloma_geometry::equispaced_nodes`; a node shared by several cells takes its value from its first cell in flat order, so the result is deterministic (ADR-0024).
+- **DOF transformations.** The base transformations of Scroggs, Dokken, Richardson and Wells (ACM TOMS 48(2), 2022, doi 10.1145/3524456) depend only on the sub-entity type. They are therefore identical in the DefElement and Basix numberings; only the block of the cell transformation that each one lands in moves. tetraloma-element computes them for its elements and classifies them (section 26) (ADR-0071).
 
 ## 7. Device model and backends
 
@@ -1060,6 +1062,8 @@ Two consequences shape tetraloma's kernels. First, with the GPU mapping of one i
 pub enum KernelKind {
     Fill, Copy, Reduce, ScanTile, SortDigits, Gather, Pack,
     TopologyKeys, PermutationInfo, EVector, GeomFactors, PullBack,
+    // ADR-0071
+    FunctionGather, DofTransform, FunctionEval, FunctionEvalComplex, FunctionAccumulate, Interpolate,
     /// Kernels not on the candidate list; always vector size 1 (ADR-0015).
     Scalar,
 }
@@ -1193,6 +1197,11 @@ Vectors pay off where a kernel does the same arithmetic for many independent ite
 | EVector (E-vector construction) | cells | – | gathers from the L-vector; only the stores are vectors |
 | GeomFactors (X, J, det J, K, normals) | cells of one tile | E-vector, tiled `QuadField` | the main expected gain: dense arithmetic with broadcast basis values |
 | PullBack (Newton iteration) | points | points tiled like cells | to measure: lanes that have converged keep their value through arithmetic masks while the others iterate |
+| FunctionGather | cells | cell-fastest E-vector | gathers from the L-vector; only the stores are vectors, like EVector (ADR-0071) |
+| DofTransform | cells | cell-fastest E-vector | small dense products; to measure (ADR-0071) |
+| FunctionEval, FunctionEvalComplex | cells (CPU); groups per cell (cooperative, sumfact on GPUs) | E-vector, tiled fields | dense arithmetic with broadcast tabulations on CPUs; complex doubles the accumulators, so it has entries of its own (ADR-0071) |
+| FunctionAccumulate | DOFs | transposed dofmap | indirect reads; expected to stay at size 1 (ADR-0071) |
+| Interpolate | cells | tiled points and factors | expression evaluation and pull-back; size 1 unless the expression is vectorizable (ADR-0071) |
 
 Histograms, connectivity inversion, segmented reductions over irregular segments and the scatter phase of the sort stay scalar. Kernels in the candidate list are written generic over `N: Size` from the start and run at the policy's size. All other kernels are scalar, plan as `KernelKind::Scalar`, and still take their CPU work distribution from `LaunchPlan`.
 
@@ -1224,7 +1233,8 @@ tetraloma-bench, an unpublished workspace crate, measures where vectors help.
 
   A strategy that fails, or takes over 30 s to compile and load on any platform of the class, is not selectable (ADR-0056). For every entry, the reports list each platform's best configuration, the generic choice, each platform's r for that choice, and the reason.
 - **Record:** the choices — vector sizes, QuadField tiles per element size, CPU block sizes per kind and element size in units of 4 KiB, and CPU units per kind and element size — go to `tetraloma-device/vector-policy.toml`; the measured speedups, choices and reasons go to `docs/perf/vectorization.md`, with the raw JSON under `docs/perf/data/`. The study is re-run with the candidate protocol in M10 for every kernel family, and after any CubeCL pin bump (ADR-0057); the `[Cpu]` vector set is re-derived in M10c (ADR-0065). From M10, `vector-policy.toml` holds `[Cpu]` and `[Gpu]` with 4- and 8-byte entries, and nothing else (ADR-0058).
-- **Degree sweep (M9h):** the degree-dependent families (EVector, the geometric factors, the pull-back and the device basis evaluator) are measured at p = 1–8 for each strategy of "Geometric factors" (`direct` not on hexahedra, prisms and tetrahedra at p ≥ 5, where T3's drift baseline gives its cost; ADR-0050), with the protocol and conditions above, except that vector size, tile and CPU block come from `vector-policy.toml`. Sizes are 10^5, 10^6 and 10^7 quadrature points (Gauss degree 2p); a CPU run over 600 s or a compile over 300 s is recorded as too slow. Each record carries the time per cell and per point and the first-use compile and load time (one new kernel per warm-up, `CUDA_CACHE_DISABLE=1`); on CUDA, registers, spill and local memory per thread come from `ncu` or `ptxas -v` of the driver's CUDA version, and failing driver calls are named by `compute-sanitizer`, without FFI. A strategy is adopted over the baseline (`direct`, or `loops` where `direct` is not selectable) only if it is at least 10% faster at 10^6 and 10^7 points; on the CPU classes the sweep times `direct`, `loops` and the sum-factorised strategy only, at 10^5 and 10^6 points with medians of five runs, and the rule uses 10^6 points (ADR-0052); among those within 3% of the fastest the simplest wins (direct < loops < sum-factorised < shared < cooperative); classes with several devices use the geometric mean; degree ranges are maximal runs of equal choices. A strategy that fails, or takes over 30 s to compile and load on a device swept for a class, is not selectable for that class (ADR-0056); bullet 2's bound is Locust's. The choices go to `tetraloma-geometry/degree-policy.toml`, and the costs, choices and reasons to `docs/perf/high-order.md`, with the raw JSON under `docs/perf/data/` (ADR-0042); `docs/perf/high-order.md` reports the p = 8 / p = 4 ratios of ADR-0042 item 1 and the speedup over M9 at p = 8 (ADR-0053); rule 11's paired runs interleave the policy's and `direct`'s timed runs on CPUs, and at p ≤ 4 the CPU classes' strategies are timed interleaved (ADR-0055). In M10, and after a CubeCL pin bump, the degree-dependent families are measured at p = 1, 4 and 8 only, with the candidate protocol (ADR-0057). FacetNormals on intervals in f32 is measured at 10^5 and 10^6 points at p = 4–6 and at 10^4 and 10^5 points at p = 7–8, where 10^6 or 10^7 equispaced points exceed f32's resolution (ADR-0063). `degree-policy.toml` then holds `[Cpu.<family>]` and `[Gpu.<family>]` only, chosen by the generic rule. The choices at the degrees in between come from M9h's per-degree records, and Grace votes at p = 1, 4 and 8. A family and cell type whose check misses the bound, or whose time at 10^6 points moves by more than 10% from M9h's record, is re-measured with candidates only at the inner degrees next to each boundary of its range (ADR-0058, ADR-0060).
+- **Comparison frameworks:** CEED bake-off problems BP1 (scalar mass) and BP3 (scalar Laplacian) are built in tetraloma-bench from `evaluate` and `integrate_basis`. They are run at p = 4 and 8 on hexahedra and compared, on the same machines, with MFEM's partial assembly or libCEED on Locust's H100 and with deal.II's matrix-free framework on one Kathleen socket. Throughput in DOFs per second, versions and build commands go to `docs/perf/function-comparison.md`. These frameworks are never test or workspace dependencies (ADR-0071).
+- **Degree sweep (M9h):** the degree-dependent families (EVector, the geometric factors, the pull-back and the device basis evaluator) are measured at p = 1–8 for each strategy of "Geometric factors" (`direct` not on hexahedra, prisms and tetrahedra at p ≥ 5, where T3's drift baseline gives its cost; ADR-0050), with the protocol and conditions above, except that vector size, tile and CPU block come from `vector-policy.toml`. Sizes are 10^5, 10^6 and 10^7 quadrature points (Gauss degree 2p); a CPU run over 600 s or a compile over 300 s is recorded as too slow. Each record carries the time per cell and per point and the first-use compile and load time (one new kernel per warm-up, `CUDA_CACHE_DISABLE=1`); on CUDA, registers, spill and local memory per thread come from `ncu` or `ptxas -v` of the driver's CUDA version, and failing driver calls are named by `compute-sanitizer`, without FFI. A strategy is adopted over the baseline (`direct`, or `loops` where `direct` is not selectable) only if it is at least 10% faster at 10^6 and 10^7 points; on the CPU classes the sweep times `direct`, `loops` and the sum-factorised strategy only, at 10^5 and 10^6 points with medians of five runs, and the rule uses 10^6 points (ADR-0052); among those within 3% of the fastest the simplest wins (direct < loops < sum-factorised < shared < cooperative); classes with several devices use the geometric mean; degree ranges are maximal runs of equal choices. A strategy that fails, or takes over 30 s to compile and load on a device swept for a class, is not selectable for that class (ADR-0056); bullet 2's bound is Locust's. The choices go to `tetraloma-geometry/degree-policy.toml`, and the costs, choices and reasons to `docs/perf/high-order.md`, with the raw JSON under `docs/perf/data/` (ADR-0042); `docs/perf/high-order.md` reports the p = 8 / p = 4 ratios of ADR-0042 item 1 and the speedup over M9 at p = 8 (ADR-0053); rule 11's paired runs interleave the policy's and `direct`'s timed runs on CPUs, and at p ≤ 4 the CPU classes' strategies are timed interleaved (ADR-0055). In M10, and after a CubeCL pin bump, the degree-dependent families are measured at p = 1, 4 and 8 only, with the candidate protocol (ADR-0057). FacetNormals on intervals in f32 is measured at 10^5 and 10^6 points at p = 4–6 and at 10^4 and 10^5 points at p = 7–8, where 10^6 or 10^7 equispaced points exceed f32's resolution (ADR-0063). `degree-policy.toml` then holds `[Cpu.<family>]` and `[Gpu.<family>]` only, chosen by the generic rule. The choices at the degrees in between come from M9h's per-degree records, and Grace votes at p = 1, 4 and 8. A family and cell type whose check misses the bound, or whose time at 10^6 points moves by more than 10% from M9h's record, is re-measured with candidates only at the inner degrees next to each boundary of its range (ADR-0058, ADR-0060). From M15, tetraloma-function's families (section 29) are measured with the candidate protocol at p = 1, 4 and 8 on every cell type, and from M17 also at p = 16 on quadrilaterals and hexahedra. Their choices go to `tetraloma-function/degree-policy.toml` under the generic decision rule, and their costs to `docs/perf/high-order.md` (ADR-0071).
 
 ## 9. Topology construction on the device
 
@@ -1304,7 +1314,7 @@ Geometry is a vector-valued Lagrange field of arbitrary degree, evaluated by dev
     - Values and reference derivatives are uploaded once per (element, point set) and narrowed to `F`.
     - The pull-back evaluates the same orthonormal bases on the device by recurrence, with `LagrangeElement::coefficients` uploaded once per geometry block; pyramid ζ is clamped to at most 1 − 2^−10 (ADR-0039).
     - Tensor rules (Gauss on quadrilaterals and hexahedra, triangle × Gauss on prisms) keep their 1D (or triangle × 1D) factors; sum-factorised kernels use 1D tabulations and a lexicographic node permutation, uploaded with the tabulation (ADR-0042).
-- **Quadrature:** collapsed Gauss–Jacobi rules on triangles, tetrahedra and pyramids. Quadrilaterals and hexahedra use tensor Gauss rules; prisms use a triangle rule times a Gauss interval rule.
+- **Quadrature:** collapsed Gauss–Jacobi rules on triangles, tetrahedra and pyramids. Quadrilaterals and hexahedra use tensor Gauss rules; prisms use a triangle rule times a Gauss interval rule. `QuadratureType` adds symmetric rules on simplices and GLL rules on tensor cells; `PointSet::from_points` and `CellPoints` take points of the caller's choice (section 27) (ADR-0071).
 - **Rules for mixed meshes:** a `QuadRule<F, TD>` holds one point set per cell type, and a `FacetQuadRule<F, TD>` holds point sets on each reference facet type.
 
 ### Geometric factors
@@ -1320,7 +1330,7 @@ Factors are computed on the device, following MFEM's GeometricFactors. Caching b
     - D1 in D2: n = s (J0_y, −J0_x) / |J0|, which points outward for counter-clockwise closed curves.
 - **Facet normals** of codimension-0 cells, at facet quadrature points: n = K^T n_ref / |K^T n_ref|, using the reference facet normals from tetraloma-refcell. The points are facet-major, so a cell has Σ_f n_f points (`FacetPointSet`, Listing B4b; ADR-0012).
 
-Each factor family runs one of the strategies direct (M9's fully unrolled kernels), loops (runtime loops over nodes), sum-factorised (quadrilaterals, hexahedra and prisms on tensor rules), shared (tabulations or coefficients in shared memory) or cooperative (a group of units per cell, planned by `LaunchPlan::per_group`). tetraloma-geometry's degree policy (`degree-policy.toml`, crate-private) chooses one per family, cell type, degree range, device class (Cpu or Gpu; ADR-0058) and scalar size from the measurements in `docs/perf/high-order.md`; its last range is open-ended and resolves to a strategy known to compile at p = 9–10. `TETRALOMA_GEOM_STRATEGY` (`policy | direct | loops | sumfact | shared | cooperative`, or `<family>=<strategy>,…`) and the hidden `tetraloma_geometry::testing::with_strategy` override it for tests and benchmarks; a strategy that does not apply falls back to loops (ADR-0042).
+Each factor family runs one of the strategies direct (M9's fully unrolled kernels), loops (runtime loops over nodes), sum-factorised (quadrilaterals, hexahedra and prisms on tensor rules), shared (tabulations or coefficients in shared memory) or cooperative (a group of units per cell, planned by `LaunchPlan::per_group`). tetraloma-geometry's degree policy (`degree-policy.toml`, crate-private) chooses one per family, cell type, degree range, device class (Cpu or Gpu; ADR-0058) and scalar size from the measurements in `docs/perf/high-order.md`; its last range is open-ended and resolves to a strategy known to compile at p = 9–10. `TETRALOMA_GEOM_STRATEGY` (`policy | direct | loops | sumfact | shared | cooperative`, or `<family>=<strategy>,…`) and the hidden `tetraloma_geometry::testing::with_strategy` override it for tests and benchmarks; a strategy that does not apply falls back to loops (ADR-0042). `Strategy` and the reader of `degree-policy.toml` move to tetraloma-device as `#[doc(hidden)] pub` items (dependency rule 7), and the device basis evaluator's `#[cube]` functions become `#[doc(hidden)] pub` items of tetraloma-geometry, so that tetraloma-function uses the same strategies, policy rules and evaluator (ADR-0071).
 
 ### Manifold orientation
 
@@ -1670,7 +1680,7 @@ tetraloma has its own Gmsh MSH 4.1 reader and writer, a VTU/PVTU writer, and a V
 Users learn tetraloma from a book and from API documentation written for them, published together on one site. This design and the other developer documents are not part of it (ADR-0067).
 
 - **Location.** The book's sources are in `docs/user/` (mdBook root: `book.toml`, `src/SUMMARY.md`, `src/**/*.md`, `src/figures/*.svg`). The developer documents stay where they are (`docs/design.md`, `docs/adr/`, `docs/plans/`, `docs/perf/`, …); `docs/README.md` says which is which.
-- **Site.** One site at `https://tetracl.github.io/tetraloma/`: the book at `/`, and at `/api/` the rustdoc of the nine published library crates (tetraloma, tetraloma-dims, tetraloma-refcell, tetraloma-device, tetraloma-parallel, tetraloma-topology, tetraloma-geometry, tetraloma-partition, tetraloma-io).
+- **Site.** One site at `https://tetracl.github.io/tetraloma/`: the book at `/`, and at `/api/` the rustdoc of the eleven published library crates (tetraloma, tetraloma-dims, tetraloma-refcell, tetraloma-device, tetraloma-parallel, tetraloma-topology, tetraloma-geometry, tetraloma-partition, tetraloma-io, tetraloma-element, tetraloma-function) (ADR-0071).
     - The API is built with `cargo doc --no-deps` and one `-p` per crate, with the features `tetraloma/mpi,tetraloma/hdf5,tetraloma/scotch,tetraloma/ptscotch,tetraloma/metis`, into an empty output directory. No unpublished crate and no test-support feature (`testing`, `bench`) is built into the site.
     - `ParMetis` is not on the site (`metis` and `parmetis` are exclusive, ADR-0033); the book's features chapter describes it, and the checks audit it in a second run with `parmetis`.
     - A CI job builds the site on every push and deploys it to GitHub Pages from `main`. Until the first crates.io release the site documents `main`; per-release copies under `/vX.Y/` start with that release (a later decision).
@@ -1683,14 +1693,15 @@ Users learn tetraloma from a book and from API documentation written for them, p
     - overview and installation;
     - mathematical concepts: meshes and topology, reference cells and maps, Lagrange geometry, Jacobians, pseudo-inverses, measures, normals and orientation, quadrature, pull-back, precision;
     - element definitions: reference cells, sub-entity numbering, Lagrange nodes, orientation bits, Gmsh and VTK maps, conversion to Basix and DOLFINx;
-    - tutorials: building a mesh, reading and writing files, iterating over cells and entities, geometric data and Jacobians, quadrature and high-order geometry, the pull-back, tags and submeshes and manifolds, distributed meshes and partitioners, halo exchange, parallel I/O, writing downstream kernels;
+    - finite elements and grid functions: element families, degrees and variants, maps and DOF transformations, quadrature types, function spaces, evaluation, interpolation and output (ADR-0071);
+    - tutorials: building a mesh, reading and writing files, iterating over cells and entities, geometric data and Jacobians, quadrature and high-order geometry, the pull-back, tags and submeshes and manifolds, distributed meshes and partitioners, halo exchange, parallel I/O, writing downstream kernels, function spaces and interpolation, grid functions in VTK output (ADR-0071);
     - compute devices: CPU runtime, Metal, CUDA, Vulkan, HIP; choosing a device; precision; one GPU per MPI rank; performance settings;
     - Cargo features and system libraries; troubleshooting; a glossary.
 - **Code in the book.** Every fenced block has a language tag, and the book has no indented code blocks (rustdoc would compile both as Rust).
     - Every `rust` block either runs as a doctest on the CPU runtime (a `#[cfg(doctest)]` module of tetraloma-examples includes each chapter with `include_str!`), or is marked `ignore` and consists only of an mdBook `{{#include}}` of a program in tetraloma-examples, which `scripts/run-examples.sh` runs on the CPU runtime, on Metal and on CUDA (MPI programs under `mpirun` on 1–4 ranks).
     - Snippets obtain devices the way a user does, through `cubecl::Device` (for example `Device::cpu()?.client()`), never through tetraloma-testing.
     - Links from the book into `/api/` target item pages, not method anchors.
-- **API documentation** of the nine published library crates. In rendered docs (`///`, `//!`):
+- **API documentation** of the eleven published library crates (ADR-0071). In rendered docs (`///`, `//!`):
     1. no citation of developer documents: no `docs/` path, ADR number, plan question or milestone id. The provenance goes in a plain `//` comment directly above the doc comment (`// Design: "Geometry", "Geometric factors"; ADR-0044.`);
     2. these items link to at least one section of the book with an absolute URL under the site's base URL (a reference-style link is fine): each crate's root, every public module, struct, enum, union, trait, type alias, constant, static, function and macro, every inherent method and associated function, and every method of a trait defined in these crates. Fields, variants and associated types and constants are documented but need no link;
     3. every function and method of item 2 has an `# Example` doctest that runs: not `ignore` and not `no_run`, and listed by `cargo test --doc -- --list`. An item is exempt only by an entry with a reason in `docs/user/doc-audit-allow.toml` (for example an accessor that its type's example calls). Examples of MPI-only items run as one-process programs in the CI job `docs`. API doctests may obtain their client and test meshes from tetraloma-testing on hidden (`# `) lines, so they run on every backend of the standing matrix; a visible comment then names what the hidden line makes and, where a reader needs it, links to the tutorial that shows how to make it. tetraloma-parallel and tetraloma-partition therefore have the dev-dependency tetraloma-testing;
@@ -1747,12 +1758,20 @@ Every acceptance test in the roadmap is automated and runs on the targets below.
     - unit-cube volume equals 1 for p = 1–4;
     - sphere surface area converges at a rate of at least p+1 − 0.2 for p = 1–4 over four refinements (even p may superconverge);
     - divergence check: ∮ x·n = D_GEO · V on closed boundaries.
+- **Elements and grid functions** (ADR-0071):
+    - the dual-basis property and polynomial reproduction of every element;
+    - DOF counts and sub-entity spans against the oracles of A.10;
+    - the de Rham inclusions ∇ Lagrange_p ⊂ N1curl_p, curl N1curl_p ⊂ RT_p and div RT_p ⊂ DG_{p−1};
+    - continuity across a shared entity for every relative orientation;
+    - adjoint identities ⟨Bu, v⟩ = ⟨u, Bᵀv⟩ of gather and evaluation;
+    - interpolation exact on the space, with convergence rates.
 - **Parallel invariance** on 1, 2, 3 and 4 ranks, under both MPICH and Open MPI. Every MPI run checks that its world size equals the rank count requested, so a launcher that starts singletons fails (ADR-0068). The following must be identical to the one-rank run:
     - global entity counts, total volume and tag counts;
     - canonical entity vertex lists, as origin ids;
     - permutation bits, keyed by cell origin id;
     - output files, after sorting by origin id;
-    - from M9h, geometric factors and pull-back results per (cell origin id, point): bitwise on the CPU runtime, within the tolerances on GPUs; thread ranks at p = 1–8 (every ghost mode at p ≤ 2), MPI at p = 1, 4 and 8 (ADR-0042).
+    - from M9h, geometric factors and pull-back results per (cell origin id, point): bitwise on the CPU runtime, within the tolerances on GPUs; thread ranks at p = 1–8 (every ghost mode at p ≤ 2), MPI at p = 1, 4 and 8 (ADR-0042);
+    - from M14, global DOF counts and, from M16, L2 norms of interpolated functions (to 10^−12 in f64) (ADR-0071).
 - **Determinism.** Two runs on the same device and rank count produce bitwise identical device arrays.
 - **Vector-size invariance.** Every kernel that is generic over the vector size runs at size 1 and at every larger power of two up to 16 that the device offers, forced with `TETRALOMA_VECTOR_SIZE` or `testing::with_vector_size`, for lengths 0, 1, 15, 16, 17 and 10^6 + 3. Integer results and lane-independent float results are compared bitwise on the CPU runtime and within the tolerances on GPUs; float reductions are compared within the tolerances. Geometry fields are also compared across tile widths 1 and 16. Factor kernels plan with `max_vector` equal to the tile width, so at tile width 1 they run at size 1, and the sweep runs at tile width 16 (ADR-0012). A separately written reference kernel may fuse multiply-adds differently; comparisons with one are bitwise up to the sign of zero on the CPU runtime (ADR-0013), where the kernel sums in the reference's order; sum-factorised and cooperative kernels are compared within the tolerances (ADR-0054). At geometry degrees 3–8 the 10^6 + 3 case is replaced by 16k + 3 cells with a Gauss rule of degree 1, whose factor and pull-back calls run with `max_page_size` lowered (`testing::with_properties`, mesh built outside it) so that the E-vector spans at least three chunks and several cubes at every degree, and J wherever a limit of at least the largest per-block table the calls upload allows (not on hexahedra from p = 6; ADR-0042, ADR-0046).
 - **I/O:**
@@ -1760,7 +1779,7 @@ Every acceptance test in the roadmap is automated and runs on the targets below.
     - a committed fixture corpus of Gmsh files written by a pinned Gmsh version, for every element type up to order 4 (pyramids up to order 3);
     - every VTU fixture read back by VTK's Python reader (the files the M5 tests write, and the committed VTK-written reference cells);
     - VTKHDF and PVTU output of the same mesh read back identically by VTK's Python reader.
-- **Conformance with ndelement:** tetraloma-conformance (A.10).
+- **Conformance:** tetraloma-conformance against ndelement, and the Python oracles Basix, Symfem and DOLFINx (A.10); comparisons with other frameworks use invariants (DOF counts, spans, point values, integrals, L2 errors, convergence rates), never DOF numbering (ADR-0071).
 - **Property tests** (proptest) cover node-ordering permutations, primitives and IndexMap scatter consistency. They use sizes up to 10^5 with 256 cases, plus fixed sizes of 10^6 and 10^7 for primitives.
 - **Compile-fail tests:** trybuild, as in Listing B10.
 - **Test meshes** come from tetraloma-testing, with origin ids and any degree p:
@@ -1826,38 +1845,41 @@ The crate graph keeps serial builds free of MPI and lets kernels live in the cra
 | Crate | Purpose | Depends on |
 | --- | --- | --- |
 | tetraloma-dims | Dimension markers, `EmbeddedIn`/`Codim`, `CellType`, `Cell1`–`Cell3`, `TopoDim` | – |
-| tetraloma-refcell | Reference cells, sub-entity tables, Lagrange layouts for any p (including the prism and pyramid rules), point families, quadrature, tabulation with its own dense LU, orientation bits, A.6 storage slots, reference facet normals and facet point maps, format permutation generators. Tests read committed JSON fixtures. | tetraloma-dims; dev: serde_json |
+| tetraloma-refcell | Reference cells, sub-entity tables, Lagrange layouts for any p (including the prism and pyramid rules), point families, quadrature, tabulation with its own dense LU, orientation bits, A.6 storage slots, reference facet normals and facet point maps, format permutation generators; the public orthonormal sets (`polyset`) and `DenseLu`, `QuadratureType` and `quadrature_rule` with the stored tables of `tables/`, `sub_entity_points_to_cell`, `rule_permutation` and `permute_vertices` (sections 26–27; ADR-0071). Tests read committed JSON fixtures. | tetraloma-dims; dev: serde_json |
 | tetraloma-device | `DeviceBuffer` family, `GridError` and `ConnKey`, capability and limit checks, launch plans and the vector policy, primitives, pack/unpack kernels, re-exports of `Client` and `CubeElement` (ADR-0026), (GPU-aware pointer access deferred, ADR-0059), test hooks (feature `testing`). The only crate that uses CubeCL runtime types. | cubecl; toml; libc (macOS, ADR-0017); dev: proptest |
 | tetraloma-parallel | `CommDyn`, `Comm`, `CommExt`, `Serial`, `Mpi` (feature `mpi`), `IndexMap`, `Scatterer`, neighbourhood exchange, wrappers over `mpi::ffi` | tetraloma-device; bytemuck; mpi (optional); dev: tetraloma-testing (ADR-0067) |
 | tetraloma-topology | Cell and entity blocks, sort-based entity creation, ownership, connectivity, permutation info, benchmark hooks (feature `bench`) | dims, refcell, device, parallel, cubecl; dev: tetraloma-testing |
-| tetraloma-geometry | Coordinate elements, geometry blocks, `DeviceGrid`, point sets and quadrature rules, factor kernels, orientation, E-vectors, pull-back, GLL → equispaced conversion (`equispaced_nodes`) | dims, refcell, device, parallel, topology, cubecl; dev: tetraloma-testing |
+| tetraloma-geometry | Coordinate elements, geometry blocks, `DeviceGrid`, point sets and quadrature rules, factor kernels, orientation, E-vectors, pull-back, GLL → equispaced conversion (`equispaced_nodes`); `QuadRule::new`, `FacetQuadRule::new`, `PointSet::from_points` and `tabulate_element`, `CellPoints` (section 27; ADR-0071) | dims, refcell, element (ADR-0071), device, parallel, topology, cubecl; dev: tetraloma-testing |
 | tetraloma-partition | `DistGraph`, `Partitioner`, block partitioner; METIS, Scotch, PT-Scotch and ParMETIS behind features | parallel; metis, scotch, scotch-sys, ptscotch-sys, parmetis-sys (all optional); build: scotch-sys-bindgen (bindgen 0.65.1, feature `scotch`; ADR-0039); dev: tetraloma-testing (ADR-0067) |
 | tetraloma-io | Gmsh reader and writer (file model and host mesh description), VTU/PVTU (file model, writer, `parse_vtu`), VTKHDF | dims, refcell, device, topology, geometry, parallel, partition; flate2; hdf5-metno and ndarray (optional, with `hdf5`; `mpio` with feature `mpi`; ADR-0039); dev: mshio, serde_json, tetraloma-testing |
-| tetraloma | Facade: `Mesh`, builder (distributed with `build_on`, `GhostMode`, `CellOrdering`; ADR-0026), `AnyMesh`, `AnyMeshRef`, `with_mesh!`, `DeviceGrid` (re-exported), tags, submeshes, `gmsh::read` and `GmshWriter`, `VtkWriter`, prelude | all of the above; log; mpi (optional, for `CommDyn::raw` of the test communicator; ADR-0028) |
+| tetraloma-element | Finite elements in f64 (section 26): families, variants, Ciarlet construction, tabulation, entity DOFs, interpolation data, map types, base transformations, tensor factors. Host only; usable in `comptime!`. Tests read committed JSON fixtures (ADR-0071). | tetraloma-dims, tetraloma-refcell; dev: serde_json |
+| tetraloma-function | Function spaces, dofmaps, grid functions, evaluation, interpolation (sections 28–31); its degree policy; test hooks (feature `testing`) (ADR-0071) | dims, refcell, element, device, parallel, topology, geometry, cubecl; bytemuck; num-complex (feature `bytemuck`); dev: tetraloma-testing |
+| tetraloma | Facade: `Mesh`, builder (distributed with `build_on`, `GhostMode`, `CellOrdering`; ADR-0026), `AnyMesh`, `AnyMeshRef`, `with_mesh!`, `DeviceGrid` (re-exported), tags, submeshes, `gmsh::read` and `GmshWriter`, `VtkWriter`, prelude; `Mesh::create_entities_for` (section 28) and `VtkWriter::function` (section 32) (ADR-0071) | all of the above, including tetraloma-element and tetraloma-function (ADR-0071); log; mpi (optional, for `CommDyn::raw` of the test communicator; ADR-0028) |
 | ptscotch-sys | bindgen FFI to PT-Scotch, with `SCOTCH_Num` width detection | mpi, bindgen, build-probe-mpi (all behind the crate's feature `mpi`) |
 | parmetis-sys | bindgen FFI to ParMETIS, with `idx_t` and `real_t` width detection | mpi, bindgen, build-probe-mpi (all behind the crate's feature `mpi`) |
 | tetraloma-testing (unpublished) | `test_client()` chosen by the `TETRALOMA_TEST_DEVICE` environment variable, test-mesh generators, tolerance helpers, `test_client_at(index)` (ADR-0060), `ThreadComm` (an in-process multi-rank communicator; ADR-0026), the Python oracle helper and `gen-gmsh-box` (ADR-0035); forwards runtime features | tetraloma; tetraloma-device (feature `testing`); tetraloma-dims; tetraloma-refcell; cubecl with runtime features; serde_json; mpi (optional, for `CommDyn::raw` of `ThreadComm`; ADR-0028) |
 | tetraloma-mpi-tests (unpublished) | MPI integration tests as `[[test]]` targets with `harness = false`, run by `scripts/mpi-test.sh` | tetraloma, tetraloma-testing; nix (unix; getrusage; ADR-0035) |
 | tetraloma-examples (unpublished) | The examples of the API walkthrough and the programs of the user book, each over a tested `run(&Client)`; forwards runtime features (ADR-0060); the doctest harness of the book (a `#[cfg(doctest)]` module that includes every chapter) and the figure generator (the binary `figures`, from tetraloma-refcell's tables) (ADR-0067) | tetraloma, tetraloma-refcell, tetraloma-testing; cubecl with runtime features; mpi (optional) |
-| tetraloma-bench (unpublished) | Kernel benchmarks across vector sizes, tile widths and CPU block sizes; end-to-end throughput; JSON output for `docs/perf/` | tetraloma, tetraloma-device (feature `testing`), tetraloma-geometry (features `bench`, `testing`), tetraloma-dims, tetraloma-refcell, tetraloma-topology (feature `bench`), tetraloma-testing; cubecl with runtime features; serde_json, toml, bytemuck; mpi (optional, feature `mpi`, for `halo_exchange`; ADR-0060); dev: proptest (ADR-0039) |
-| conformance/ (tetraloma-conformance, outside the workspace) | Compares tetraloma-refcell with ndelement at the pinned commit and exports JSON fixtures. The only crate that depends on ndelement and BLAS/LAPACK. | tetraloma-refcell (path), ndelement (git), blas-src, lapack-src, openblas-src |
+| tetraloma-bench (unpublished) | Kernel benchmarks across vector sizes, tile widths and CPU block sizes; end-to-end throughput; JSON output for `docs/perf/`; the function families and the CEED BP1 and BP3 comparison benchmarks (sections 8, 29–30; ADR-0071) | tetraloma, tetraloma-device (feature `testing`), tetraloma-geometry (features `bench`, `testing`), tetraloma-dims, tetraloma-refcell, tetraloma-topology (feature `bench`), tetraloma-testing; cubecl with runtime features; serde_json, toml, bytemuck; mpi (optional, feature `mpi`, for `halo_exchange`; ADR-0060); dev: proptest (ADR-0039) |
+| conformance/ (tetraloma-conformance, outside the workspace) | Compares tetraloma-refcell with ndelement at the pinned commit and exports JSON fixtures, including those of tetraloma-element (A.10; ADR-0071). The only crate that depends on ndelement and BLAS/LAPACK. | tetraloma-refcell (path), ndelement (git), blas-src, lapack-src, openblas-src |
 | tools/env-check (outside the workspace) | Probe of a development target: devices, properties, sample kernels in f32 and f64, MPI allreduce; JSON report. Built in E0. | cubecl with the target's runtime features; mpi (optional) |
 
 ### Dependency rules
 
-1. Every crate that defines or launches kernels may depend on `cubecl` without runtime features. This covers tetraloma-device, tetraloma-topology, tetraloma-geometry and tetraloma.
+1. Every crate that defines or launches kernels may depend on `cubecl` without runtime features. This covers tetraloma-device, tetraloma-topology, tetraloma-geometry, tetraloma-function (ADR-0071) and tetraloma.
 2. The launch API may be used anywhere: `Client`, `CubeCount`, `CubeDim`, `BufferArg`, `launch_unchecked`, `calculate_cube_count_elemwise` and `Client::properties`.
 3. Runtime types appear only in tetraloma-device: runtime structs such as `CudaRuntime`, `get_resource`, and `cubecl-runtime`.
 4. Runtime features (`cpu`, `cuda`, `hip`, `vulkan`, `metal`, `metal-native`, `wgpu`) are enabled only in tetraloma-testing, examples, benchmarks and binaries. `gpu-aware-cuda` is reserved and enables nothing (ADR-0059).
 5. No crate depends on MPI unless its `mpi` feature is on. `cargo test --workspace` without features needs neither MPI nor a GPU.
 6. ndelement appears only in conformance/. The workspace excludes conformance/ and tools/env-check/ (`exclude = ["conformance", "tools/env-check"]`).
 7. A workspace crate may expose a `#[doc(hidden)] pub` item to other workspace crates when no stable API serves the purpose (hidden hooks and test accessors). Such an item is documented as not part of the stable API, has a rustdoc example or a named test, is listed in its milestone plan, and is semver-exempt (ADR-0015, ADR-0028, ADR-0038).
+8. tetraloma-element depends only on tetraloma-dims and tetraloma-refcell, has no CubeCL dependency and allocates nothing on a device (ADR-0071).
 
 ### Cargo features
 
 - **Library features** (on tetraloma, forwarded to the crates concerned): `mpi`, `ptscotch`, `parmetis`, `metis`, `scotch`, `hdf5`, `gpu-aware-cuda` (reserved; enables nothing, ADR-0059). `ptscotch` and `parmetis` imply `mpi`. `metis` and `parmetis` are mutually exclusive: the vendored METIS and ParMETIS's METIS clash at run time (ADR-0033). The sys crates have a feature `mpi`, off by default, that tetraloma-partition enables (ADR-0029). `hdf5` builds the VTKHDF writer with any HDF5 1.10.10–2.2.0; with `mpi` it enables hdf5-metno's `mpio` and needs a parallel HDF5 (`HDF5_DIR`) (ADR-0035).
 - **Runtime features** (on tetraloma-testing, tetraloma-examples and tetraloma-bench): `cpu` (default), `cuda`, `hip`, `vulkan`, `metal`, `metal-native`, `wgpu`. Each maps to the cubecl feature of the same name; cubecl's `vulkan` is wgpu with SPIR-V and `metal` is wgpu with MSL. tetraloma-examples also has `hdf5`, which forwards `tetraloma/hdf5`, for the VTKHDF part of the book's parallel I/O program (ADR-0067).
-- **Test-support feature** (on tetraloma-device; not a library feature): `testing` enables `tetraloma_device::testing` (Listing S2). tetraloma-testing turns it on, so every workspace test has it. tetraloma-geometry has a `testing` feature too, for the hidden `tetraloma_geometry::testing` (strategy overrides; ADR-0042), also turned on by tetraloma-testing.
+- **Test-support feature** (on tetraloma-device; not a library feature): `testing` enables `tetraloma_device::testing` (Listing S2). tetraloma-testing turns it on, so every workspace test has it. tetraloma-geometry has a `testing` feature too, for the hidden `tetraloma_geometry::testing` (strategy overrides; ADR-0042), also turned on by tetraloma-testing. tetraloma-function's `testing` feature enables the hidden `tetraloma_function::testing` (strategy overrides), turned on by tetraloma-testing (ADR-0071).
 - **Benchmark-support feature** (on tetraloma-topology; not a library feature): `bench` enables the hidden `tetraloma_topology::bench` module (ADR-0015). tetraloma-bench turns it on. tetraloma-geometry's `bench` feature enables the hidden `tetraloma_geometry::bench` (the basis-evaluator timing hook; the pull-back is timed through its public call at 1 and 9 iterations; ADR-0042), also turned on by tetraloma-bench.
 
 ### CI matrix
@@ -1908,6 +1930,11 @@ The largest risks are CubeCL churn, the capability gaps of wgpu and Metal, and t
 | Wider vectors raise register pressure and padding memory | Register-aware sizes from `vector_sizes_in_registers`; padding of at most 15 elements per buffer and 15 cells per block. |
 | CubeCL's vector API may change between releases | Pinned at `=0.11.0`; vector handling confined to `LaunchPlan`, `DeviceBuffer::vector_arg` and the kernels of the candidate list. |
 | A tiled `QuadField` is a less familiar layout for downstream crates | The index formula is documented; `to_host_cell_major` gives the plain layout; tile width 1 stays available. |
+| Sum factorisation is the largest single item, and cooperative kernels behave differently on wgpu, Metal and CUDA | Loops and cooperative strategies first (M15); sumfact validated against loops in its own milestone (M17); plans checked against device limits; loops remains the fallback (ADR-0071) |
+| Cost and conditioning of the dense Ciarlet construction at high p | Tensor cells built from 1D factors; f64 throughout; Gll and Legendre variants; dual-basis checks up to p = 10 (ADR-0071) |
+| Licences of quadrature tables | Checked and recorded in `tables/sources.json` before copying; `Gauss` as the fallback (ADR-0071) |
+| JIT compile time per element, degree and rule | Comptime specialisation per degree only; the 30 s first-use bound of ADR-0056 applies to the new families (ADR-0071) |
+| A future pyramid H(curl) family incompatible with DefElement's Definition 9 Lagrange space | Recorded under Open questions; checked before such a family is scheduled (ADR-0071) |
 
 ## 20. Appendix A — Reference cells and element tables
 
@@ -2104,6 +2131,15 @@ Higher degrees are generated from each format's rules ("High-order node ordering
 
     M1b lists the acceptance tests.
 
+**Oracles for elements and grid functions (ADR-0071):**
+
+- **ndelement** (the pin above): JSON fixtures for Lagrange tabulations, DOF layouts and base transformations, and for N1curl and RT spans and DOF counts.
+- **Basix** (pinned in the Python environment): Isaac GLL points (`gll_isaac`), Legendre variants and base transformations; its triangle and tetrahedron numbering is converted with A.11.
+- **Symfem:** DOF counts and spans at low degree, in DefElement numbering.
+- **DOLFINx** (pinned, ADR-0007): interpolation of expressions, point values, submesh transfers and L2 norms.
+- **Quadrature tables:** their sources and licences are recorded in `tetraloma-refcell/tables/sources.json`.
+- **DefElement verification:** tetraloma is registered there after M12.
+
 **Listing A.1 — conformance crate**
 
 ```text
@@ -2264,6 +2300,9 @@ These rules apply to all code in the workspace (ADR-0069). They were the code ru
   - no assumption of forward progress between workgroups (no decoupled look-back);
   - never assume a plane size; correct for plane size 1;
   - results bitwise deterministic.
+- DOF transformations are never fused into evaluation kernels. Complex values are pairs of
+  reals, with complex arithmetic written out in a fixed order; CubeCL's complex types are not
+  used (ADR-0071).
 - SIMD only through CubeCL Vector<F, N> in kernels; never intrinsics or std::simd.
   - kernels on the candidate list are generic over N: Size and correct for N = 1;
   - lanes are independent items (cells, elements); no cross-lane operations except
@@ -2273,7 +2312,7 @@ These rules apply to all code in the workspace (ADR-0069). They were the code ru
     data in docs/perf/vectorization.md;
   - from M10, vector-policy.toml and degree-policy.toml hold four generic sets (Cpu and Gpu,
     for f32 and f64), good enough on every benchmark platform, never one set per platform
-    (ADR-0058).
+    (ADR-0058); so does tetraloma-function/degree-policy.toml (ADR-0071).
 - Precision: every kernel test runs in f32 and, where supported, f64.
   Tolerances: 1e-12 relative (f64), 1e-5 (f32).
 - Host maths generic over F: Real uses widen()/narrow() or f64, never F's own methods.
@@ -2283,6 +2322,8 @@ These rules apply to all code in the workspace (ADR-0069). They were the code ru
   the world size equals the rank count requested (ADR-0068).
 - ndelement is a dependency of conformance/ only (outside the workspace). Never add it to a
   library crate, and never add `version =` to its git dependency.
+- tetraloma-element is host-only f64 code without CubeCL; element tables reach kernels as
+  comptime values or as uploads on first use (ADR-0071).
 - Host<->device copies in library code only for I/O (including the upload of input arrays
   at mesh creation, and of quadrature points and tabulations when a rule is created or a
   tabulation is first cached, including the 1D tabulations and lexicographic node
@@ -2303,8 +2344,11 @@ These rules apply to all code in the workspace (ADR-0069). They were the code ru
   in orient, the per-round change flag, the agreed error flags, the per-component (label,
   sum, open) records and the flip decisions back; and the upload of a geometry block's
   expansion coefficients, or of the coefficient factors and node permutation of a
-  sum-factorised pull-back, when the pull-back first uses it (ADR-0039, ADR-0040,
-  ADR-0042, ADR-0049).
+  sum-factorised pull-back, when the pull-back first uses it; in tetraloma-function, the
+  upload of an element's coefficients, interpolation matrix, DOF-transformation blocks and
+  tensor factors when a kernel first uses them, the host-staged exchange of a function
+  space's per-block DOF offsets, and the download of interpolation points and upload of
+  values in `interpolate_host` (ADR-0039, ADR-0040, ADR-0042, ADR-0049, ADR-0071).
 - FFI declarations only in *-sys crates. FFI calls only in tetraloma-parallel (MPI),
   tetraloma-device (GPU-aware; the macOS performance-core count, ADR-0017) and tetraloma-partition
   (Scotch, PT-Scotch, ParMETIS; ADR-0029), behind safe wrappers; a -sys crate's own tests
@@ -2335,12 +2379,16 @@ A change of behaviour in these paths stops a task until the maintainer decides (
 | `rust-toolchain.toml`, the `cubecl` and `cubecl-runtime` pins in `Cargo.toml` | Rust 1.99; `cubecl` and `cubecl-runtime` at `=0.11.0`; a default build free of ndelement, BLAS and MPI | `scripts/check-workspace-deps.sh` (the forbidden dependencies). The pins have no automated check: a change to them shows in the diff and is a design change (section 2, fixed decision 2; section 22) (ADR-0070) |
 | `scripts/mpi-test.sh`, `scripts/run-examples.sh` | every MPI run checks the world size (ADR-0068) | `scripts/check-rank-guard.sh` |
 | names in tracked paths and content | the project name and its allowlist (ADR-0066) | `scripts/check-name.sh` |
+| `tetraloma-function/degree-policy.toml` | the four generic sets; entries change only with benchmark records in `docs/perf/` (ADR-0071) | `cargo test -p tetraloma-function --test integration policy::` |
+| `tetraloma-element/tests/fixtures/` | the oracle values exported from ndelement, Basix and Symfem (ADR-0071) | `cargo test -p tetraloma-element --test integration fixtures::` |
+| `tetraloma-refcell/tables/` | every stored quadrature table and its source and licence entry (ADR-0071) | `cargo test -p tetraloma-refcell --test integration quadrature_tables::` |
 
 ## 24. Open questions
 
 What the design leaves undecided; an agent that meets one stops and asks (ADR-0069).
 
-None.
+- The throughput target of the comparison benchmarks (section 8, **Comparison frameworks**): set after M17's first measurement (ADR-0071).
+- Whether N1curl and RT are ever needed on prisms and pyramids. If they are, the pyramid family must form an exact sequence with the Lagrange space of Definition 9 (ADR-0071).
 
 ## 25. Glossary
 
@@ -2350,3 +2398,622 @@ The terms and symbols of the user book's glossary (`docs/user/src/glossary.md`) 
 - **Candidate protocol:** how benchmarks time and choose among candidates; section 8, "Benchmarks".
 - **Benchmark platform:** a machine and backend the policies are measured on; sections 8 ("Benchmarks") and 17.
 - **Cpu and Gpu device classes:** the two `DeviceClass` variants the vector and degree policies are keyed on; section 8 (ADR-0058).
+- **L-vector, E-vector:** a function's coefficients once per DOF ([owned | ghost]), and once per cell and local DOF (cells fastest); MFEM's terms (ADR-0071).
+- **Writer bit:** the flag of the one (cell, slot) that writes a shared DOF during interpolation (section 28) (ADR-0071).
+- **Polyset superdegree:** the degree convention of section 26 (ADR-0071).
+- **Base transformation, signed-permutation fold:** section 26; section 28 (ADR-0071).
+
+The user book's glossary gains element, DOF, map type, Piola map and grid function in the same milestones (ADR-0071).
+
+## 26. Finite elements
+
+### Purpose
+
+Finite elements in Ciarlet's sense on the reference cells of section 6: Lagrange elements for continuous and discontinuous Galerkin methods, and first-kind Nédélec (N1curl) and Raviart–Thomas (RT) elements, at arbitrary degree. They come with the maps between reference and physical cells for D_TOP ≤ D_GEO, and with the DOF transformations that make neighbouring cells agree. tetraloma-element computes them on the host in f64, independently of ndelement (fixed decision 4). Sections 27–32 and downstream FEM and BEM crates use them (ADR-0071).
+
+### Interface
+
+**Listing E1 — finite elements (tetraloma-element; additions to tetraloma-refcell)**
+
+```rust
+// tetraloma-element: host only, f64; depends on tetraloma-dims and tetraloma-refcell.
+
+/// One value per family on every cell type. On quadrilaterals and hexahedra, N1curl and
+/// RaviartThomas are the tensor-product spaces (DefElement: RTCE and RTCF; NCE and NCF).
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Family { Lagrange, N1curl, RaviartThomas }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Variant {
+    /// Point evaluations at a tetraloma-refcell point family.
+    Nodal(NodeFamily),
+    /// Lagrange: orthonormal basis with integral-moment DOFs; discontinuous spaces only.
+    /// N1curl and RaviartThomas: Legendre moments on every sub-entity; their only variant.
+    Legendre,
+}
+
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum MapType { Identity, CovariantPiola, ContravariantPiola, L2Piola }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TransformationKind { Identity, SignedPermutation, Dense }
+
+/// Generators of a sub-entity's reorientations (A.6): reversal of an interval; rotation and
+/// reflection of a triangle or quadrilateral.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Generator { Reversal, Rotation, Reflection }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ElementKey { pub family: Family, pub cell: CellType, pub degree: u32, pub variant: Variant }
+
+/// A Ciarlet element on one reference cell, in f64. Built once per key, kept in a process-wide
+/// thread-safe cache.
+pub struct Element { /* private */ }
+impl Element {
+    pub fn get(key: ElementKey) -> Result<Arc<Element>, ElementError>;
+    pub fn key(&self) -> ElementKey;
+    pub fn map_type(&self) -> MapType;
+    /// 1 for Lagrange; tdim for N1curl and RaviartThomas.
+    pub fn reference_value_size(&self) -> usize;
+    /// Number of DOFs.
+    pub fn dim(&self) -> usize;
+    pub fn entity_dofs(&self, d: usize, e: usize) -> &[usize];
+    pub fn entity_closure_dofs(&self, d: usize, e: usize) -> &[usize];
+    pub fn discontinuous_only(&self) -> bool;
+    /// The smallest Lagrange degree whose space contains this element's space.
+    pub fn embedded_superdegree(&self) -> u32;
+    /// The basis in tetraloma-refcell's orthonormal set: [dim][polyset dim · reference value size].
+    pub fn coefficients(&self) -> &[f64];
+    /// [derivative][point][basis][component], derivatives in tetraloma-refcell's order up to nderivs.
+    pub fn tabulate(&self, points: &[f64], nderivs: u32) -> Result<ElementTabulation, ElementError>;
+    /// Reference points [m][tdim] and the matrix [dim][m · reference value size] such that the
+    /// DOF values of a reference function û are M û(points).
+    pub fn interpolation_points(&self) -> &[f64];
+    pub fn interpolation_matrix(&self) -> &[f64];
+    pub fn transformation_kind(&self) -> TransformationKind;
+    /// None if the element has no DOFs on sub-entities of that type.
+    pub fn base_transformation(&self, entity: CellType, generator: Generator) -> Option<&BaseTransformation>;
+    /// Quadrilaterals and hexahedra only.
+    pub fn tensor_factors(&self) -> Option<&TensorFactors>;
+}
+
+pub struct ElementTabulation {
+    pub nderivs: u32, pub num_points: usize, pub dim: usize, pub value_size: usize,
+    pub values: Vec<f64>,   // [derivative][point][basis][component]
+}
+
+/// Acts on the DOFs of one sub-entity.
+pub enum BaseTransformation {
+    SignedPermutation { perm: Vec<u32>, negate: Vec<bool> },
+    Dense { n: usize, matrix: Vec<f64> },   // row-major n × n
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Factor1d { NodalH1(NodeFamily), MomentH1, LegendreL2 }
+
+pub struct TensorFactors {
+    pub factors: Vec<Vec<(Factor1d, u32)>>,   // [component][direction]: kind and degree
+    pub lexicographic: Vec<Vec<usize>>,       // [component][tensor index] -> element DOF
+}
+impl TensorFactors {
+    /// [derivative][point][basis] of one 1D factor at points of [0, 1].
+    pub fn tabulate_1d(&self, component: usize, direction: usize, points: &[f64], nderivs: u32) -> Vec<f64>;
+}
+
+#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq)]
+pub enum ElementError {
+    Unsupported { family: Family, cell: CellType, degree: u32, variant: Variant },
+    RefCell(RefCellError),
+}
+
+// tetraloma-refcell: additions.
+pub mod polyset {
+    /// tetraloma-refcell's orthonormal set of `degree` on `cell`: [derivative][basis][point].
+    pub fn tabulate(cell: CellType, degree: u32, points: &[f64], nderivs: u32) -> Vec<f64>;
+    pub fn dim(cell: CellType, degree: u32) -> usize;
+}
+/// Dense LU with partial pivoting, in f64.
+pub struct DenseLu { /* private */ }
+impl DenseLu {
+    pub fn factor(a: Vec<f64>, n: usize) -> Result<Self, RefCellError>;
+    pub fn solve(&self, b: &mut [f64], nrhs: usize);
+}
+// NodeFamily becomes #[non_exhaustive]; NodeFamily::Gll is accepted on triangles, tetrahedra and
+// prisms (section 6).
+```
+
+tetraloma-function converts `ElementError` into `GridError::UnsupportedElement { family, cell, degree, variant }`. The fields are `&'static str` names and the degree, because tetraloma-device depends on neither crate.
+
+### Behaviour and invariants
+
+**Families, cells and degrees:**
+
+| Cell | Lagrange (H1), DG | N1curl (H(curl)) | RT (H(div)) | Degrees |
+| --- | --- | --- | --- | --- |
+| interval | P_p | – | – | 1–20 (DG 0–20) |
+| triangle | P_p | N1curl_p | RT_p | 1–15 (DG 0–15) |
+| quadrilateral | Q_p | RTCE_p | RTCF_p | 1–20 (DG 0–20) |
+| tetrahedron | P_p | N1curl_p | RT_p | 1–15 (DG 0–15) |
+| hexahedron | Q_p | NCE_p | NCF_p | 1–20 (DG 0–20) |
+| prism | the DefElement prism space | – | – | 1–15 (DG 0–15) |
+| pyramid | DefElement Definition 9 | – | – | 1–8 (DG 0–8) |
+
+Any other combination of family, cell, degree and variant returns `ElementError::Unsupported`. Sections 29 and 30 state the degrees up to which the device kernels are verified.
+
+**Degree convention.** The degree is the polyset superdegree, as in Basix:
+
+- degree 1 is the lowest-order Lagrange, N1curl, RT, RTCE, RTCF, NCE and NCF;
+- degree 0 is the lowest DG.
+
+With this convention, the traces of degree-p elements on a shared entity are the same space for every pair of cell types.
+
+**Construction:**
+
+- **Polynomial sets** are coefficients in tetraloma-refcell's orthonormal sets. Vector spaces are obtained by projection with a rule exact for the products:
+    - N1curl on simplices, degree p: P_{p−1}^d ⊕ {q ∈ P̃_p^d : q · x = 0};
+    - RT on simplices, degree p: P_{p−1}^d ⊕ x P̃_{p−1};
+    - on quadrilaterals, RTCE_p has components in Q_{p−1,p} × Q_{p,p−1}, and RTCF_p the reverse; on hexahedra, the analogous NCE_p and NCF_p.
+- **DOFs** are point evaluations (Nodal variants) or integral moments (Legendre, and every N1curl and RT element). Moments on a sub-entity are taken against an orthonormal basis of the sub-entity's moment space. That space is defined on the sub-entity itself and mapped into the cell by the sub-entity map, so cells of different types define identical DOFs on a shared entity.
+    - N1curl: tangential moments against P_{p−1} on edges; tangential vector moments against P_{p−2}² on faces; moments against P_{p−3}³ in the interior of tetrahedra and P_{p−2}² in the interior of triangles; tensor-product Legendre moments on quadrilaterals and hexahedra.
+    - RT: normal moments against P_{p−1} on facets; moments against P_{p−2}^d in the interior; tensor-product Legendre moments on tensor cells.
+- **The dual basis** comes from the matrix D_ij = l_i(ψ_j) over the orthonormal set ψ, inverted with `DenseLu` in f64.
+- **Tensor cells** assemble their elements from 1D factors, so only 1D elements are inverted; the dense construction is used there only by tests, for p ≤ 8.
+
+**Variants:**
+
+- **Point families** are tetraloma-refcell's `NodeFamily` (section 6), shared with coordinate elements; point sets on tensor cells are products of 1D sets.
+- **Element variants** are `Nodal(Equispaced)`, `Nodal(Gll)` and `Legendre`. `Nodal(Gll)` is unsupported on pyramids. A `Legendre` Lagrange element has only interior DOFs, so `discontinuous_only()` is true.
+- **Defaults:** `Nodal(Gll)` for Lagrange function spaces; `Nodal(Equispaced)` for geometry, unchanged.
+- **Conditioning:** applying an element's interpolation to its own basis gives the identity to 10^−12 for p ≤ 10 (Gll, Legendre, N1curl, RT) and for p ≤ 6 (Equispaced).
+
+**Map types.** Reference values have 1 or TD components and physical values 1 or GD components, so embedded cells use the same formulas. J, K and det J are those of section 10; det J is the pseudo-determinant when D_TOP < D_GEO.
+
+| Map type | Families | Push-forward u(x) | Pull-back û(ξ) | Derivative pushed forward |
+| --- | --- | --- | --- | --- |
+| Identity | Lagrange, DG | û | u | ∇u = Kᵀ ∇̂û |
+| Covariant Piola | N1curl, RTCE, NCE | Kᵀ û | Jᵀ u | 3D: curl u = J curl̂ û / det J; 2D and surfaces: rot u = rot̂ û / det J |
+| Contravariant Piola | RT, RTCF, NCF | J û / det J | det J · K u | div u = div̂ û / det J |
+| L2 Piola | DG in exact sequences (chosen per space, section 28) | û / det J | det J · u | – |
+
+- Curl, rot and divergence commute with the Piola maps, also on curved cells.
+- Full gradients of Piola-mapped fields on curved cells need second derivatives of the geometry, which tetraloma does not compute; they are not offered.
+- The pseudo-determinant is positive, so contravariant fields on manifolds need no orientation. Normals, where an operation needs them (section 31), carry the sign of the cell's orientation flag (section 10).
+
+**DOF transformations:**
+
+- **Computation.** Base transformations are computed numerically, per sub-entity type and generator, by evaluating the DOF functionals of the reoriented sub-entity on the basis.
+- **Composition.** They are composed per cell from the permutation-info word (A.6), as in Scroggs, Dokken, Richardson and Wells (section 6). Because orientation is keyed on origin ids, every rank agrees on them.
+- **Classification.** Each element records its `TransformationKind`:
+    - Lagrange elements: permutations without negation (`Identity` where every permutation is trivial, as for p ≤ 2);
+    - N1curl and RT on quadrilaterals and hexahedra, at every degree: signed permutations, because reversing an edge maps Legendre q_i to (−1)^i q_i and the symmetries of a quadrilateral permute tensor Legendre moments with signs;
+    - N1curl and RT on tetrahedra at p ≥ 2: dense blocks on triangular faces; their edges are signed permutations.
+- **Application.** Let T_c map the reference basis to cell c's basis. Evaluation applies T_c, transposed operations apply T_cᵀ, and interpolation applies T_c^{−ᵀ}. A signed permutation is orthogonal, so all three are the same signed permutation.
+
+**Tensor factors.** On quadrilaterals and hexahedra, every element is, per reference component, a tensor product of 1D elements, because its DOFs are tensor products of 1D functionals. There are three kinds of factor:
+
+- `NodalH1`: Lagrange at a point family; also the factor of nodal DG.
+- `MomentH1`: endpoint evaluations plus interior Legendre moments up to degree p − 2; the factor of N1curl and RT in their continuous directions.
+- `LegendreL2`: moments against P_{p−1}; their factor in the remaining direction, and the factor of Legendre DG.
+
+The product of the factors reproduces the element's tabulation to 10^−12 for p ≤ 8.
+
+### Out of scope
+
+- Second-kind families (N2curl, BDM, BDMCE, BDMCF), DPC and serendipity families.
+- Crouzeix–Raviart and enriched (bubble) elements; Regge and HHJ (the double Piola maps); Buffa–Christiansen and other dual-mesh elements.
+- N1curl and RT on prisms and pyramids.
+- Point-evaluation DOFs for N1curl and RT; hierarchical bases for p-adaptivity; element construction on the device.
+
+## 27. Quadrature rules and point sets
+
+### Purpose
+
+High-order quadrature on every reference cell: symmetric rules on simplices, GLL rules on tensor cells, rules on sub-entities of every dimension, and facet rules that match from both sides of an interior facet. Point sets of the caller's choice and per-cell reference points get the same device tabulation as built-in rules; they are the hooks that a future BEM crate builds its singular quadrature on (ADR-0071).
+
+### Interface
+
+**Listing Q1 — quadrature and point sets (additions to tetraloma-refcell and tetraloma-geometry)**
+
+```rust
+// tetraloma-refcell
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum QuadratureType { #[default] Default, Gauss, Symmetric, GaussLobatto }
+
+pub fn quadrature_rule(cell: CellType, degree: u32, kind: QuadratureType) -> Result<QuadratureRule, RefCellError>;
+/// Points of the reference sub-entity (d, e) of `cell`, in cell coordinates.
+pub fn sub_entity_points_to_cell(cell: CellType, d: usize, e: usize, points: &[f64]) -> Result<Vec<f64>, RefCellError>;
+/// Index permutation of a symmetric rule on `entity` under the reorientation of its A.6 bits.
+pub fn rule_permutation(entity: CellType, rule: &QuadratureRule, bits: u32) -> Result<Vec<u32>, RefCellError>;
+/// Reference points of `cell` mapped under a permutation of its vertices.
+pub fn permute_vertices(cell: CellType, perm: &[usize], points: &[f64]) -> Result<Vec<f64>, RefCellError>;
+
+// tetraloma-geometry
+impl<F: Real, TD: TopoDim> QuadRule<F, TD> {
+    pub fn new(client: &Client, cells: &[TD::Cell], degree: u32, kind: QuadratureType) -> Result<Self>;
+    // gauss(…) stays and equals new(…, QuadratureType::Gauss).
+}
+impl<F: Real, TD: TopoDim> FacetQuadRule<F, TD> {
+    pub fn new(client: &Client, cells: &[TD::Cell], degree: u32, kind: QuadratureType) -> Result<Self>;
+}
+impl<F: Real, TD: TopoDim> PointSet<F, TD> {
+    /// Reference points [q][tdim] and weights of the caller's choice; weights may be empty.
+    pub fn from_points(client: &Client, cell: TD::Cell, points: Vec<f64>, weights: Vec<f64>) -> Result<Self>;
+    /// [derivative][q][k][component], computed in f64, narrowed to F, cached per ElementKey.
+    pub fn tabulate_element(&self, e: &Element, nderivs: u32) -> Result<DeviceBuffer<F>>;
+}
+/// Per-cell reference points of one cell block: point i lies in local cell cells[i].
+pub struct CellPoints<F: Real, TD: TopoDim> { /* block, cells: DeviceBuffer<u32>, points: [i][tdim] */ }
+impl<F: Real, TD: TopoDim> CellPoints<F, TD> {
+    pub fn new(client: &Client, block: usize, cells: DeviceBuffer<u32>, points: DeviceBuffer<F>) -> Result<Self>;
+    pub fn block(&self) -> usize;
+    pub fn len(&self) -> usize;
+}
+```
+
+### Behaviour and invariants
+
+**Rule types:**
+
+| Type | Triangles, tetrahedra | Intervals, quadrilaterals, hexahedra | Prisms, pyramids |
+| --- | --- | --- | --- |
+| `Default` | `Symmetric` for degree 1–30; `Gauss` for 31–60 | `Gauss` | `Gauss` |
+| `Gauss` | `gauss_rule` (section 10), degree 0–60 | as left | as left |
+| `Symmetric` | fully symmetric tables (Xiao–Gimbutas), degree 1–30 | – | – |
+| `GaussLobatto` | – | n = 2–41 points per direction, n = ⌈(degree + 3) / 2⌉, exact to degree 2n − 3 | – |
+
+- Any other request returns `RefCellError::UnsupportedDegree`, or `UnsupportedNodeFamily` for a type on a cell it does not cover.
+- **Point and weight properties.** Points of `Gauss` and `Symmetric` rules lie in the interior of the cell and their weights are positive. `GaussLobatto` points include the cell's boundary, and its weights are positive.
+- **GLL mass matrices.** With the `Nodal(Gll)` Lagrange element of degree n − 1, the n-point `GaussLobatto` rule gives a diagonal mass matrix.
+- **Table provenance.** The `Symmetric` tables live in `tetraloma-refcell/tables/`. Each records its source, the version or commit taken, and its licence in `tables/sources.json`. They are copied only under a licence compatible with MIT/Apache-2.0. A table that fails this check is not shipped, and `Default` uses `Gauss` for its degrees.
+
+**Rules on sub-entities.** `sub_entity_points_to_cell` generalises `facet_points_to_cell` to every sub-entity dimension. Integral-moment DOFs on edges of 3D cells and on faces need it, and so does interpolation into them.
+
+**Interior facets.** Every facet rule maps onto itself under its facet's symmetry group: Gauss rules on intervals and quadrilaterals, `Symmetric` rules on triangles. `FacetQuadRule::new` with `Default` therefore supports degree 1–30 on triangular facets. Two cells sharing a facet see the same physical points after the index permutation `rule_permutation` returns for the facet's A.6 bits. There are 2 cases on intervals, 6 on triangles and 8 on quadrilaterals. Tabulations stay per reference facet.
+
+**Point sets of the caller's choice:**
+
+- `PointSet::from_points` gets the device tabulation cache of section 10.
+- `tabulate_element` tabulates any `Element`. The upload is a tabulation upload in the sense of section 22.
+- `CellPoints` evaluation (section 29) uses the device basis evaluator of section 10 with `Element::coefficients`, uploaded once per element.
+- `permute_vertices` maps reference points under a vertex permutation. Singular quadrature and submesh transfers (section 31) use it.
+
+### Out of scope
+
+- Singular and near-singular quadrature (Sauter–Schwab, Duffy): a future BEM crate builds it on `PointSet::from_points` and `permute_vertices`.
+- Adaptive and nested rules; symmetric rules on prisms and pyramids; rules on curved sub-entities.
+
+## 28. Function spaces and dofmaps
+
+### Purpose
+
+Function spaces on any `DeviceGrid`: an element per cell type, a global DOF numbering that follows the mesh's IndexMap conventions, and the device data that evaluation and interpolation need (ADR-0071).
+
+### Interface
+
+**Listing F1 — function spaces (tetraloma-function; additions to tetraloma and tetraloma-device)**
+
+```rust
+// tetraloma-function
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Continuity { Continuous, Discontinuous }
+
+/// Family, degree and variant; one Element per cell type of a grid. `map` overrides the family's
+/// map type: None for its own, Some(MapType::L2Piola) for discontinuous Lagrange only.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ElementFamily { pub family: Family, pub degree: u32, pub variant: Variant, pub map: Option<MapType> }
+impl ElementFamily {
+    pub fn element(&self, cell: CellType) -> Result<Arc<Element>>;
+    /// Entity dimensions that carry DOFs for these cell types; empty for Discontinuous.
+    pub fn dof_dimensions(&self, cells: &[CellType], continuity: Continuity) -> Vec<usize>;
+}
+
+pub struct FunctionSpace<'g, G: DeviceGrid> { /* grid, family, continuity, block shape, dofmaps, IndexMap, Scatterer */ }
+impl<'g, G: DeviceGrid> FunctionSpace<'g, G> {
+    /// Err(EntitiesNotCreated(d)) for the first dimension the space needs that has not been created.
+    pub fn new(grid: &'g G, family: ElementFamily, continuity: Continuity, block_shape: &[usize]) -> Result<Self>;
+    /// The mesh geometry as a vector Lagrange space of block shape [GD], without copying.
+    pub fn geometry(grid: &'g G) -> Result<Self>;
+    pub fn grid(&self) -> &'g G;
+    pub fn family(&self) -> ElementFamily;
+    pub fn continuity(&self) -> Continuity;
+    pub fn block_shape(&self) -> &[usize];
+    /// Product of the block shape.
+    pub fn block_size(&self) -> usize;
+    /// Per cell block, indexed like cell_blocks().
+    pub fn dofmap(&self, b: usize) -> &DofMap;
+    /// [owned | ghost] DOFs (one entry per DOF, not per block component).
+    pub fn index_map(&self) -> &IndexMap;
+    pub fn num_global_dofs(&self) -> u64;
+}
+
+pub struct DofMap {
+    pub element: Arc<Element>,
+    pub dofs: DeviceStrided<u32>,           // cells × DOFs per cell; signed permutations folded in
+    pub signs: Option<DeviceStrided<u32>>,  // bitset per cell; None if no sign is negative
+    pub writers: DeviceStrided<u32>,        // bitset per cell: the slots that write shared DOFs
+    pub dense_transforms: bool,             // the DofTransform kernel runs for this block
+}
+
+// tetraloma (facade)
+impl<F: Real, TD: TopoDim + EmbeddedIn<GD>, GD: Dim, C: Comm> Mesh<F, TD, GD, C> {
+    /// Creates every entity dimension a space of this family needs, on every rank (collective).
+    pub fn create_entities_for(&mut self, family: &ElementFamily, continuity: Continuity) -> Result<()>;
+}
+
+// tetraloma-device: GridError gains
+//   UnsupportedElement { family: &'static str, cell: &'static str, degree: u32, variant: &'static str }
+//   SpaceMismatch(&'static str)
+```
+
+### Behaviour and invariants
+
+- **Entity-numbered dofmaps.** Entity blocks are homogeneous by type, so every (dimension, entity block) pair carries a fixed number k of DOFs; a prism mesh's triangular and quadrilateral faces simply differ in k.
+    - Local DOF numbers are block offset + entity index × k + i, with owned DOFs first and ghosts after, in the order of the entity IndexMaps.
+    - A ghost DOF's global number follows from its entity's global number and the owner's per-block offsets. These offsets are exchanged once per space, through the host-staged neighbourhood exchange (section 22); there is no per-DOF communication.
+    - Discontinuous spaces use only the cell IndexMaps.
+- **Geometry-numbered dofmaps.** `FunctionSpace::geometry` wraps each geometry block's dofmap and the node IndexMap, with the coordinate element as Lagrange element (same degree and node family) and block shape [GD].
+- **Entity creation stays explicit.** `new` and the accessors create no topology (section 4), and entity creation is collective. `create_entities_for` creates exactly the dimensions `dof_dimensions` lists, on every rank.
+- **Signs and transformations.**
+    - Signed-permutation transformations (section 26) are folded into `dofs` once per space: an entry holds the global-orientation slot, and `signs` holds the sign.
+    - Elements with dense blocks keep the cell-local order and set `dense_transforms`; evaluation then applies the blocks in a separate kernel (section 29).
+- **Transposed dofmap.** Built once per space with the radix sort of section 7: for each DOF, its (cell, slot) pairs in increasing order, as offsets and slots. It drives accumulation from E-vectors to the L-vector.
+- **Writer bits.** For each owned DOF, exactly one slot is flagged: that of the touching cell with the lowest local index on the owning rank, found with a segmented minimum over the transposed dofmap. Interpolation writes only flagged slots (section 31).
+- **Limits:**
+    - local DOFs per rank below 2^32, otherwise `TooLarge`;
+    - global DOFs below 2^63;
+    - block shapes of rank 0, 1 or 2 with extents 1–3.
+- **Errors:**
+    - a `discontinuous_only` element, or `map = Some(L2Piola)`, in a `Continuous` space gives `SpaceMismatch`;
+    - an unsupported element gives `UnsupportedElement`.
+- **Determinism.** Numbering, signs, writer bits and the transposed dofmap are identical in every run on the same rank count. Global DOF counts do not depend on the rank count.
+
+### Out of scope
+
+DOF reordering for bandwidth; degrees that vary per cell; product (mixed) spaces; constraints such as hanging nodes and periodicity.
+
+## 29. Grid functions and their evaluation
+
+### Purpose
+
+Device storage of functions in a space, and their evaluation at quadrature points and at per-cell reference points, with the push-forwards of section 26. It also provides the transposed operation, integration against the basis, which load vectors, matrix-free operators and the comparison benchmarks of section 30 need (ADR-0071).
+
+### Interface
+
+**Listing F2 — grid functions (tetraloma-function)**
+
+```rust
+/// Coefficient scalars: f32, f64, num_complex::Complex<f32>, num_complex::Complex<f64>.
+pub trait FieldScalar: Copy + Default + bytemuck::Pod + Send + Sync + 'static {
+    type Real: Real;
+    const PARTS: usize;   // 1 real, 2 complex
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Op { Value, Grad, Curl, Div }
+
+/// Values at points per cell block: the QuadField layout with value size × PARTS components.
+pub struct FunctionFields<F: Real> { /* blocks of tiled chunks, components */ }
+impl<F: Real> FunctionFields<F> {
+    pub fn components(&self) -> usize;
+    pub fn num_points(&self, b: usize) -> usize;
+    pub fn block(&self, b: usize) -> &[QuadChunk<F>];
+    /// Host copy of block b in plain [cell][point][component] order (an explicit download).
+    pub fn to_host_cell_major(&self, b: usize) -> Result<Vec<F>>;
+}
+
+pub struct GridFunction<'a, G: DeviceGrid, T: FieldScalar<Real = G::F>> { /* space, L-vector */ }
+impl<'a, G: DeviceGrid, T: FieldScalar<Real = G::F>> GridFunction<'a, G, T> {
+    pub fn zeros(space: &'a FunctionSpace<'a, G>) -> Result<Self>;
+    /// [dof][component][part], owned and ghost DOFs.
+    pub fn from_coefficients(space: &'a FunctionSpace<'a, G>, values: DeviceBuffer<G::F>) -> Result<Self>;
+    pub fn space(&self) -> &FunctionSpace<'a, G>;
+    pub fn coefficients(&self) -> &DeviceBuffer<G::F>;
+    pub fn coefficients_mut(&mut self) -> &mut DeviceBuffer<G::F>;
+    /// Owner → ghosts (forward scatter).
+    pub fn update_ghosts(&mut self) -> Result<()>;
+    /// Ghosts → owner, Add, then zero the ghosts (reverse scatter).
+    pub fn accumulate_ghosts(&mut self) -> Result<()>;
+    pub fn evaluate(&self, rule: &QuadRule<G::F, G::TD>, op: Op) -> Result<FunctionFields<G::F>>;
+    pub fn evaluate_at(&self, points: &CellPoints<G::F, G::TD>, op: Op) -> Result<FunctionFields<G::F>>;
+}
+
+/// A read-only function that shares its coefficients, such as the geometry.
+pub struct GridFunctionRef<'a, G: DeviceGrid, T: FieldScalar<Real = G::F>> { /* space, shared L-vector */ }
+impl<'a, G: DeviceGrid> GridFunctionRef<'a, G, G::F> {
+    /// Requires a space from FunctionSpace::geometry; values relative to origin().
+    pub fn geometry(space: &'a FunctionSpace<'a, G>) -> Result<Self>;
+}
+
+/// Implemented by GridFunction and GridFunctionRef: what evaluation and interpolation can read.
+pub trait Source<G: DeviceGrid> { /* space and coefficients; sealed */ }
+
+impl<'g, G: DeviceGrid> FunctionSpace<'g, G> {
+    /// b_i = Σ_cells Σ_q w_q · |det J| · values(x_q) · op(φ_i)(x_q) for every owned DOF i, summed
+    /// in a fixed order and reverse-scattered to the owners.
+    pub fn integrate_basis(&self, rule: &QuadRule<G::F, G::TD>, values: &FunctionFields<G::F>, op: Op)
+        -> Result<DeviceBuffer<G::F>>;
+}
+```
+
+### Behaviour and invariants
+
+**Layouts:**
+
+- **L-vector:** interleaved [dof][component][part]. The `Scatterer` block size is the block size × `PARTS`, so the halo exchange and reverse addition of section 11 apply unchanged.
+- **E-vector:** [k][component][part][cell], cells fastest, tiled and padded like the geometry E-vector (section 8, "Padding and tiles").
+- **`FunctionFields`:** the `QuadField` layout of Listing B4b with a runtime component count.
+
+**Complex values.** Complex arithmetic is written out in real operations in a fixed order, and a comptime flag doubles the component loops. CubeCL's native complex types are not used: in 0.11.0 only the CUDA runtime registers `ComplexUsage`.
+
+**Pipeline:**
+
+| Step | Kernel family (`KernelKind`, degree-policy family) | Buffers |
+| --- | --- | --- |
+| L → E gather, signed permutations | FunctionGather | L-vector, dofs, signs, E-vector |
+| Dense DOF transformations (tetrahedra, p ≥ 2) | DofTransform | E-vector, permutation info, transformation blocks |
+| E → Q contraction and push-forward, real | FunctionEval | E-vector, packed tabulation, J or K, det J, output |
+| E → Q contraction and push-forward, complex | FunctionEvalComplex | as FunctionEval |
+| Q → E transpose (`integrate_basis`) | FunctionEval, FunctionEvalComplex | as FunctionEval, with weights in the tabulation buffer |
+| E → L accumulation, fixed order | FunctionAccumulate | E-vector, slot offsets, slots, signs, L-vector |
+
+- **Six buffers.** DOF transformations run before evaluation, never inside it, so every kernel binds at most six buffers (section 22).
+- **Strategies.** FunctionEval and FunctionEvalComplex run the strategies of section 10:
+    - **direct, loops:** as for geometry;
+    - **shared:** the tabulation in shared memory;
+    - **cooperative:** a group of units per cell, planned by `LaunchPlan::per_group`, with the cell's coefficients in shared memory and one unit per point and component;
+    - **sumfact:** on quadrilaterals and hexahedra, section 30.
+- **Degree policy.** tetraloma-function's `degree-policy.toml` chooses a strategy per family, cell type, degree range, device class and scalar size, under the generic decision rule of section 8, and holds the four sets of ADR-0058. `TETRALOMA_FUNCTION_STRATEGY` (the syntax of `TETRALOMA_GEOM_STRATEGY`) and the hidden `tetraloma_function::testing::with_strategy` override it. A strategy that does not apply falls back to loops.
+- **Verified range.** Evaluation is verified for p ≤ 8 on intervals, triangles, quadrilaterals, tetrahedra, hexahedra and prisms, and p ≤ 3 on pyramids (as geometry; ADR-0041). The tolerances are those of section 16.
+- **Operations:**
+    - `Value`;
+    - `Grad`, for identity-mapped families;
+    - `Curl`, for covariant families (rot in 2D and on surfaces);
+    - `Div`, for contravariant families;
+
+  each with the push-forward of section 26. Any other combination gives `SpaceMismatch`.
+- **Per-cell points.** `evaluate_at` evaluates the basis at the points of `CellPoints` with the device basis evaluator of section 10 and `Element::coefficients`, then pushes forward as above.
+- **Geometry view.** `GridFunctionRef::geometry` shares `nodes()`; its values are relative to `origin()`, as `nodes()` are.
+- **Determinism.** Each output value is written by one unit, summing in a fixed order, so results are bitwise reproducible for a fixed configuration. `FunctionAccumulate` sums each DOF's slots in the order of the transposed dofmap. Results are bitwise identical across vector sizes on the CPU runtime (section 8).
+
+### Out of scope
+
+- Assembly of matrices; operators and solvers.
+- Full gradients of Piola-mapped fields on curved cells.
+- Evaluation at physical points (point location) and on non-matching meshes.
+- Updating the geometry from a grid function, and curved meshes of higher degree built from one.
+
+## 30. Sum-factorised evaluation
+
+### Purpose
+
+Evaluation and its transpose at high degree on quadrilaterals and hexahedra, where a dense contraction costs (p + 1)^(2·TD) operations per component and cell (ADR-0071).
+
+### Interface
+
+No new public items. The strategy is `sumfact` in tetraloma-function's degree policy (section 29), selected by the policy or by its overrides.
+
+### Behaviour and invariants
+
+- **Applies to:** FunctionEval and FunctionEvalComplex, with their transposes, for every family of section 26 on quadrilaterals and hexahedra, using the tensor factors of section 26 and tensor rules (`Gauss`, `GaussLobatto`).
+- **GPUs (cooperative slab).** One group per cell, planned by `LaunchPlan::per_group`. On hexahedra, units cover a 2D slab of n × n entries, n the larger of p + 1 and the points per direction. Each unit holds a register column along the third direction.
+    - The third-direction contraction runs in registers.
+    - The other two exchange values through one shared n × n slab per cell, one level at a time, with `sync_cube` in uniform control flow between steps.
+    - Shared memory is n² · size_of::<F>() per cell: 648 bytes at p = 8 in f64. Where n² exceeds the units a group can have (256 on WebGPU), each unit handles several slab entries.
+    - On quadrilaterals the slab is the whole cell.
+- **CPUs.** Lanes over cells, as in section 8, with the contractions per lane in local arrays.
+- **Verified range:** p ≤ 16 on quadrilaterals and hexahedra, agreeing with the loops strategy to the tolerances of section 16.
+- **Limits.** Every plan stays within `max_units_per_cube`, `max_cube_dim` and the shared-memory limit, checked by `LaunchPlan`. A degree whose plan does not fit is not selectable on that device.
+- **Determinism** as in section 29.
+
+### Out of scope
+
+Sum factorisation on simplices (collapsed coordinates), prisms and pyramids; tensor-core (MMA) instructions; matrix-free operators beyond `integrate_basis`.
+
+## 31. Interpolation
+
+### Purpose
+
+Grid functions created by interpolation: from functions given as device code, from other spaces on the same grid, through the `EntityMap` of a submesh in either direction, and from data that exist only on the host (ADR-0071).
+
+### Interface
+
+**Listing F3 — interpolation (tetraloma-function)**
+
+```rust
+/// A function of physical coordinates, evaluated on the device by interpolate().
+pub trait DeviceExpression: Send + Sync + 'static {
+    /// Values per point: the value shape's product, times 2 for complex values.
+    fn num_values(&self) -> usize;
+    /// Runtime parameters (for example a wavenumber), uploaded once per call; the kernel receives
+    /// origin() (GD values) first, then these.
+    fn params(&self) -> Vec<f64> { Vec::new() }
+    /// True if eval never branches on lane values, so that it may run at vector sizes above 1.
+    fn vectorizable(&self) -> bool { false }
+    // The #[cube] method (provisional; the first task of M16 checks it against CubeCL 0.11):
+    // fn eval<F: Float, N: Size>(x: &Array<Vector<F, N>>, params: &Slice<F>, out: &mut Array<Vector<F, N>>);
+    // x relative to origin(); lanes are points of consecutive cells.
+}
+
+impl<'g, G: DeviceGrid> FunctionSpace<'g, G> {
+    /// Physical interpolation points per cell block, relative to origin().
+    pub fn interpolation_points(&self) -> Result<FunctionFields<G::F>>;
+}
+
+impl<'a, G: DeviceGrid, T: FieldScalar<Real = G::F>> GridFunction<'a, G, T> {
+    pub fn interpolate<E: DeviceExpression>(&mut self, e: &E) -> Result<()>;
+    /// Another space on the same grid, optionally through Grad, Curl or Div of the source.
+    pub fn interpolate_from<S: Source<G>>(&mut self, source: &S, op: Op) -> Result<()>;
+    /// Parent to child (traces) or child to parent (lifting) through a submesh's EntityMap;
+    /// `normal_cross` applies n × to a covariant trace.
+    pub fn interpolate_through<H: DeviceGrid<F = G::F>, S: Source<H>>(
+        &mut self, map: &EntityMap, source: &S, op: Op, normal_cross: bool) -> Result<()>;
+    /// Values at interpolation_points(), [point][component][part] per cell block.
+    pub fn interpolate_values(&mut self, values: &FunctionFields<G::F>) -> Result<()>;
+    /// Host round trip: absolute points to the host, values back (section 22).
+    pub fn interpolate_host(&mut self, f: impl FnMut(&[f64], &mut [T])) -> Result<()>;
+}
+```
+
+### Behaviour and invariants
+
+- **Element interpolation.** Each element provides interpolation points and the matrix M of section 26. The device pipeline per cell is:
+    1. physical points from the factor kernels;
+    2. source values;
+    3. pull-back (Jᵀu, det J · K u or det J · u);
+    4. multiplication by M;
+    5. the transformation T_c^{−ᵀ};
+    6. the write of the flagged slots.
+
+  Interpolation is exact on the space: a function of the space is reproduced to the tolerances of section 16.
+- **Sources:**
+    - **Expressions** run at vector size 1 unless `vectorizable()` is true, and then at the size of the Interpolate policy entry.
+    - **Same-grid sources** are tabulated at the target's reference points; no point location is involved. A source on a different grid gives `SpaceMismatch`.
+    - **`interpolate_through`.** From parent to child (`boundary`, `facet_submesh`, `cell_submesh`):
+        - the child cell's reference points are related to the parent facet's through the facet map and `permute_vertices`;
+        - a covariant pull-back on the child projects onto the tangent plane, which gives the tangential trace;
+        - `normal_cross` applies n × with the child's outward normal (section 15), which gives the rotated trace into surface RT.
+
+      From child to parent, values are written into the DOFs of the parent's entities that the child covers; other DOFs keep their values. Facet children need the parent's (tdim − 1, tdim) connectivity, otherwise `ConnectivityNotCreated`.
+    - **Host data.** `interpolation_points` and `interpolate_values` are the building blocks. `interpolate_host` does exactly one download of the points and one upload of the values, and adds `origin()` for the closure.
+- **Shared DOFs.** Only flagged slots are written (section 28), with no races and no atomics. A forward scatter then fills the ghosts. The result is bitwise deterministic for a fixed configuration; across different partitions it can differ at rounding level.
+- **Complex targets** take complex expressions (`num_values` doubled) and complex or real sources.
+
+### Out of scope
+
+- Interpolation between non-matching meshes and evaluation at physical points (point location).
+- L2 projection and averaging quasi-interpolants.
+- Traces on edge submeshes.
+- Interpolation into the geometry.
+
+## 32. Output of grid functions
+
+### Purpose
+
+Grid functions in VTK output, so they can be inspected in ParaView (ADR-0071).
+
+### Interface
+
+```rust
+// tetraloma (VtkWriter, Listing B13)
+impl<'a> VtkWriter<'a> {
+    /// Adds a grid function to the next write; all functions of one write share one output space.
+    pub fn function<G: DeviceGrid, S: Source<G>>(self, name: &str, f: &'a S) -> Self;
+}
+```
+
+### Behaviour and invariants
+
+- **Direct output.** A continuous Lagrange function whose degree and node family equal the geometry's goes out as point data indexed by geometry node, like `.point_data`.
+- **Output space.** Otherwise every function of the write is interpolated on the device into one equispaced Lagrange space of degree max(p_geometry, p of each function). The space is discontinuous if any function is not continuous Lagrange; N1curl and RT go into vector DG.
+- **Output points.** The output mesh's points are the geometry view (section 29) interpolated into the output space. Discontinuous output duplicates points per cell.
+- **Mixing with buffers.** `.point_data` buffers cannot be combined with an output space other than the geometry's: `SpaceMismatch`.
+- **Complex functions** are written as `<name>_re` and `<name>_im`.
+- **Formats.** VTU, PVTU and VTKHDF, collective as in section 13. High-order pyramids keep the vertices-only rule of ADR-0024.
+
+### Out of scope
+
+Gmsh `$NodeData` and `$ElementNodeData` output; checkpointing and restart; time series.
