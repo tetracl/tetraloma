@@ -40,7 +40,7 @@ The discussion went through twelve questions, then output and comparison framewo
 | 1. Scope on prisms, pyramids and hybrid meshes | "This works H(curl) and H(div) on pyramids are no priority. They are more important on 2d triangles and quads and 3d tets and hexahedra" |
 | 2. Families: first kind only in v1, others on demand | "Happy with your suggestion." |
 | 3. Variants: Equispaced, Gll (Isaac points on simplices), Legendre; Legendre moments for N1curl and RT | "Your suggestion works for me" |
-| 4. ndelement | "Gridcl should be independent of ndelement. Ndelement should only be used for conformance testing comparisons." |
+| 4. ndelement | "[tetraloma] should be independent of ndelement. Ndelement should only be used for conformance testing comparisons." |
 | 5. Quadrature: symmetric simplex rules, GLL, sub-entity rules, symmetric facet rules | "This covers my needs" |
 | 6. BEM singular quadrature | "It should live in a future BEM crate" |
 | 7. Explicit entity creation; spaces borrow the grid | "I agree with your suggestion" |
@@ -51,6 +51,8 @@ The discussion went through twelve questions, then output and comparison framewo
 | 12. High-order kernels in the first version | "Would a different GPU parallelisation that can deal with high p be feasible in v1? High p is an important application.", then "Yes, please" |
 | Output through `VtkWriter` | "Yes" |
 | Prisms; comparison frameworks | "One small change. Prisms are not a priority either. Also, what is a good comparison framework? Would you suggest mfem or something else for comparison tests?", then, on Basix, Symfem, DOLFINx and DefElement for correctness and MFEM, libCEED and deal.II with the CEED bake-off problems for performance: "That works well" |
+
+In the answer to question 4, "[tetraloma]" replaces the project's former name, which `scripts/check-name.sh` does not allow (ADR-0066).
 
 The answer to question 1 and the later "Prisms are not a priority either" are read together: Lagrange and DG on all cells; H(curl) and H(div) on triangles, quadrilaterals, tetrahedra and hexahedra only.
 
