@@ -682,6 +682,7 @@ mod tests {
     /// record whose size ran is at most the size asked for; Scalar runs on CPUs only, at size 1.
     #[test]
     fn smoke_sweep_at_ten_thousand() {
+        let _guard = crate::device_test_lock();
         let client = tetraloma_testing::test_client();
         let machine = Machine::new(&client);
         let options = SweepOptions {
@@ -738,6 +739,7 @@ mod tests {
     /// PullBack pass their checks; Scalar runs on CPUs only.
     #[test]
     fn candidate_smoke_sweep_covers_every_kind() {
+        let _guard = crate::device_test_lock();
         let client = tetraloma_testing::test_client();
         let machine = Machine::new(&client);
         assert_eq!(machine.load_width, client.properties().hardware.load_width);
@@ -828,6 +830,7 @@ mod tests {
     /// device reports performance cores.
     #[test]
     fn grid_smoke_sweep_interleaves() {
+        let _guard = crate::device_test_lock();
         let client = tetraloma_testing::test_client();
         let machine = Machine::new(&client);
         let options = GridOptions {
@@ -898,6 +901,7 @@ mod tests {
     /// its check.
     #[test]
     fn mesh_smoke_sweep_at_a_thousand_cells() {
+        let _guard = crate::device_test_lock();
         let client = tetraloma_testing::test_client();
         let machine = Machine::new(&client);
         let options = SweepOptions {

@@ -526,6 +526,7 @@ mod tests {
     }
 
     fn measure_delayed(calibration: Duration) -> (Measured, usize) {
+        let _guard = crate::device_test_lock();
         let client = tetraloma_testing::test_client();
         let inner =
             crate::families::workload(&client, KernelKind::Fill, crate::record::Scalar::F32, 1000)

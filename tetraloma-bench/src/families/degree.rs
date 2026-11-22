@@ -1808,6 +1808,7 @@ mod tests {
     /// through JSON; the counts follow the cells, node families and iterations.
     #[test]
     fn launch_only_smoke_at_p_1_and_2() {
+        let _guard = crate::device_test_lock();
         let client = tetraloma_testing::test_client();
         let machine = Machine::new(&client);
         let o = options(&DegreeFamily::ALL, &CELLS, true);
@@ -1861,10 +1862,12 @@ mod tests {
         }
     }
 
-    /// A timed run of J and the pull-back (1 and 9 iterations) on quadrilaterals at p = 2 and
-    /// 10^5 points, twice: two timed runs each, and the second identical run compiles nothing.
+    /// A timed run of J and the pull-back (1 and 9 iterations) on quadrilaterals at p = 2 (10^6
+    /// points on CPUs so 9 vs 1 iterations exceeds runner timing noise; 10^5 points on GPUs),
+    /// four times: two timed runs each, and the cached runs compile nothing.
     #[test]
     fn timed_smoke_and_second_call_compile_time() {
+        let _guard = crate::device_test_lock();
         let client = tetraloma_testing::test_client();
         let machine = Machine::new(&client);
         let mut o = options(
@@ -1872,12 +1875,15 @@ mod tests {
             &[CellType::Quadrilateral],
             false,
         );
+        // On CPUs, 10^6 points at p = 2 (~0.6 ms for 1 iteration vs ~6.3 ms for 9 on the Mac mini)
+        // leaves a wide margin over runner load; at 10^5 points M10c's vector size 4 brought 1 vs
+        // 9 iterations under 1 ms apart, which hosted CI load inverted (#62). On GPUs, 10^5 points
+        // stays fast on software Vulkan and the ordering assertion does not apply.
+        let cpu = is_cpu(machine.class);
         o.degrees = vec![2];
         o.node_families = vec![NodeFamily::Equispaced];
         o.scalars = vec![Scalar::F32];
-        // 10^5 points, so the Newton iterations outweigh the per-call synchronisation even
-        // while the other tests load the machine.
-        o.sizes = vec![100_000];
+        o.sizes = vec![if cpu { 1_000_000 } else { 100_000 }];
         let first = degree_sweep(&client, &machine, &o, &mut |_| ()).unwrap();
         // Three cached runs: on a loaded hosted runner one warm-up call can take 0.09 s longer
         // than the median, as long as a CPU compile at p = 2 (0.01-0.07 s), and load only adds.
@@ -1917,7 +1923,7 @@ mod tests {
                 .map(|r| r[i].median_s)
                 .fold(f64::INFINITY, f64::min)
         };
-        if is_cpu(machine.class) {
+        if cpu {
             assert!(least(2) > least(1), "{} s, {} s", least(2), least(1));
         }
     }
@@ -1927,6 +1933,7 @@ mod tests {
     /// `too slow` after it, without running.
     #[test]
     fn resumed_and_stopped_runs() {
+        let _guard = crate::device_test_lock();
         let client = tetraloma_testing::test_client();
         let machine = Machine::new(&client);
         let mut o = options(&[DegreeFamily::Points], &[CellType::Interval], true);
@@ -1961,6 +1968,7 @@ mod tests {
     /// Skipped (family, strategy) pairs are neither run nor recorded, also by `--stopped-after`.
     #[test]
     fn skipped_pairs_have_no_records() {
+        let _guard = crate::device_test_lock();
         let client = tetraloma_testing::test_client();
         let machine = Machine::new(&client);
         let families = [DegreeFamily::Points, DegreeFamily::Jacobian];
@@ -1995,6 +2003,7 @@ mod tests {
     /// from the times; the pull-back's two iteration counts are paired separately.
     #[test]
     fn interleaved_strategies_are_timed_alike() {
+        let _guard = crate::device_test_lock();
         let client = tetraloma_testing::test_client();
         let machine = Machine::new(&client);
         let families = [DegreeFamily::Jacobian, DegreeFamily::PullBack];
@@ -2024,6 +2033,7 @@ mod tests {
 
     #[test]
     fn records_name_the_strategy_that_ran() {
+        let _guard = crate::device_test_lock();
         let client = tetraloma_testing::test_client();
         let machine = Machine::new(&client);
         let mut o = options(&[DegreeFamily::Points], &[CellType::Interval], true);
@@ -2065,6 +2075,7 @@ mod tests {
     /// det J brings `loops` to J, det J and K, J's in the second pass (J runs first).
     #[test]
     fn candidate_mode_runs_the_candidates_and_a_backup_baseline() {
+        let _guard = crate::device_test_lock();
         let client = tetraloma_testing::test_client();
         let machine = Machine::new(&client);
         let families = [
