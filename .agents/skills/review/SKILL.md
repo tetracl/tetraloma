@@ -17,8 +17,8 @@ Two modes. Say which one you are running.
 - Start each reviewer in a fresh context: a read-only subagent if you have
   one, otherwise ask the maintainer to run the brief in a new session and
   paste the report.
-- Use the reviewer model that rule 11 of `AGENTS.md` names (Reviewers).
-  Say which model reviewed.
+- Use the reviewer model that `AGENTS.md` names (Reviewers). Say which
+  model reviewed.
 - Every report ends with what the reviewer read in full. If that is not
   every changed file, run it again.
 - **A report is a claim, not a result.** Check each finding against the
