@@ -5,7 +5,6 @@ mod common;
 mod any_mesh;
 mod build_on_threads;
 mod builder;
-mod compile;
 mod determinism;
 mod factor_invariance;
 mod gmsh;

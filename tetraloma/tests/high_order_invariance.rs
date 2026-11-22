@@ -16,7 +16,9 @@
 //! Comparisons are bitwise on the CPU runtime (up to the sign of zero) and within the tolerance
 //! of the precision scaled by max(1, A / A_ref) on GPUs; the pull-back's last step is compared
 //! on the CPU runtime only (on GPUs a converged step is rounding noise, see pull_back.rs). Every
-//! check runs under the degree policy and every strategy ([`for_each_strategy!`]); each run
+//! check runs under the degree policy and every distinct strategy ([`for_each_strategy!`],
+//! skipping `Fixed(s)` when `Policy` ran `s` uniformly and `Fixed(SumFactorised)` on meshes with
+//! no tensor cell); each run
 //! builds its own E-vector on a copy of the mesh. One test per degree ([`degree_tests!`]); p ≥ 5
 //! runs in release builds only.
 
@@ -241,12 +243,14 @@ where
         .collect()
 }
 
-/// Runs `compute` at tile 16 and every vector size the device offers, under every strategy, and
-/// compares each with vector size 1. Each run asserts its vector size through `record_plans`.
+/// Runs `compute` at tile 16 and every vector size the device offers, under every distinct
+/// strategy, and compares each with vector size 1. Each run asserts its vector size through
+/// `record_plans`.
 fn sweep_vector_sizes<F: Real>(
     client: &Client,
     what: &str,
     cells: usize,
+    sumfact: bool,
     compute: impl Fn() -> Vec<Quantity>,
 ) {
     let at = |n: usize| {
@@ -254,7 +258,7 @@ fn sweep_vector_sizes<F: Real>(
             at_vector_size(n, KernelKind::GeomFactors, cells > 0, &compute)
         })
     };
-    for_each_strategy!(|run| {
+    for_each_strategy!(sumfact, |run| {
         let want = at(1);
         for n in vector_sizes(client, size_of::<F>(), 16).into_iter().skip(1) {
             let what = format!("{what} ({cells} cells), vector size {n}, under {run}");
@@ -276,11 +280,12 @@ impl MeshVisitor for VectorSizes<'_> {
         GD: Dim,
     {
         let degree = rule_degree(full);
+        let sumfact = has_tensor_cell(full.blocks.iter().map(|b| b.cell));
         for cells in INVARIANCE_CELLS {
             let h = full.first_cells(cells);
             let mesh = build::<F, TD, GD>(&h, self.client);
             let s = Scales::of(&mesh, &h, degree);
-            sweep_vector_sizes::<F>(self.client, what, cells, || {
+            sweep_vector_sizes::<F>(self.client, what, cells, sumfact, || {
                 common_quantities(&mesh, degree, &s)
             });
         }
@@ -288,11 +293,12 @@ impl MeshVisitor for VectorSizes<'_> {
 
     fn facets<F: Real, TD: TopoDim + Codim0<TD>>(&mut self, what: &str, full: &HostMesh) {
         let degree = rule_degree(full);
+        let sumfact = has_tensor_cell(full.blocks.iter().map(|b| b.cell));
         for cells in INVARIANCE_CELLS {
             let h = full.first_cells(cells);
             let mesh = build::<F, TD, TD>(&h, self.client);
             let s = Scales::of(&mesh, &h, degree);
-            sweep_vector_sizes::<F>(self.client, what, cells, || {
+            sweep_vector_sizes::<F>(self.client, what, cells, sumfact, || {
                 facet_quantities(&mesh, degree, s.j)
             });
         }
@@ -305,11 +311,12 @@ impl MeshVisitor for VectorSizes<'_> {
         GD: Dim,
     {
         let degree = rule_degree(full);
+        let sumfact = has_tensor_cell(full.blocks.iter().map(|b| b.cell));
         for cells in INVARIANCE_CELLS {
             let h = full.first_cells(cells);
             let mesh = build::<F, TD, GD>(&h, self.client);
             let s = Scales::of(&mesh, &h, degree);
-            sweep_vector_sizes::<F>(self.client, what, cells, || {
+            sweep_vector_sizes::<F>(self.client, what, cells, sumfact, || {
                 normal_quantities(&mesh, degree, s.j)
             });
         }
@@ -376,10 +383,17 @@ where
             "{what} p={p}: J spans {chunks} chunks"
         );
     });
-    sweep_vector_sizes::<F>(client, &format!("{what} p={p}"), h.num_cells(), || {
-        let fresh = mesh.try_clone().expect("try_clone");
-        with_properties(props.clone(), || quantities_of(&fresh, 1, &s))
-    });
+    let sumfact = has_tensor_cell(h.blocks.iter().map(|b| b.cell));
+    sweep_vector_sizes::<F>(
+        client,
+        &format!("{what} p={p}"),
+        h.num_cells(),
+        sumfact,
+        || {
+            let fresh = mesh.try_clone().expect("try_clone");
+            with_properties(props.clone(), || quantities_of(&fresh, 1, &s))
+        },
+    );
 }
 
 fn vector_size_checks<F: Real>(client: &Client, p: u32) {
@@ -405,9 +419,9 @@ struct Tiles<'a> {
     client: &'a Client,
 }
 
-/// Runs `compute` at tile widths 1 and 16 under every strategy and compares them.
-fn sweep_tiles<F: Real>(what: &str, compute: impl Fn() -> Vec<Quantity>) {
-    for_each_strategy!(|run| {
+/// Runs `compute` at tile widths 1 and 16 under every distinct strategy and compares them.
+fn sweep_tiles<F: Real>(what: &str, sumfact: bool, compute: impl Fn() -> Vec<Quantity>) {
+    for_each_strategy!(sumfact, |run| {
         let want = with_quad_tile(1, &compute);
         let got = with_quad_tile(16, &compute);
         compare::<F>(
@@ -427,16 +441,18 @@ impl MeshVisitor for Tiles<'_> {
         GD: Dim,
     {
         let degree = rule_degree(h);
+        let sumfact = has_tensor_cell(h.blocks.iter().map(|b| b.cell));
         let mesh = build::<F, TD, GD>(h, self.client);
         let s = Scales::of(&mesh, h, degree);
-        sweep_tiles::<F>(what, || common_quantities(&mesh, degree, &s));
+        sweep_tiles::<F>(what, sumfact, || common_quantities(&mesh, degree, &s));
     }
 
     fn facets<F: Real, TD: TopoDim + Codim0<TD>>(&mut self, what: &str, h: &HostMesh) {
         let degree = rule_degree(h);
+        let sumfact = has_tensor_cell(h.blocks.iter().map(|b| b.cell));
         let mesh = build::<F, TD, TD>(h, self.client);
         let s = Scales::of(&mesh, h, degree);
-        sweep_tiles::<F>(what, || facet_quantities(&mesh, degree, s.j));
+        sweep_tiles::<F>(what, sumfact, || facet_quantities(&mesh, degree, s.j));
     }
 
     fn normals<F, TD, GD>(&mut self, what: &str, h: &HostMesh)
@@ -446,9 +462,10 @@ impl MeshVisitor for Tiles<'_> {
         GD: Dim,
     {
         let degree = rule_degree(h);
+        let sumfact = has_tensor_cell(h.blocks.iter().map(|b| b.cell));
         let mesh = build::<F, TD, GD>(h, self.client);
         let s = Scales::of(&mesh, h, degree);
-        sweep_tiles::<F>(what, || normal_quantities(&mesh, degree, s.j));
+        sweep_tiles::<F>(what, sumfact, || normal_quantities(&mesh, degree, s.j));
     }
 }
 
@@ -467,9 +484,10 @@ struct Twice<'a> {
     client: &'a Client,
 }
 
-/// Runs `compute` twice under every strategy, each on its own build, and compares bitwise.
-fn sweep_twice<F: Real>(what: &str, compute: impl Fn() -> Vec<Quantity>) {
-    for_each_strategy!(|run| {
+/// Runs `compute` twice under every distinct strategy, each on its own build, and compares
+/// bitwise.
+fn sweep_twice<F: Real>(what: &str, sumfact: bool, compute: impl Fn() -> Vec<Quantity>) {
+    for_each_strategy!(sumfact, |run| {
         compare::<F>(&compute(), &compute(), true, &format!("{what} under {run}"));
     });
 }
@@ -482,20 +500,22 @@ impl MeshVisitor for Twice<'_> {
         GD: Dim,
     {
         let degree = rule_degree(h);
+        let sumfact = has_tensor_cell(h.blocks.iter().map(|b| b.cell));
         let s = Scales {
             x: 1.0,
             j: 1.0,
             pinv: vec![1.0; h.blocks.len()],
             pull_back: vec![1.0; h.blocks.len()],
         };
-        sweep_twice::<F>(what, || {
+        sweep_twice::<F>(what, sumfact, || {
             common_quantities(&build::<F, TD, GD>(h, self.client), degree, &s)
         });
     }
 
     fn facets<F: Real, TD: TopoDim + Codim0<TD>>(&mut self, what: &str, h: &HostMesh) {
         let degree = rule_degree(h);
-        sweep_twice::<F>(what, || {
+        let sumfact = has_tensor_cell(h.blocks.iter().map(|b| b.cell));
+        sweep_twice::<F>(what, sumfact, || {
             facet_quantities(&build::<F, TD, TD>(h, self.client), degree, 1.0)
         });
     }
@@ -507,7 +527,8 @@ impl MeshVisitor for Twice<'_> {
         GD: Dim,
     {
         let degree = rule_degree(h);
-        sweep_twice::<F>(what, || {
+        let sumfact = has_tensor_cell(h.blocks.iter().map(|b| b.cell));
+        sweep_twice::<F>(what, sumfact, || {
             normal_quantities(&build::<F, TD, GD>(h, self.client), degree, 1.0)
         });
     }

@@ -580,8 +580,10 @@ impl std::fmt::Display for StrategyRun {
     }
 }
 
-/// The settings of [`for_each_strategy!`]: the environment's alone if `TETRALOMA_GEOM_STRATEGY`
-/// is set, else the policy and then every strategy forced.
+/// The candidate settings of [`for_each_strategy!`]: the environment's alone if
+/// `TETRALOMA_GEOM_STRATEGY` is set, else the policy followed by every strategy forced.
+/// [`run_strategies`] skips `Fixed(s)` when `Policy` ran `s` uniformly across every launch, and
+/// skips `Fixed(Strategy::SumFactorised)` when `sumfact_applies` is `false`.
 pub fn strategy_runs() -> Vec<StrategyRun> {
     if std::env::var_os(GEOM_STRATEGY_VAR).is_some() {
         return vec![StrategyRun::Environment];
@@ -610,9 +612,30 @@ pub fn with_every_family<R>(s: StrategyOverride, f: impl FnOnce() -> R) -> R {
     })
 }
 
+/// Whether any cell type in `cells` supports `Strategy::SumFactorised` (matches
+/// `Strategy::applies` in `tetraloma-geometry/src/strategy.rs`).
+pub fn has_tensor_cell(cells: impl IntoIterator<Item = CellType>) -> bool {
+    cells.into_iter().any(|c| {
+        matches!(
+            c,
+            CellType::Quadrilateral | CellType::Hexahedron | CellType::Prism
+        )
+    })
+}
+
 /// Runs `f` under `run` and checks what ran (`record_strategies`): under a forced strategy,
 /// that strategy or its fallback `Loops` (ADR-0042, item 3).
 pub fn under_strategy<R>(run: StrategyRun, f: impl FnOnce() -> R) -> R {
+    under_strategy_recorded(run, f).0
+}
+
+/// Runs `f` under `run`, checks what ran (`record_strategies`: under a forced strategy, that
+/// strategy or its fallback `Loops`, ADR-0042 item 3), and returns both the result and the
+/// recorded launches.
+pub fn under_strategy_recorded<R>(
+    run: StrategyRun,
+    f: impl FnOnce() -> R,
+) -> (R, Vec<(StrategyFamily, Strategy)>) {
     let (result, ran) = tetraloma_geometry::testing::record_strategies(|| match run {
         StrategyRun::Environment => f(),
         StrategyRun::Hook(s) => with_every_family(s, f),
@@ -626,18 +649,55 @@ pub fn under_strategy<R>(run: StrategyRun, f: impl FnOnce() -> R) -> R {
             );
         }
     }
-    result
+    (result, ran)
 }
 
-/// Runs `$f(run)` under every [`StrategyRun`] of [`strategy_runs`], `$f` taking the run.
+/// If every launch recorded in `ran` executed the same single strategy `s`, returns `Some(s)`.
+///
+/// Because `degree-policy.toml`, `Strategy::applies`, `shared::fits` and `cooperative::fits`
+/// depend only on `(family, cell, degree, elem_bytes, tensor, device properties)`, a `Policy`
+/// run whose launches all execute `s` is identical to `Fixed(s)` on the same test closure.
+pub fn uniform_strategy(ran: &[(StrategyFamily, Strategy)]) -> Option<Strategy> {
+    let &(_, first) = ran.first()?;
+    ran.iter().all(|&(_, s)| s == first).then_some(first)
+}
+
+/// Runs `f` under every [`StrategyRun`] of [`strategy_runs`], skipping only runs guaranteed to
+/// execute the exact same kernel launches as an earlier run in this call:
+/// - `Fixed(s)` when `Policy` just executed `s` for every recorded launch (`uniform_strategy`);
+/// - `Fixed(Strategy::SumFactorised)` when `sumfact_applies` is `false` (no tensor cell in the
+///   mesh/block, so `SumFactorised` unconditionally falls back to `Loops`, which `Fixed(Loops)`
+///   or a uniform-`Loops` `Policy` run already executes; fallback dispatch itself is tested in
+///   `tetraloma-geometry`).
+pub fn run_strategies(sumfact_applies: bool, mut f: impl FnMut(StrategyRun)) {
+    let mut policy_uniform: Option<Strategy> = None;
+    for run in strategy_runs() {
+        if let StrategyRun::Hook(StrategyOverride::Fixed(s)) = run {
+            if policy_uniform == Some(s) {
+                continue;
+            }
+            if s == Strategy::SumFactorised && !sumfact_applies {
+                continue;
+            }
+        }
+        let (_, ran) = under_strategy_recorded(run, || f(run));
+        if run == StrategyRun::Hook(StrategyOverride::Policy) {
+            policy_uniform = uniform_strategy(&ran);
+        }
+    }
+}
+
+/// Runs `$f(run)` under every distinct [`StrategyRun`] of [`strategy_runs`], `$f` taking the run.
+///
+/// The two-argument form `for_each_strategy!(sumfact_applies, |run| ...)` also skips
+/// `Fixed(Strategy::SumFactorised)` when `sumfact_applies` is `false`.
 #[macro_export]
 macro_rules! for_each_strategy {
     ($f:expr) => {{
-        #[allow(unused_mut)] // FnMut or Fn.
-        let mut f = $f;
-        for run in $crate::common::strategy_runs() {
-            $crate::common::under_strategy(run, || f(run));
-        }
+        $crate::common::run_strategies(true, $f);
+    }};
+    ($sumfact_applies:expr, $f:expr) => {{
+        $crate::common::run_strategies($sumfact_applies, $f);
     }};
 }
 
