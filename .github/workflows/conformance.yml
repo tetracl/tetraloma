@@ -1,5 +1,5 @@
 # tetraloma-conformance against ndelement at the pinned commit (docs/design.md, A.10).
-# Nightly, on changes to conformance/, tetraloma-refcell/ or tetraloma-dims/, and by hand.
+# Nightly, on changes to conformance/, tetraloma-refcell/, tetraloma-element/ or tetraloma-dims/, and by hand.
 name: conformance
 
 on:
@@ -9,6 +9,7 @@ on:
     paths:
       - "conformance/**"
       - "tetraloma-refcell/**"
+      - "tetraloma-element/**"
       - "tetraloma-dims/**"
       - ".github/workflows/conformance.yml"
   workflow_dispatch:
@@ -41,6 +42,4 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo test --manifest-path conformance/Cargo.toml
       - name: Fixtures match a fresh export
-        run: |
-          cargo run --manifest-path conformance/Cargo.toml --bin export-fixtures
-          git diff --exit-code tetraloma-refcell/tests/fixtures
+        run: cargo run --manifest-path conformance/Cargo.toml --bin export-fixtures -- --check
