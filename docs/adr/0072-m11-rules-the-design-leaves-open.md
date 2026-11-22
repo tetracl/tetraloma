@@ -1,6 +1,6 @@
 # ADR-0072: M11, rules the design leaves open: degree 0, derivative orders and the book's examples
 
-Status: Proposed
+Status: Accepted
 Date: 2026-11-22
 Decision issue: #65
 Raised by: the plan of M11 (pull request #64, `docs/plans/M11.md`), its open questions 1 to 3, and finding G10 of its review
@@ -89,4 +89,8 @@ Option 3 would add to this: `nderivs` ≤ 2 in the paragraph "Derivative orders"
 
 ## Decision
 
-Not decided yet.
+> Accept ADR 72 with option 2, 2026-11-22, said to the agent in a session.
+
+The answer names option 2, the recommendation, and changes none of its wording, so the changes listed for option 2 apply as written. It also answers open question 2 of the plan of M11: `nderivs` is 0 or 1.
+
+`docs/plans/M11.md` is not on the main branch yet, so its changes (the answer in its Decisions table; tasks T3, T5 and T7) are made in the plan's pull request #64, not in this one.
