@@ -14,8 +14,8 @@ Run exactly the commands the delegating prompt asks for. When it only names a sc
 
 | Scope | Commands |
 | --- | --- |
-| crate X | `cargo test -p X` |
-| workspace | `cargo test --workspace` |
+| crate X | `scripts/test-cpu.sh -p X` on the local Mac (`cargo test -p X` on Linux; ADR-0073) |
+| workspace | `scripts/test-cpu.sh` on the local Mac (`cargo test --workspace` on Linux; ADR-0073) |
 | backend metal (local) | `TETRALOMA_TEST_DEVICE=metal cargo test --workspace --features tetraloma-testing/metal` |
 | backend vulkan | `TETRALOMA_TEST_DEVICE=vulkan cargo test --workspace --features tetraloma-testing/vulkan` (hosted CI; usually unavailable on the local Mac) |
 | CUDA on target T | `scripts/hpc/remote-test.sh T -- cargo test --release --workspace --features tetraloma-testing/cuda` |
@@ -25,7 +25,7 @@ Run exactly the commands the delegating prompt asks for. When it only names a sc
 | MPI on two Kathleen nodes (every gate) | `scripts/hpc/remote-test.sh kathleen --nodes 2 --ranks 16 -- scripts/mpi-test.sh 2 4 8 16` (never more than two nodes) |
 | MPI on CUDA (Myriad V100) | `scripts/hpc/remote-test.sh myriad-v100 --gpus 2 --ranks 2 -- scripts/mpi-test.sh` |
 | dependency check | `scripts/check-workspace-deps.sh` |
-| vector sizes | `TETRALOMA_VECTOR_SIZE=scalar cargo test --workspace` and `TETRALOMA_VECTOR_SIZE=widest cargo test --workspace` |
+| vector sizes | `TETRALOMA_VECTOR_SIZE=scalar scripts/test-cpu.sh` and `TETRALOMA_VECTOR_SIZE=widest scripts/test-cpu.sh` on the local Mac (`cargo test --workspace` on Linux; ADR-0073) |
 | conformance | `cargo test --manifest-path conformance/Cargo.toml` |
 | lint | `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets -- -D warnings` |
 

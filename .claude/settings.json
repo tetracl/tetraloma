@@ -31,6 +31,8 @@
       "Bash(git push *)",
       "Bash(git worktree list)",
       "Bash(scripts/mpi-test.sh *)",
+      "Bash(scripts/test-cpu.sh)",
+      "Bash(scripts/test-cpu.sh *)",
       "Bash(cargo run --manifest-path tools/env-check/Cargo.toml *)",
       "Bash(cargo run --release --manifest-path tools/env-check/Cargo.toml *)",
       "Bash(scripts/hpc/remote-test.sh *)",

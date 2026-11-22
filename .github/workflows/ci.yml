@@ -50,10 +50,10 @@ jobs:
           cache-directories: ~/.local/share/tracel
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo fmt --all -- --check
-      # The CI shard scripts (E3); the other scripts are not checked yet.
+      # The CI shard scripts (E3) and local CPU runner (ADR-0073); the other scripts are not checked yet.
       - run: |
           shellcheck --version
-          shellcheck scripts/ci-tetraloma-shard.sh scripts/check-ci-shards.sh
+          shellcheck scripts/ci-tetraloma-shard.sh scripts/check-ci-shards.sh scripts/test-cpu.sh
       # The project's name (ADR-0066, rule 5).
       - run: scripts/check-name.sh
       - run: cargo clippy --workspace --all-targets -- -D warnings
