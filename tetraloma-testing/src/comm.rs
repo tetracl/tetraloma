@@ -89,15 +89,38 @@ impl RankBudget {
     }
 
     fn acquire(&self, n: usize) -> usize {
+        struct TicketGuard<'a> {
+            budget: &'a RankBudget,
+            ticket: u64,
+            active: bool,
+        }
+        impl Drop for TicketGuard<'_> {
+            fn drop(&mut self) {
+                if self.active {
+                    let mut state = self.budget.state.lock().unwrap_or_else(|e| e.into_inner());
+                    if let Some(pos) = state.queue.iter().position(|&t| t == self.ticket) {
+                        state.queue.remove(pos);
+                    }
+                    self.budget.wake.notify_all();
+                }
+            }
+        }
+
         let n = n.min(self.total);
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         let ticket = state.next_ticket;
         state.next_ticket += 1;
         state.queue.push_back(ticket);
+        let mut guard = TicketGuard {
+            budget: self,
+            ticket,
+            active: true,
+        };
         while state.queue.front() != Some(&ticket) || state.free < n {
             state = self.wake.wait(state).unwrap_or_else(|e| e.into_inner());
         }
         state.queue.pop_front();
+        guard.active = false;
         state.free -= n;
         if state.free > 0 && !state.queue.is_empty() {
             self.wake.notify_all();
@@ -546,7 +569,21 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "TETRALOMA_THREAD_COMM_BUDGET")]
+    fn budget_override_rejects_zero() {
+        let _ = parse_budget(Some("0"), 12, true);
+    }
+
+    #[test]
+    #[should_panic(expected = "TETRALOMA_THREAD_COMM_BUDGET")]
+    fn budget_override_rejects_non_numeric() {
+        let _ = parse_budget(Some("abc"), 12, true);
+    }
+
+    #[test]
     fn rank_budget_is_fifo_fair() {
+        use std::time::{Duration, Instant};
+
         let budget = Arc::new(RankBudget::new(4));
         // Hold 2 permits so a 4-permit waiter must block at the head of the queue.
         let held = budget.acquire(2);
@@ -559,11 +596,14 @@ mod tests {
             o1.lock().unwrap().push("large");
             b1.release(got);
         });
-        // Wait until `large` is queued at the front.
-        loop {
-            if !budget.state.lock().unwrap().queue.is_empty() {
-                break;
-            }
+        // Wait until `large` is queued at the front (bounded so a regression fails instead of
+        // hanging).
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while budget.state.lock().unwrap().queue.is_empty() {
+            assert!(
+                Instant::now() < deadline,
+                "timed out waiting for large waiter to enqueue"
+            );
             std::thread::yield_now();
         }
 
@@ -576,10 +616,12 @@ mod tests {
             o2.lock().unwrap().push("small");
             b2.release(got);
         });
-        loop {
-            if budget.state.lock().unwrap().queue.len() == 2 {
-                break;
-            }
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while budget.state.lock().unwrap().queue.len() < 2 {
+            assert!(
+                Instant::now() < deadline,
+                "timed out waiting for small waiter to queue behind large (FIFO violated)"
+            );
             std::thread::yield_now();
         }
 
