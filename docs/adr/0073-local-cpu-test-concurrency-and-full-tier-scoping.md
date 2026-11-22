@@ -1,8 +1,8 @@
 # ADR-0073: Local CPU test concurrency and full-tier scoping for host-only changes
 
-Status: Proposed
+Status: Accepted
 Date: 2026-11-22
-Decision issue: none (requested in session; tracked in pull request #78; proposes amending ADR-0057)
+Decision issue: none (requested and accepted in session; tracked in pull request #78; amends ADR-0057)
 Raised by: M11.T0 (pull request #77) local `full`-tier run taking 2 h 05 m on the M6 Mac mini
 
 ## Context
@@ -61,4 +61,4 @@ Each design edit carries the marker `(ADR-0073)`. Option 3 amends ADR-0057's sta
 
 ## Decision
 
-Pending maintainer confirmation on PR #78 (in session on 2026-11-22, the maintainer said: *"Do PRs for all recommendations with the exception of a CubeCL upgrade. This will wait until there is an official 0.12 release."* — the edits for Option 3 are included in this draft pull request for review; please confirm **Option 3** reversing ADR-0057's standing-matrix rule for host-only PRs, or choose **Option 2** to keep full-workspace Metal on every change).
+Accepted **Option 3** by the maintainer in session on 2026-11-22 (*"Accept option 3"*), capping local Mac CubeCL CPU libtest concurrency via `scripts/test-cpu.sh` and amending ADR-0057 to mechanically scope local Mac `full`-tier CPU and Metal runs on host-only changes when hosted CI runs on the head commit. Applied in pull request #78.

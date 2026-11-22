@@ -81,4 +81,4 @@ Applied in `adr: 0057 apply`: docs/design.md ("Benchmarks", Roadmap M10, Listing
 
 Amended by ADR-0065 (accepted 2026-11-18): from M10c, the `[Cpu]` vector entries replace item 3's configurations with a grid (vector sizes 1, 4, 8 and 16, blocks of 4, 16 and 64 KiB, both unit settings) and are timed in shuffled interleaved rounds in two processes.
 
-Amended by ADR-0073 (proposed 2026-11-22): on the local Mac, CPU runs cap CubeCL-crate libtest concurrency (`scripts/test-cpu.sh`), and `full`-tier local CPU and Metal runs on host-only changes scope mechanically via `cargo metadata` reverse dependencies when hosted CI runs on the head commit; milestone gates keep the full local workspace matrix.
+Amended by ADR-0073 (accepted 2026-11-22): on the local Mac, CPU runs cap CubeCL-crate libtest concurrency (`scripts/test-cpu.sh`), and `full`-tier local CPU and Metal runs on host-only changes scope mechanically via `cargo metadata` reverse dependencies when hosted CI runs on the head commit; milestone gates keep the full local workspace matrix.
