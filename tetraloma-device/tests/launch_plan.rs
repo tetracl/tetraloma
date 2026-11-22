@@ -355,42 +355,57 @@ fn check_group_plan(
     );
 }
 
-/// Whether `GridError::TooLarge` is justified for a `per_group` plan with these inputs and
-/// injected limits.
+/// Whether `GridError::TooLarge` is justified for a `per_group` plan with `groups` groups,
+/// given the per-cube shape from a probe plan under the same properties and overrides.
 ///
-/// A plan must exist when the shared memory fits, `padded <= 2^30`, `padded` fits
-/// `max_cube_count`, and the launched work fits `u32`: for `k >= 2` cubes, `spread_cubes`
-/// rounds `y` or `z` up by at most one slice (`x * y * z <= 2 * (k - 1)`), and
-/// `(k - 1) * per_cube < num_vectors <= padded`, so
-/// `x * y * z * cube_dim * items_per_unit < 2 * padded * cube`; for `k == 1`, a single CPU
-/// block of at most 64 KiB / 4 bytes per unit covers at most `(16 << 10) * cube`.
+/// `vector_size`, `cube_dim`, `units_per_group` and `items_per_unit` do not depend on `groups`
+/// or `max_cube_count`, so checking ADR-0010's x-then-y-then-z spread and `Shape::plan`'s u32
+/// launched-units bound (`x * y * z * cube_dim * items_per_unit <= u32::MAX`) against the
+/// probe's shape is exact.
 fn per_group_too_large_is_justified(
+    probe: &LaunchPlan,
     groups: usize,
-    units_limit: u32,
-    dim_x: u32,
     count: (u32, u32, u32),
     shared_bytes: usize,
     shared_limit: usize,
 ) -> bool {
-    let padded = groups.max(1).next_multiple_of(VECTOR_PAD) as u128;
-    let cubes = u128::from(count.0) * u128::from(count.1) * u128::from(count.2);
-    let cube = u128::from(units_limit.min(dim_x).max(1));
-    let launched = (2 * padded).max(16 << 10) * cube;
-    shared_bytes > shared_limit
-        || padded > 1u128 << 30
-        || padded > cubes
-        || launched > u128::from(u32::MAX)
+    if shared_bytes > shared_limit {
+        return true;
+    }
+    let Some(padded) = groups.max(1).checked_next_multiple_of(VECTOR_PAD) else {
+        return true;
+    };
+    let num_vectors = (padded / probe.vector_size) as u128;
+    if num_vectors > u128::from(u32::MAX) {
+        return true;
+    }
+    let cube_dim = u128::from(probe.cube_dim.num_elems());
+    let upg = u128::from(probe.units_per_group);
+    let ipu = u128::from(probe.items_per_unit);
+    let per_cube = (cube_dim / upg) * ipu;
+    let cubes = num_vectors.div_ceil(per_cube).max(1);
+    let mx = u128::from(count.0.max(1));
+    let my = u128::from(count.1.max(1));
+    let mz = u128::from(count.2);
+    let x = cubes.min(mx);
+    let y = cubes.div_ceil(x).min(my);
+    let z = cubes.div_ceil(x * y);
+    if z > mz {
+        return true;
+    }
+    let covered = x * y * z * cube_dim * ipu;
+    covered > u128::from(u32::MAX)
 }
 
-/// Regression test for `spread_cubes` 3D grid rounding pushing `covered` past `u32::MAX`
-/// when `padded * cube` alone still fits `u32` (found by `prop_per_group_respects_injected_limits`
-/// on `vulkan-other` for the CPU case; the GPU case overflows `ABSOLUTE_POS` the same way).
+/// Regression test for ADR-0010's `spread_cubes` 3D grid rounding pushing the launched-units
+/// product (`x * y * z * cube_dim * items_per_unit`) past `u32::MAX` when `padded * cube` alone
+/// still fits `u32` (M10 follow-up; reproduced on `vulkan-other` for the injected CPU limits).
 #[test]
 fn per_group_grid_rounding_overflow_is_too_large() {
     let client = test_client();
-    // (cpu, max_cube_count): at 402_647_040 groups both fit two xy planes (z = 2,
-    // covered = 3_221_176_320 <= u32::MAX); at 402_647_041 groups both round to z = 3
-    // (covered = 4_831_764_480 > u32::MAX).
+    // (label, cpu, injected max_cube_count): with a pinned 4 KiB CPU block (items_per_unit = 512),
+    // at 402_647_040 groups both fit two xy planes (z = 2, covered = 3_221_176_320 <= u32::MAX);
+    // at 402_647_041 groups both round to z = 3 (covered = 4_831_764_480 > u32::MAX).
     let cases = [
         ("cpu", true, (65_535, 6, 1196)),
         ("gpu", false, (65_535, 3072, 10)),
@@ -400,8 +415,19 @@ fn per_group_grid_rounding_overflow_is_too_large() {
         props.hardware.max_shared_memory_size = 18_874;
         let run = |groups| {
             with_properties(props.clone(), || {
-                with_cpu_units(CpuUnits::All, || {
-                    LaunchPlan::per_group(&client, KernelKind::GeomFactors, groups, 8, 8, 1, 2, 0)
+                with_cpu_block_bytes(4 << 10, || {
+                    with_cpu_units(CpuUnits::All, || {
+                        LaunchPlan::per_group(
+                            &client,
+                            KernelKind::GeomFactors,
+                            groups,
+                            8,
+                            8,
+                            1,
+                            2,
+                            0,
+                        )
+                    })
                 })
             })
         };
@@ -409,6 +435,10 @@ fn per_group_grid_rounding_overflow_is_too_large() {
             .unwrap_or_else(|e| panic!("{label}: 402_647_040 groups should fit in z = 2: {e}"));
         check_group_plan(&fits, &props, 402_647_040, 8, 1);
         assert_eq!(cube_count(&fits).2, 2, "{label}: expected z = 2");
+        assert!(
+            !per_group_too_large_is_justified(&fits, 402_647_040, count, 0, 18_874),
+            "{label}: TooLarge at 402_647_040 groups must not be considered justified"
+        );
 
         let overflow = run(402_647_041);
         assert!(
@@ -416,13 +446,8 @@ fn per_group_grid_rounding_overflow_is_too_large() {
             "{label}: 402_647_041 groups should overflow u32 at z = 3, got {overflow:?}"
         );
         assert!(
-            per_group_too_large_is_justified(402_647_041, 8, 8, count, 0, 18_874),
+            per_group_too_large_is_justified(&fits, 402_647_041, count, 0, 18_874),
             "{label}: TooLarge at 402_647_041 groups with max_cube_count {count:?} must be justified"
-        );
-        // Well below u32::MAX / (2 * cube), TooLarge must still be rejected.
-        assert!(
-            !per_group_too_large_is_justified(100_000_000, 8, 8, count, 0, 18_874),
-            "{label}: TooLarge at 100_000_000 groups must not be considered justified"
         );
     }
 }
@@ -448,46 +473,54 @@ proptest! {
         let client = test_client();
         let mut props = injected(client.properties(), cpu, units_limit, dim, count, 128);
         props.hardware.max_shared_memory_size = shared_limit;
-        let plan = with_properties(props.clone(), || {
-            let make = || {
-                LaunchPlan::per_group(
-                    &client,
-                    KernelKind::GeomFactors,
-                    groups,
-                    units,
-                    elem_bytes,
-                    max_vector,
-                    2,
-                    shared_bytes,
-                )
-            };
-            let make = || match vector {
-                Some(v) => with_vector_size(v, make),
-                None => make(),
-            };
-            let make = || match block {
-                Some(b) => with_cpu_block_bytes(b, make),
-                None => make(),
-            };
-            with_cpu_units(CpuUnits::All, make)
-        });
+        let run_with = |run_props: DeviceProperties, run_groups: usize, run_shared: usize| {
+            with_properties(run_props, || {
+                let make = || {
+                    LaunchPlan::per_group(
+                        &client,
+                        KernelKind::GeomFactors,
+                        run_groups,
+                        units,
+                        elem_bytes,
+                        max_vector,
+                        2,
+                        run_shared,
+                    )
+                };
+                let make = || match vector {
+                    Some(v) => with_vector_size(v, make),
+                    None => make(),
+                };
+                let make = || match block {
+                    Some(b) => with_cpu_block_bytes(b, make),
+                    None => make(),
+                };
+                with_cpu_units(CpuUnits::All, make)
+            })
+        };
+        let plan = run_with(props.clone(), groups, shared_bytes);
         match plan {
             Ok(plan) => {
                 prop_assert!(shared_bytes <= shared_limit);
                 check_group_plan(&plan, &props, groups, units, max_vector);
             }
             Err(GridError::TooLarge) => {
-                prop_assert!(
-                    per_group_too_large_is_justified(
-                        groups,
-                        units_limit,
-                        dim.0,
-                        count,
-                        shared_bytes,
-                        shared_limit,
-                    ),
-                    "TooLarge for {groups} groups with max_cube_count {count:?}"
-                );
+                if shared_bytes <= shared_limit {
+                    let mut probe_props = props.clone();
+                    probe_props.hardware.max_cube_count = (u32::MAX, 1, 1);
+                    let probe = run_with(probe_props, 1, 0)
+                        .expect("a 1-group probe with unconstrained cube count must fit");
+                    prop_assert!(
+                        per_group_too_large_is_justified(
+                            &probe,
+                            groups,
+                            count,
+                            shared_bytes,
+                            shared_limit,
+                        ),
+                        "TooLarge for {groups} groups with max_cube_count {count:?}"
+                    );
+                }
             }
             Err(other) => prop_assert!(false, "unexpected error {other}"),
         }
