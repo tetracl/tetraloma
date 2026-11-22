@@ -4,11 +4,12 @@
 # (E3), without running the tests:
 #   1. each `shard:` matrix of .github/workflows/ci.yml (cpu-tetraloma, vulkan) holds shards 1-12,
 #      each once (entries like "11,12" hold two; `other` is not a shard);
-#   2. every test of `cargo test -p tetraloma` (lib, integration and doc tests) is selected by
-#      exactly one of shards 1-12, h5-h8 (p = 5-8, which hosted CI does not run) or the exclusion
-#      below, by the shard script's own selection (TETRALOMA_SHARD_LIST=1 lists instead of running).
-#   3. tetraloma's test targets are the library and `integration` (with the doc tests), the ones
-#      the shard script and step 2 know; another target would be in no listing.
+#   2. every test of `cargo test -p tetraloma` (lib, compile, integration and doc tests) is
+#      selected by exactly one of shards 1-12, h5-h8 (p = 5-8, which hosted CI does not run) or
+#      the exclusion below, by the shard script's own selection (TETRALOMA_SHARD_LIST=1 lists
+#      instead of running).
+#   3. tetraloma's test targets are the library, `compile` and `integration` (with the doc tests),
+#      the ones the shard script and step 2 know; another target would be in no listing.
 # It lists the tests of one build, by default debug with default features. The vulkan jobs build
 # release with tetraloma-testing/vulkan, which lists the same tests: no test depends on the
 # profile or on that feature (only on hdf5, metis and scotch, which run outside the shards; E3).
@@ -58,11 +59,11 @@ for p in json.load(sys.stdin)["packages"]:
         for t in p["targets"]:
             print(" ".join(t["kind"]), t["name"])
 ' | sort >"$tmp/targets"
-printf '%s\n' "lib tetraloma" "test integration" >"$tmp/known"
+printf '%s\n' "lib tetraloma" "test compile" "test integration" >"$tmp/known"
 if cmp -s "$tmp/known" "$tmp/targets"; then
     echo "ok    targets: $(tr '\n' ',' <"$tmp/targets" | sed 's/,$//')"
 else
-    echo "FAIL  tetraloma's targets are not the library and \`integration\` (update the shard script and this check):"
+    echo "FAIL  tetraloma's targets are not the library, \`compile\` and \`integration\` (update the shard script and this check):"
     sed 's/^/        /' "$tmp/targets"
     fail=1
 fi
@@ -73,13 +74,14 @@ tag() {
         /^\+ cargo test / {
             t = "integration"
             if ($0 ~ / --lib( |$)/) t = "lib"
+            else if ($0 ~ / --test compile( |$)/) t = "compile"
             else if ($0 ~ / --doc( |$)/) t = "doc"
             next
         }
         /: test$/ { sub(/: test$/, ""); print t " " $0 }
     '
 }
-for target in --lib "--test integration" --doc; do
+for target in --lib "--test compile" "--test integration" --doc; do
     echo "+ cargo test $target"
     # shellcheck disable=SC2086 # $target is one or two words
     cargo test -p tetraloma "$@" $target -- --list --format terse
