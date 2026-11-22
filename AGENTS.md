@@ -125,9 +125,13 @@ Project skills (tetraloma's own; not part of the template):
       design sections it depends on and this rule: "If the design is ambiguous or an API must change, stop and return
       an ADR draft instead of deviating." Subagents cannot ask the maintainer questions.
     - **Reviewers.** Task reviews, plan reviews and both gate passes use Claude Fable at high
-      effort, each reviewer in a fresh read-only context. If it cannot be started, use the
-      strongest read-only reviewer available and say so in the review comment. A plan pull
-      request is reviewed with the brief
+      effort, each reviewer in a fresh read-only context. In T3 Code, start each brief as its own
+      delegated task (`delegate_task`, provider `claudeAgent`, model `claude-fable-5-2`,
+      `effort: high`, isolation `worktree`), one task per reviewer and round, with the brief, the
+      commit, the base branch and the pull request description as a file. Where `delegate_task`
+      is not available, start a fresh read-only subagent with the same model and effort. If
+      Claude Fable cannot be started, use the strongest read-only reviewer available and say so
+      in the review comment. A plan pull request is reviewed with the brief
       `.agents/skills/review/references/gate-architecture.md` in its plan scope, one round, posted
       as in task mode; the plan pull request stays a draft until that round and its fixes are
       done, then you tell the maintainer it is ready.
