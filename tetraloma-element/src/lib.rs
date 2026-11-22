@@ -3,7 +3,6 @@
 // that implements it (docs/plans/M11.md, Tasks).
 //! Finite elements in Ciarlet's sense on the reference cells of tetraloma.
 
-use core::fmt;
 use std::sync::Arc;
 
 use tetraloma_dims::CellType;
@@ -65,7 +64,6 @@ pub struct ElementKey {
 }
 
 #[doc(hidden)]
-#[derive(Debug)]
 pub struct Element {
     _private: (),
 }
@@ -166,7 +164,6 @@ impl Element {
 }
 
 #[doc(hidden)]
-#[derive(Clone, Debug, PartialEq)]
 pub struct ElementTabulation {
     pub nderivs: u32,
     pub num_points: usize,
@@ -176,7 +173,6 @@ pub struct ElementTabulation {
 }
 
 #[doc(hidden)]
-#[derive(Clone, Debug, PartialEq)]
 pub enum BaseTransformation {
     SignedPermutation { perm: Vec<u32>, negate: Vec<bool> },
     Dense { n: usize, matrix: Vec<f64> },
@@ -193,36 +189,4 @@ pub enum ElementError {
         variant: Variant,
     },
     RefCell(RefCellError),
-}
-
-impl fmt::Display for ElementError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Unsupported {
-                family,
-                cell,
-                degree,
-                variant,
-            } => write!(
-                f,
-                "unsupported element: {family:?} ({variant:?}) of degree {degree} on {cell:?}"
-            ),
-            Self::RefCell(err) => err.fmt(f),
-        }
-    }
-}
-
-impl std::error::Error for ElementError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Unsupported { .. } => None,
-            Self::RefCell(err) => Some(err),
-        }
-    }
-}
-
-impl From<RefCellError> for ElementError {
-    fn from(err: RefCellError) -> Self {
-        Self::RefCell(err)
-    }
 }

@@ -12,7 +12,6 @@ pub enum Factor1d {
 }
 
 #[doc(hidden)]
-#[derive(Clone, Debug, PartialEq)]
 pub struct TensorFactors {
     pub factors: Vec<Vec<(Factor1d, u32)>>,
     pub lexicographic: Vec<Vec<usize>>,

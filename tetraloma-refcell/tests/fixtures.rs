@@ -1,7 +1,12 @@
 //! tetraloma-refcell against the fixtures exported from ndelement by tetraloma-conformance
-//! (docs/design.md, A.10): the workspace mirror of the conformance tests, needing neither
-//! ndelement nor BLAS. Regenerate with
+//! and from Basix by `scripts/fixtures/element/generate.py` (docs/design.md, A.10, A.11): the
+//! workspace mirror of the conformance tests, needing neither ndelement nor BLAS nor Python.
+//! Regenerate the ndelement fixtures with
 //! `cargo run --manifest-path conformance/Cargo.toml --bin export-fixtures`.
+//!
+//! Expected JSON schema of `gll_isaac.json` (Basix `gll_isaac` points, M11.T1 / A3):
+//! `{ "<Cell>": { "<p>": [f64; N(p) * tdim] } }` for `Triangle`, `Tetrahedron` and `Prism`,
+//! `p = 1..=15`, flat node-major in Basix's DOF order (converted here with Appendix A.11).
 
 use serde_json::Value;
 use tetraloma_dims::CellType;

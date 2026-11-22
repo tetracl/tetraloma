@@ -122,8 +122,11 @@ fn unsupported_keys_return_unsupported() {
     }
 
     for key in keys {
+        let Err(err) = Element::get(key) else {
+            panic!("expected Unsupported for {key:?}");
+        };
         assert_eq!(
-            Element::get(key).unwrap_err(),
+            err,
             ElementError::Unsupported {
                 family: key.family,
                 cell: key.cell,

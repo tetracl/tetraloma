@@ -347,27 +347,45 @@ fn lagrange_base_transformations_match_ndelement() {
                         match spec["kind"].as_str().unwrap() {
                             "Identity" if ndofs == 0 => assert!(
                                 ours.is_none(),
-                                "{key:?} ({entity:?}, {generator:?}): expected None, got {ours:?}"
+                                "{key:?} ({entity:?}, {generator:?}): expected None when entity has 0 DOFs"
                             ),
-                            "Identity" => assert_eq!(
-                                ours,
-                                Some(&BaseTransformation::SignedPermutation {
-                                    perm: (0..ndofs as u32).collect(),
-                                    negate: vec![false; ndofs],
-                                }),
-                                "{key:?} ({entity:?}, {generator:?}): expected identity"
-                            ),
+                            "Identity" => match ours {
+                                Some(BaseTransformation::SignedPermutation { perm, negate }) => {
+                                    let want_perm: Vec<u32> = (0..ndofs as u32).collect();
+                                    assert_eq!(
+                                        perm, &want_perm,
+                                        "{key:?} ({entity:?}, {generator:?}): expected identity perm"
+                                    );
+                                    assert!(
+                                        negate.len() == ndofs && negate.iter().all(|&b| !b),
+                                        "{key:?} ({entity:?}, {generator:?}): unexpected negation"
+                                    );
+                                }
+                                _ => panic!(
+                                    "{key:?} ({entity:?}, {generator:?}): expected identity SignedPermutation"
+                                ),
+                            },
                             "Permutation" => {
-                                let perm = u32s(&spec["perm"]);
-                                assert_eq!(perm.len(), ndofs, "{key:?}: fixture perm length");
-                                assert_eq!(
-                                    ours,
-                                    Some(&BaseTransformation::SignedPermutation {
+                                let want_perm = u32s(&spec["perm"]);
+                                assert_eq!(want_perm.len(), ndofs, "{key:?}: fixture perm length");
+                                match ours {
+                                    Some(BaseTransformation::SignedPermutation {
                                         perm,
-                                        negate: vec![false; ndofs],
-                                    }),
-                                    "{key:?} ({entity:?}, {generator:?}): permutation mismatch"
-                                );
+                                        negate,
+                                    }) => {
+                                        assert_eq!(
+                                            perm, &want_perm,
+                                            "{key:?} ({entity:?}, {generator:?}): permutation mismatch"
+                                        );
+                                        assert!(
+                                            negate.len() == ndofs && negate.iter().all(|&b| !b),
+                                            "{key:?} ({entity:?}, {generator:?}): unexpected negation"
+                                        );
+                                    }
+                                    _ => panic!(
+                                        "{key:?} ({entity:?}, {generator:?}): expected SignedPermutation"
+                                    ),
+                                }
                             }
                             other => {
                                 panic!("{key:?} ({entity_name}, {tname}): unknown kind {other}")

@@ -55,7 +55,7 @@ if [[ -n "$found" ]]; then
     exit 3
 fi
 
-cubecl_crates=$(cargo tree -p "$no_cubecl" --target all -e normal,build,dev --prefix none --format '{p}' |
+cubecl_crates=$(cargo tree -p "$no_cubecl" --all-features --target all -e normal,build,dev --prefix none --format '{p}' |
     awk '{ print $1 }' | sort -u)
 cubecl_found=$(grep -E '^cubecl(-.*)?$' <<<"$cubecl_crates" || true)
 
