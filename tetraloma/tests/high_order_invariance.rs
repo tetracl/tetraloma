@@ -16,7 +16,9 @@
 //! Comparisons are bitwise on the CPU runtime (up to the sign of zero) and within the tolerance
 //! of the precision scaled by max(1, A / A_ref) on GPUs; the pull-back's last step is compared
 //! on the CPU runtime only (on GPUs a converged step is rounding noise, see pull_back.rs). Every
-//! check runs under the degree policy and every strategy ([`for_each_strategy!`]); each run
+//! check runs under the degree policy and every distinct strategy ([`for_each_strategy!`],
+//! skipping `Fixed(s)` when `Policy` ran `s` uniformly and `Fixed(SumFactorised)` on meshes with
+//! no tensor cell); each run
 //! builds its own E-vector on a copy of the mesh. One test per degree ([`degree_tests!`]); p ≥ 5
 //! runs in release builds only.
 

@@ -580,8 +580,10 @@ impl std::fmt::Display for StrategyRun {
     }
 }
 
-/// The settings of [`for_each_strategy!`]: the environment's alone if `TETRALOMA_GEOM_STRATEGY`
-/// is set, else the policy and then every strategy forced.
+/// The candidate settings of [`for_each_strategy!`]: the environment's alone if
+/// `TETRALOMA_GEOM_STRATEGY` is set, else the policy followed by every strategy forced.
+/// [`run_strategies`] skips `Fixed(s)` when `Policy` ran `s` uniformly across every launch, and
+/// skips `Fixed(Strategy::SumFactorised)` when `sumfact_applies` is `false`.
 pub fn strategy_runs() -> Vec<StrategyRun> {
     if std::env::var_os(GEOM_STRATEGY_VAR).is_some() {
         return vec![StrategyRun::Environment];
