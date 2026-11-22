@@ -6,15 +6,16 @@
 #   - CubeCL-dependent crates run with `--test-threads=${TETRALOMA_CPU_TEST_THREADS:-1}`.
 # Intended for the local Mac (on Locust aarch64, `--test-threads=1` hits C17).
 #
-# Usage: scripts/test-cpu.sh [--dry-run] [--with-rdeps] [-p CRATE]... [CARGO-TEST-ARGS...] [-- LIBTEST-ARGS...]
+# Usage: scripts/test-cpu.sh [--dry-run] [--with-rdeps] [--print-cubecl] [-p CRATE]... [CARGO-TEST-ARGS...] [-- LIBTEST-ARGS...]
 #   -p / --package CRATE  limit the run to the named workspace crate(s); default: whole workspace.
-#   --with-rdeps          expand `-p` crates to include their transitive reverse workspace deps.
+#   --with-rdeps          expand `-p` crates to transitive reverse workspace deps (default-feature graph).
+#   --print-cubecl        print `-p CRATE` args for the selected CubeCL crates on stdout and exit.
 #   --dry-run             print the commands without running cargo test.
 #
 # Notes:
-#   - Rejects `--workspace`, `--all`, `--exclude` and attached `-pCRATE` (use `-p CRATE`).
+#   - Rejects `--workspace`, `--all`, `--exclude`, attached `-pCRATE`, and `-- --test-threads`.
 #   - Package-qualified `--features pkg/feat` or `--test NAME` require matching `-p CRATE`.
-#   - Set `TETRALOMA_CPU_TEST_THREADS` (default: 1) rather than passing `-- --test-threads=...`.
+#   - Set `TETRALOMA_CPU_TEST_THREADS` (default: 1) to change CubeCL libtest thread count.
 set -euo pipefail
 
 script_path="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
@@ -22,6 +23,7 @@ cd "$(dirname "$script_path")/.."
 
 dry_run=0
 with_rdeps=0
+print_cubecl=0
 packages=()
 cargo_args=()
 libtest_args=()
@@ -29,6 +31,12 @@ after_sep=0
 
 while [[ $# -gt 0 ]]; do
     if [[ $after_sep -eq 1 ]]; then
+        case "$1" in
+            --test-threads | --test-threads=*)
+                echo "test-cpu.sh: set TETRALOMA_CPU_TEST_THREADS instead of passing '$1'" >&2
+                exit 2
+                ;;
+        esac
         libtest_args+=("$1")
         shift
         continue
@@ -40,6 +48,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --with-rdeps)
             with_rdeps=1
+            shift
+            ;;
+        --print-cubecl)
+            print_cubecl=1
             shift
             ;;
         -p | --package)
@@ -72,7 +84,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -h | --help)
-            sed -n '2,17p' "$script_path" | sed 's/^# \{0,1\}//'
+            sed -n '2,18p' "$script_path" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *)
@@ -87,7 +99,7 @@ if [[ $with_rdeps -eq 1 && ${#packages[@]} -eq 0 ]]; then
     exit 2
 fi
 
-if [[ -n "${TETRALOMA_TEST_DEVICE:-}" && "${TETRALOMA_TEST_DEVICE}" != "cpu" ]]; then
+if [[ $print_cubecl -eq 0 && -n "${TETRALOMA_TEST_DEVICE:-}" && "${TETRALOMA_TEST_DEVICE}" != "cpu" ]]; then
     echo "test-cpu.sh: CPU-runtime script called with TETRALOMA_TEST_DEVICE=${TETRALOMA_TEST_DEVICE} (unset it or set it to cpu)" >&2
     exit 2
 fi
@@ -99,7 +111,7 @@ if ! [[ "$threads" =~ ^[1-9][0-9]*$ ]]; then
 fi
 
 # Classify selected workspace members into host-only vs CubeCL-dependent via reverse BFS from all
-# `cubecl` / `cubecl-*` packages in the resolved dependency graph (cycle-safe, order-independent).
+# `cubecl` / `cubecl-*` packages in the default-feature resolved graph (cycle-safe, order-independent).
 classified=$(cargo metadata --format-version 1 | python3 -I -c '
 from collections import deque
 import json, sys
@@ -170,6 +182,17 @@ while IFS=' ' read -r kind name; do
     fi
 done <<<"$classified"
 
+if [[ $print_cubecl -eq 1 ]]; then
+    out=()
+    for c in ${cubecl_crates[@]+"${cubecl_crates[@]}"}; do
+        out+=(-p "$c")
+    done
+    if [[ ${#out[@]} -gt 0 ]]; then
+        printf '%s\n' "${out[*]}"
+    fi
+    exit 0
+fi
+
 no_fail_fast=0
 for arg in ${cargo_args[@]+"${cargo_args[@]}"}; do
     if [[ "$arg" == "--no-fail-fast" ]]; then
@@ -193,7 +216,9 @@ if [[ ${#host_crates[@]} -gt 0 ]]; then
     if [[ ${#libtest_args[@]} -gt 0 ]]; then
         cmd+=(-- "${libtest_args[@]}")
     fi
-    if ! run_cmd "${cmd[@]}"; then
+    if run_cmd "${cmd[@]}"; then
+        :
+    else
         status=$?
         if [[ $no_fail_fast -eq 0 ]]; then
             exit "$status"
@@ -206,7 +231,9 @@ if [[ ${#cubecl_crates[@]} -gt 0 ]]; then
     for c in "${cubecl_crates[@]}"; do cmd+=(-p "$c"); done
     cmd+=(${cargo_args[@]+"${cargo_args[@]}"})
     cmd+=(-- --test-threads="$threads" ${libtest_args[@]+"${libtest_args[@]}"})
-    if ! run_cmd "${cmd[@]}"; then
+    if run_cmd "${cmd[@]}"; then
+        :
+    else
         status=$?
     fi
 fi
