@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Check and print the local tool versions of the local Mac (docs/design.md, E0 acceptance):
 # the pinned Python packages in ${TETRALOMA_PYTHON:-.venv/bin/python} (vtk 9.7.1 and meshio 5.3.5,
-# the M5 oracles, ADR-0024; gmsh 4.15.2, the M4 fixture corpus), gmsh, claude >= 2.1.286,
+# the M5 oracles, ADR-0024; gmsh 4.15.2, the M4 fixture corpus; fenics-basix 0.11.0, the M11
+# element oracle, ADR-0071), gmsh, claude >= 2.1.286,
 # rsync >= 3, mpirun, and a parallel HDF5 1.10.10-2.2.0 in ${HDF5_DIR:-/opt/homebrew/opt/hdf5-mpi}
 # (the M8 VTKHDF writer, ADR-0035 rule 9). Prints one line per tool; exits 1 if any check fails.
 #
@@ -43,7 +44,7 @@ report() {
 }
 
 # The pinned Python packages, as pip requirements.
-pins="vtk==9.7.1 meshio==5.3.5 gmsh==4.15.2"
+pins="vtk==9.7.1 meshio==5.3.5 gmsh==4.15.2 fenics-basix==0.11.0"
 
 # pinned <label> <pip package> <version> <python code printing the version>
 pinned() {
@@ -65,11 +66,13 @@ first_version() {
 
 if [ -x "$python" ]; then
     report python "$("$python" -c 'import platform; print(platform.python_version())' 2>/dev/null)"
-    # The M5 oracles (scripts/oracles/vtk_oracle.py, ADR-0024) and the Gmsh wheel that writes
-    # the M4 fixture corpus (docs/plans/M4.md, T1): exactly these versions.
+    # The M5 oracles (scripts/oracles/vtk_oracle.py, ADR-0024), the Gmsh wheel that writes the M4
+    # fixture corpus (docs/plans/M4.md, T1), and Basix for the M11 element fixtures (ADR-0071):
+    # exactly these versions.
     pinned vtk vtk 9.7.1 'from vtkmodules.vtkCommonCore import vtkVersion; print(vtkVersion.GetVTKVersion())'
     pinned meshio meshio 5.3.5 'import meshio; print(meshio.__version__)'
     pinned gmsh-py gmsh 4.15.2 'import gmsh; print(gmsh.__version__)'
+    pinned basix fenics-basix 0.11.0 'import basix; print(basix.__version__)'
 else
     printf '%-8s FAIL: no interpreter at %s (python3 -m venv .venv && .venv/bin/pip install %s)\n' \
         python "$python" "$pins"
