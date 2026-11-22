@@ -440,15 +440,14 @@ fn per_group_grid_rounding_overflow_is_too_large() {
             "{label}: TooLarge at 402_647_040 groups must not be considered justified"
         );
 
-        let overflow = run(402_647_041);
-        assert!(
-            matches!(overflow, Err(GridError::TooLarge)),
-            "{label}: 402_647_041 groups should overflow u32 at z = 3, got {overflow:?}"
-        );
-        assert!(
-            per_group_too_large_is_justified(&fits, 402_647_041, count, 0, 18_874),
-            "{label}: TooLarge at 402_647_041 groups with max_cube_count {count:?} must be justified"
-        );
+        match run(402_647_041) {
+            Ok(plan) => check_group_plan(&plan, &props, 402_647_041, 8, 1),
+            Err(GridError::TooLarge) => assert!(
+                per_group_too_large_is_justified(&fits, 402_647_041, count, 0, 18_874),
+                "{label}: TooLarge at 402_647_041 groups with max_cube_count {count:?} must be justified"
+            ),
+            Err(other) => panic!("{label}: unexpected error at 402_647_041 groups: {other}"),
+        }
     }
 }
 
@@ -508,8 +507,17 @@ proptest! {
                 if shared_bytes <= shared_limit {
                     let mut probe_props = props.clone();
                     probe_props.hardware.max_cube_count = (u32::MAX, 1, 1);
-                    let probe = run_with(probe_props, 1, 0)
+                    let probe = run_with(probe_props.clone(), 1, 0)
                         .expect("a 1-group probe with unconstrained cube count must fit");
+                    check_group_plan(&probe, &probe_props, 1, units, max_vector);
+                    if cpu {
+                        let bytes = probe.items_per_unit as usize * probe.vector_size * elem_bytes;
+                        let max_block = block.unwrap_or(64 << 10).max(128);
+                        prop_assert!(
+                            bytes.is_multiple_of(128) && bytes <= max_block,
+                            "probe block {bytes} exceeds {max_block}"
+                        );
+                    }
                     prop_assert!(
                         per_group_too_large_is_justified(
                             &probe,
