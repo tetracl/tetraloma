@@ -126,7 +126,7 @@ Project skills (tetraloma's own; not part of the template):
       an ADR draft instead of deviating." Subagents cannot ask the maintainer questions.
     - **Reviewers.** Task reviews, plan reviews and both gate passes use Claude Fable at high
       effort, each reviewer in a fresh read-only context. In T3 Code, start each brief as its own
-      delegated task (`delegate_task`, provider `claudeAgent`, model `claude-fable-5-2`,
+      delegated task (`delegate_task`, provider `claudeAgent`, the newest Claude Fable model,
       `effort: high`, isolation `worktree`), one task per reviewer and round, with the brief, the
       commit, the base branch and the pull request description as a file. Where `delegate_task`
       is not available, start a fresh read-only subagent with the same model and effort. If
