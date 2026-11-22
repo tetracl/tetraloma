@@ -66,8 +66,9 @@ struct BudgetState {
 /// by `TETRALOMA_THREAD_COMM_BUDGET`). The ranks of every test of a test executable submit to
 /// one CubeCL device thread, and CubeCL 0.11 spins while that device's queue is full
 /// (docs/cubecl-upstream.md, C14). Without a limit `io_threads` on the CPU runtime spent about
-/// 70% of its CPU time spinning and ran for over half an hour; with the hardware threads as the
-/// limit it took 808 s, with half 311 s and with a quarter 287 s (M6 Mac mini, 12 cores).
+/// 70% of its CPU time spinning and ran for over half an hour; in 2026-11-05 measurements
+/// (before FIFO) it took 808 s with the hardware threads as the limit, 311 s with half and
+/// 287 s with a quarter (M6 Mac mini, 12 cores).
 struct RankBudget {
     state: Mutex<BudgetState>,
     wake: Condvar,
@@ -89,39 +90,17 @@ impl RankBudget {
     }
 
     fn acquire(&self, n: usize) -> usize {
-        struct TicketGuard<'a> {
-            budget: &'a RankBudget,
-            ticket: u64,
-            active: bool,
-        }
-        impl Drop for TicketGuard<'_> {
-            fn drop(&mut self) {
-                if self.active {
-                    let mut state = self.budget.state.lock().unwrap_or_else(|e| e.into_inner());
-                    if let Some(pos) = state.queue.iter().position(|&t| t == self.ticket) {
-                        state.queue.remove(pos);
-                    }
-                    self.budget.wake.notify_all();
-                }
-            }
-        }
-
         let n = n.min(self.total);
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         let ticket = state.next_ticket;
         state.next_ticket += 1;
         state.queue.push_back(ticket);
-        let mut guard = TicketGuard {
-            budget: self,
-            ticket,
-            active: true,
-        };
         while state.queue.front() != Some(&ticket) || state.free < n {
             state = self.wake.wait(state).unwrap_or_else(|e| e.into_inner());
         }
         state.queue.pop_front();
-        guard.active = false;
         state.free -= n;
+        // Throughput-only: if permits remain after admission, wake the next queued waiter.
         if state.free > 0 && !state.queue.is_empty() {
             self.wake.notify_all();
         }
