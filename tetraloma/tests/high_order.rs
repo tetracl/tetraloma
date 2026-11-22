@@ -7,8 +7,10 @@
 //! the normals, of J times κ_F(J) / TD for K, and of the coefficients times κ_F(J) / TD for the
 //! pull-back (ADR-0044); for all but X also by max(1, n / n_ref) and max(1, R) (ADR-0046).
 //!
-//! Every check runs under the degree policy and under every strategy forced
-//! ([`for_each_strategy!`]; under `TETRALOMA_GEOM_STRATEGY` only that setting). The references are
+//! Every check runs under the degree policy and under every distinct strategy
+//! ([`for_each_strategy!`], skipping `Fixed(s)` when `Policy` ran `s` uniformly and skipping
+//! `Fixed(SumFactorised)` on blocks/meshes with no tensor cell; under `TETRALOMA_GEOM_STRATEGY`
+//! only that setting). The references are
 //! computed once per mesh and precision; each run uses a copy of the mesh with an empty E-vector
 //! cache, so the E-vector is built under the run's strategy too. One test per degree ([`degree_tests!`]); p ≥ 5 runs in release builds only.
 
@@ -70,7 +72,8 @@ impl MeshVisitor for Factors<'_> {
             let d_ref = reference::detj(&mesh, b, p).expect("det J");
             let k_ref = reference::pseudo_inverses(&mesh, b, p).expect("K");
             let sk = reference::pinv_scale(&mesh, b, p).expect("K scale");
-            for_each_strategy!(|run| {
+            let sumfact = has_tensor_cell([block.cell.into()]);
+            for_each_strategy!(sumfact, |run| {
                 let mesh = fresh(&mesh);
                 let at = format!("{what}, block {b}, under {run}");
                 let x = field_f64(&physical_points_block(&mesh, b, pts).expect("X")).unwrap();
@@ -94,7 +97,8 @@ impl MeshVisitor for Factors<'_> {
             let want = reference::facet_normals(&mesh, b, fps).expect("facet normals");
             let scale = reference::jacobian_scale(&mesh, b, fps.points().points())
                 .expect("facet normal scale");
-            for_each_strategy!(|run| {
+            let sumfact = has_tensor_cell([block.cell.into()]);
+            for_each_strategy!(sumfact, |run| {
                 let mesh = fresh(&mesh);
                 let n = field_f64(&facet_normals_block(&mesh, b, fps).expect("n")).unwrap();
                 let at = format!("facet normals of {what}, block {b}, under {run}");
@@ -116,7 +120,8 @@ impl MeshVisitor for Factors<'_> {
             let pts = rule.get(block.cell).expect("point set");
             let want = reference::normals(&mesh, b, pts.points()).expect("normals");
             let scale = reference::jacobian_scale(&mesh, b, pts.points()).expect("normal scale");
-            for_each_strategy!(|run| {
+            let sumfact = has_tensor_cell([block.cell.into()]);
+            for_each_strategy!(sumfact, |run| {
                 let mesh = fresh(&mesh);
                 let n = field_f64(&normals_block(&mesh, b, pts).expect("n")).unwrap();
                 let at = format!("normals of {what}, block {b}, under {run}");
@@ -161,7 +166,8 @@ impl MeshVisitor for PullBacks<'_> {
             let scale = reference::pull_back_scale(&mesh, b, pts.points()).expect("scale");
             wants.push((want, scale));
         }
-        for_each_strategy!(|run| {
+        let sumfact = has_tensor_cell(h.blocks.iter().map(|b| b.cell));
+        for_each_strategy!(sumfact, |run| {
             let mesh = fresh(&mesh);
             let x = mesh.physical_points(&rule).expect("X");
             let pb = mesh
@@ -367,4 +373,161 @@ mod open_ended_ranges_launch {
     fn p10() {
         for_each_precision!(client(), open_ended, 10);
     }
+}
+
+#[test]
+fn strategy_dedup_covers_every_distinct_strategy() {
+    use tetraloma_geometry::testing::{
+        Strategy, StrategyFamily, StrategyOverride, record_strategies, with_strategy,
+    };
+    use tetraloma_testing::{cube_box, interval_box, square_box};
+
+    assert_eq!(uniform_strategy(&[]), None);
+    assert_eq!(
+        uniform_strategy(&[
+            (StrategyFamily::EVector, Strategy::Direct),
+            (StrategyFamily::Points, Strategy::Direct),
+        ]),
+        Some(Strategy::Direct)
+    );
+    assert_eq!(
+        uniform_strategy(&[
+            (StrategyFamily::EVector, Strategy::Direct),
+            (StrategyFamily::Points, Strategy::Loops),
+        ]),
+        None
+    );
+
+    let client = client();
+
+    // Tie `has_tensor_cell` directly to `tetraloma-geometry`'s `Strategy::SumFactorised`
+    // dispatch across all seven cell types so the helper can never drift from `Strategy::applies`.
+    let check_sumfact = |cell: CellType, ran: Vec<(StrategyFamily, Strategy)>| {
+        let used_sumfact = ran.contains(&(StrategyFamily::Points, Strategy::SumFactorised));
+        assert_eq!(
+            used_sumfact,
+            has_tensor_cell([cell]),
+            "{cell:?}: dispatch {ran:?} disagrees with has_tensor_cell"
+        );
+        if !used_sumfact {
+            assert!(
+                ran.contains(&(StrategyFamily::Points, Strategy::Loops)),
+                "{cell:?}: non-tensor fallback did not run Loops: {ran:?}"
+            );
+        }
+    };
+    {
+        let m = build::<f32, D1, D1>(&interval_box(1, 1), &client);
+        let r = QuadRule::for_grid(&m, 2).expect("rule");
+        let pts = r.get(Cell1::Interval).expect("pts");
+        let (_, ran) = record_strategies(|| {
+            with_strategy(
+                StrategyFamily::Points,
+                StrategyOverride::Fixed(Strategy::SumFactorised),
+                || physical_points_block(&m, 0, pts).expect("X"),
+            )
+        });
+        check_sumfact(CellType::Interval, ran);
+    }
+    for cell in [Cell2::Triangle, Cell2::Quadrilateral] {
+        let m = build::<f32, D2, D2>(&square_box(cell, 1, 1), &client);
+        let r = QuadRule::for_grid(&m, 2).expect("rule");
+        let pts = r.get(cell).expect("pts");
+        let (_, ran) = record_strategies(|| {
+            with_strategy(
+                StrategyFamily::Points,
+                StrategyOverride::Fixed(Strategy::SumFactorised),
+                || physical_points_block(&m, 0, pts).expect("X"),
+            )
+        });
+        check_sumfact(cell.into(), ran);
+    }
+    for cell in [
+        Cell3::Tetrahedron,
+        Cell3::Hexahedron,
+        Cell3::Prism,
+        Cell3::Pyramid,
+    ] {
+        let m = build::<f32, D3, D3>(&cube_box(cell, 1, 1), &client);
+        let r = QuadRule::for_grid(&m, 2).expect("rule");
+        let pts = r.get(cell).expect("pts");
+        let (_, ran) = record_strategies(|| {
+            with_strategy(
+                StrategyFamily::Points,
+                StrategyOverride::Fixed(Strategy::SumFactorised),
+                || physical_points_block(&m, 0, pts).expect("X"),
+            )
+        });
+        check_sumfact(cell.into(), ran);
+    }
+
+    if std::env::var_os(GEOM_STRATEGY_VAR).is_some() {
+        return;
+    }
+
+    // On a triangle (non-tensor), `for_each_strategy!` skips exactly `Fixed(SumFactorised)` and
+    // `Fixed(uniform)` (when `Policy` ran one strategy uniformly), while running every other run.
+    let tri = build::<f32, D2, D2>(&square_box(Cell2::Triangle, 1, 1), &client);
+    let rule = QuadRule::for_grid(&tri, 2).expect("rule");
+    let pts = rule.get(Cell2::Triangle).expect("pts");
+    let mut tri_runs = Vec::new();
+    let mut policy_ran = Vec::new();
+    for_each_strategy!(false, |run| {
+        tri_runs.push(run);
+        let mesh = fresh(&tri);
+        let (_, ran) = record_strategies(|| physical_points_block(&mesh, 0, pts).expect("X"));
+        if run == StrategyRun::Hook(StrategyOverride::Policy) {
+            policy_ran = ran;
+        }
+    });
+    let policy_uniform = uniform_strategy(&policy_ran);
+    let expected_tri: Vec<StrategyRun> = strategy_runs()
+        .into_iter()
+        .filter(|run| {
+            !matches!(
+                run,
+                StrategyRun::Hook(StrategyOverride::Fixed(s))
+                    if *s == Strategy::SumFactorised || policy_uniform == Some(*s)
+            )
+        })
+        .collect();
+    assert_eq!(tri_runs, expected_tri);
+
+    // On a quadrilateral (tensor), every `Strategy::ALL` executes (either via `Policy` or
+    // `Fixed`), and when `Policy` is mixed (e.g. a second call under a different strategy inside
+    // `Policy`), no `Fixed` run is skipped.
+    let quad = build::<f32, D2, D2>(&square_box(Cell2::Quadrilateral, 1, 1), &client);
+    let rule = QuadRule::for_grid(&quad, 2).expect("rule");
+    let pts = rule.get(Cell2::Quadrilateral).expect("pts");
+    let mut quad_seen = Vec::new();
+    for_each_strategy!(true, |_run| {
+        let mesh = fresh(&quad);
+        let (_, ran) = record_strategies(|| physical_points_block(&mesh, 0, pts).expect("X"));
+        quad_seen.extend(ran);
+    });
+    for s in Strategy::ALL {
+        assert!(
+            quad_seen.contains(&(StrategyFamily::Points, s)),
+            "Points never ran {s:?}: {quad_seen:?}"
+        );
+    }
+
+    let mut mixed_runs = Vec::new();
+    for_each_strategy!(true, |run| {
+        mixed_runs.push(run);
+        let mesh = fresh(&quad);
+        if run == StrategyRun::Hook(StrategyOverride::Policy) {
+            with_strategy(
+                StrategyFamily::Points,
+                StrategyOverride::Fixed(Strategy::Direct),
+                || physical_points_block(&mesh, 0, pts).expect("X"),
+            );
+            with_strategy(
+                StrategyFamily::Points,
+                StrategyOverride::Fixed(Strategy::Loops),
+                || physical_points_block(&mesh, 0, pts).expect("X"),
+            );
+        }
+    });
+    assert_eq!(mixed_runs, strategy_runs());
 }

@@ -9,6 +9,7 @@ members = [
     "tetraloma-geometry",
     "tetraloma-partition",
     "tetraloma-io",
+    "tetraloma-element",
     "tetraloma",
     "ptscotch-sys",
     "parmetis-sys",
@@ -88,6 +89,11 @@ overflow-checks = false
 # p = 8); unoptimised they take minutes (docs/plans/M1b.md, T7). Debug assertions and overflow
 # checks stay on.
 [profile.dev.package.tetraloma-refcell]
+opt-level = 3
+
+# tetraloma-element's acceptance tests factor and apply high-order dual matrices and check
+# tensor-factor equivalence up to p = 8; unoptimised they take minutes (docs/plans/M11.md, T0).
+[profile.dev.package.tetraloma-element]
 opt-level = 3
 
 # Dependencies (not workspace members) optimised in debug builds: the CPU runtime's kernel
