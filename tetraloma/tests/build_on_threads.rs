@@ -2,12 +2,28 @@
 //! builds, and the global cell, vertex and node counts, the owned cell ids and the volume agree
 //! with one rank.
 
+use std::collections::HashMap;
+use std::sync::{Arc, LazyLock, Mutex, OnceLock};
+
 use tetraloma::prelude::*;
 use tetraloma::{CommDyn, GhostMode};
 use tetraloma_device::Client;
 
-use tetraloma_testing::parallel::{self, Case, Coverage, Distribution, MeshCheck, RoundRobin};
+use tetraloma_testing::parallel::{
+    self, Case, Coverage, Distribution, Family, MeshCheck, RoundRobin,
+};
 use tetraloma_testing::{HostChunk, HostMesh, ThreadComm};
+
+struct SerialBuildRef {
+    origin: Vec<f64>,
+    counts: Vec<i64>,
+    volume: f64,
+    ids: Vec<i64>,
+}
+
+type SerialKey = (usize, Family, u32, usize);
+static BUILD_SERIAL: LazyLock<Mutex<HashMap<SerialKey, Arc<OnceLock<SerialBuildRef>>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// The global counts and the volume of a mesh, and the sorted origin ids of the cells this
 /// rank owns, gathered on rank 0.
@@ -49,12 +65,31 @@ impl MeshCheck for Build<'_> {
     {
         let rank = self.comm.rank();
         let at = format!("{case}, rank {rank}");
-        let serial: Mesh<F, TD, GD> = host
-            .chunk(0, 1)
-            .builder(self.client)
-            .unwrap()
-            .build()
-            .unwrap();
+        let key = (
+            Arc::as_ptr(&self.client.properties_shared()) as usize,
+            case.family,
+            case.degree,
+            size_of::<F>(),
+        );
+        let cell = {
+            let mut map = BUILD_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+            Arc::clone(map.entry(key).or_insert_with(|| Arc::new(OnceLock::new())))
+        };
+        let want = cell.get_or_init(|| {
+            let serial: Mesh<F, TD, GD> = host
+                .chunk(0, 1)
+                .builder(self.client)
+                .unwrap()
+                .build()
+                .unwrap();
+            let (counts, volume, ids) = summary(&serial, case.degree);
+            SerialBuildRef {
+                origin: serial.origin().as_ref().to_vec(),
+                counts,
+                volume,
+                ids,
+            }
+        });
         let chunk = match case.distribution {
             Distribution::RankZero if rank != 0 => HostChunk::empty(host.gdim),
             Distribution::RankZero => host.chunk(0, 1),
@@ -81,19 +116,18 @@ impl MeshCheck for Build<'_> {
         }
         assert_eq!(
             mesh.origin().as_ref(),
-            serial.origin().as_ref(),
+            want.origin.as_slice(),
             "{at}: origin"
         );
 
         let (counts, volume, ids) = summary(&mesh, case.degree);
-        let (want_counts, want_volume, want_ids) = summary(&serial, case.degree);
-        assert_eq!(counts, want_counts, "{at}: cell, vertex and node counts");
+        assert_eq!(counts, want.counts, "{at}: cell, vertex and node counts");
         if rank == 0 {
-            assert_eq!(ids, want_ids, "{at}: owned cells");
+            assert_eq!(ids, want.ids, "{at}: owned cells");
         }
         let tol = if size_of::<F>() == 8 { 1e-12 } else { 1e-5 };
-        let err = (volume - want_volume).abs() / want_volume.abs();
-        assert!(err <= tol, "{at}: volume {volume} vs {want_volume}");
+        let err = (volume - want.volume).abs() / want.volume.abs();
+        assert!(err <= tol, "{at}: volume {volume} vs {}", want.volume);
     }
 }
 

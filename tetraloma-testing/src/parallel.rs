@@ -19,6 +19,9 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
+use std::hash::Hash;
+use std::mem::Discriminant;
+use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 
 use cubecl::prelude::Client;
 use tetraloma::{
@@ -31,8 +34,33 @@ use tetraloma_dims::CellType;
 
 use crate::{HostChunk, HostMesh, TOL_F32, TOL_F64, supports};
 
+/// Process-local thread-safe cache for one-rank (`Serial`) reference snapshots, keyed per device
+/// server so concurrent `ThreadComm` ranks and repeated rank-count/ghost-mode runs compute each
+/// serial reference once instead of on every rank.
+pub(crate) struct SerialCache<K, V>(LazyLock<Mutex<HashMap<K, Arc<OnceLock<V>>>>>);
+
+impl<K: Eq + Hash, V> SerialCache<K, V> {
+    pub(crate) const fn new() -> Self {
+        Self(LazyLock::new(|| Mutex::new(HashMap::new())))
+    }
+
+    pub(crate) fn get_or_init(&self, key: K, init: impl FnOnce() -> V) -> Arc<OnceLock<V>> {
+        let cell = {
+            let mut map = self.0.lock().unwrap_or_else(|e| e.into_inner());
+            Arc::clone(map.entry(key).or_insert_with(|| Arc::new(OnceLock::new())))
+        };
+        cell.get_or_init(init);
+        cell
+    }
+}
+
+/// Identifies the device server behind `client` (two clients sharing a server share `properties`).
+pub(crate) fn client_key(client: &Client) -> usize {
+    Arc::as_ptr(&client.properties_shared()) as usize
+}
+
 /// A test mesh family.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Family {
     /// `cube_box` of one cell type.
     Cube(Cell3),
@@ -660,6 +688,8 @@ pub struct Invariance<'a, C: Comm> {
     pub client: &'a Client,
 }
 
+static INVARIANCE_SERIAL: SerialCache<(usize, Family, u32, usize), Summary> = SerialCache::new();
+
 impl<C: Comm> MeshCheck for Invariance<'_, C> {
     fn check<F, TD, GD>(&mut self, case: &Case, host: &HostMesh)
     where
@@ -670,11 +700,22 @@ impl<C: Comm> MeshCheck for Invariance<'_, C> {
         let rank = self.comm.rank();
         let at = format!("{case}, rank {rank}");
         let quad = 2 * case.degree;
-        let serial = ok(
-            build::<F, TD, GD, _>(Serial, self.client, host, case, CellOrdering::Input),
-            &at,
+        let want_cell = INVARIANCE_SERIAL.get_or_init(
+            (
+                client_key(self.client),
+                case.family,
+                case.degree,
+                size_of::<F>(),
+            ),
+            || {
+                let serial = ok(
+                    build::<F, TD, GD, _>(Serial, self.client, host, case, CellOrdering::Input),
+                    &at,
+                );
+                ok(summarise(&serial, quad), &at)
+            },
         );
-        let want = ok(summarise(&serial, quad), &at);
+        let want = want_cell.get().expect("initialised");
         let mesh = ok(
             build::<F, TD, GD, _>(
                 self.comm.clone(),
@@ -1634,6 +1675,8 @@ where
     })
 }
 
+static SUBMESH_SERIAL: SerialCache<(usize, Family, u32, usize), Submeshes> = SerialCache::new();
+
 /// The submesh check of one case on `comm`, in scalar `F`.
 fn submesh_case<F, TD, GD, C>(comm: &C, client: &Client, case: &Case, host: &HostMesh)
 where
@@ -1647,20 +1690,26 @@ where
     let at = format!("{case}, rank {rank}");
     let centre = bbox_centre(host);
     let tol = if size_of::<F>() == 8 { 1e-10 } else { TOL_F32 };
-    let mut serial = ok(
-        build::<F, TD, GD, _>(Serial, client, host, case, CellOrdering::Input),
-        &at,
+    let want_cell = SUBMESH_SERIAL.get_or_init(
+        (client_key(client), case.family, case.degree, size_of::<F>()),
+        || {
+            let mut serial = ok(
+                build::<F, TD, GD, _>(Serial, client, host, case, CellOrdering::Input),
+                &at,
+            );
+            ok(
+                submeshes(
+                    client,
+                    &mut serial,
+                    &centre,
+                    case.degree,
+                    &format!("{at} (one rank)"),
+                ),
+                &at,
+            )
+        },
     );
-    let want = ok(
-        submeshes(
-            client,
-            &mut serial,
-            &centre,
-            case.degree,
-            &format!("{at} (one rank)"),
-        ),
-        &at,
-    );
+    let want = want_cell.get().expect("initialised");
     let mut mesh = ok(
         build::<F, TD, GD, _>(comm.clone(), client, host, case, CellOrdering::Input),
         &at,
@@ -1722,15 +1771,72 @@ where
     Ok(all)
 }
 
-/// The topology of a child on `comm` against the one-rank child `want`: the cell summary, the
-/// vertex count, each vertex owned once, ghosts that receive their global ids by a forward
-/// scatter over every map, vertex sharer rows that list the holders with an owned-cell holder
-/// as owner, and the entities of every lower dimension.
+/// Host snapshot of a one-rank (`Serial`) child mesh for [`child_topology_matches`].
+struct ChildTopologyRef {
+    summary: ChildSummary,
+    num_vertices: usize,
+    sorted_vertex_ids: Vec<i64>,
+    num_nodes: usize,
+    sorted_node_bits: Vec<Vec<i64>>,
+    entity_counts: Vec<i64>,
+    cell_block_counts: Vec<i64>,
+}
+
+impl ChildTopologyRef {
+    fn from_serial<F, TD, GD>(want: &mut Mesh<F, TD, GD, Serial>, degree: u32) -> Result<Self>
+    where
+        F: Real,
+        TD: TopoDim + EmbeddedIn<GD>,
+        GD: Dim,
+    {
+        let summary = child_summary(want, degree)?;
+        let num_vertices = want.vertex_index_map().num_local();
+        let mut sorted_vertex_ids = decode_ids(&want.vertex_origin_ids().to_host()?);
+        sorted_vertex_ids.sort_unstable();
+        let num_nodes = want.node_index_map().num_local();
+        let gd = GD::N;
+        let raw_bits: Vec<i64> = want
+            .nodes()
+            .to_host()?
+            .iter()
+            .map(|v| v.widen().to_bits() as i64)
+            .collect();
+        let mut sorted_node_bits: Vec<Vec<i64>> =
+            raw_bits.chunks_exact(gd).map(<[i64]>::to_vec).collect();
+        sorted_node_bits.sort_unstable();
+        let sizes =
+            |b: &[tetraloma::EntityBlock]| b.iter().map(|b| b.index_map.size_global()).sum::<i64>();
+        let mut entity_counts = Vec::with_capacity(TD::N);
+        for d in 0..TD::N {
+            want.create_entities(d)?;
+            entity_counts.push(sizes(want.entity_blocks(d)?));
+        }
+        let cell_block_counts = want
+            .cell_blocks()
+            .iter()
+            .map(|b| b.index_map.size_global())
+            .collect();
+        Ok(Self {
+            summary,
+            num_vertices,
+            sorted_vertex_ids,
+            num_nodes,
+            sorted_node_bits,
+            entity_counts,
+            cell_block_counts,
+        })
+    }
+}
+
+/// The topology of a child on `comm` against the one-rank child snapshot `want`: the cell
+/// summary, the vertex count, each vertex owned once, ghosts that receive their global ids by a
+/// forward scatter over every map, vertex sharer rows that list the holders with an owned-cell
+/// holder as owner, and the entities of every lower dimension.
 #[allow(clippy::too_many_arguments)]
 fn child_topology_matches<F, TD, GD, C>(
     client: &Client,
     child: &mut Mesh<F, TD, GD, C>,
-    want: &mut Mesh<F, TD, GD, Serial>,
+    want: &ChildTopologyRef,
     degree: u32,
     rank: usize,
     tol: f64,
@@ -1742,25 +1848,17 @@ where
     GD: Dim,
     C: Comm,
 {
-    assert_same_child(
-        &child_summary(child, degree)?,
-        &child_summary(want, degree)?,
-        rank,
-        tol,
-        at,
-    );
+    assert_same_child(&child_summary(child, degree)?, &want.summary, rank, tol, at);
     let map = child.vertex_index_map();
     assert_eq!(
         map.size_global() as usize,
-        want.vertex_index_map().num_local(),
+        want.num_vertices,
         "{at}: child vertex count"
     );
     let owned = owned_vertex_ids(child)?;
     if rank == 0 {
-        let mut all = decode_ids(&want.vertex_origin_ids().to_host()?);
-        all.sort_unstable();
         assert!(
-            owned == all,
+            owned == want.sorted_vertex_ids,
             "{at}: owned child vertices are not each vertex once"
         );
     }
@@ -1799,10 +1897,9 @@ where
         |b: &[tetraloma::EntityBlock]| b.iter().map(|b| b.index_map.size_global()).sum::<i64>();
     for d in 0..TD::N {
         child.create_entities(d)?;
-        want.create_entities(d)?;
         assert_eq!(
             sizes(child.entity_blocks(d)?),
-            sizes(want.entity_blocks(d)?),
+            want.entity_counts[d],
             "{at}: child entities of dimension {d}"
         );
     }
@@ -1820,12 +1917,12 @@ where
     Ok(())
 }
 
-/// The nodes of a child on `comm` against the one-rank child `want`: the node count, each node
-/// owned once (bitwise coordinates; the parent's origin is partition-independent), and every
-/// corner node owned by the owner of its vertex.
+/// The nodes of a child on `comm` against the one-rank child snapshot `want`: the node count,
+/// each node owned once (bitwise coordinates; the parent's origin is partition-independent), and
+/// every corner node owned by the owner of its vertex.
 fn child_nodes_match<F, TD, GD, C>(
     child: &Mesh<F, TD, GD, C>,
-    want: &Mesh<F, TD, GD, Serial>,
+    want: &ChildTopologyRef,
     rank: usize,
     at: &str,
 ) -> Result<()>
@@ -1839,7 +1936,7 @@ where
     let nodes = child.node_index_map();
     assert_eq!(
         nodes.size_global() as usize,
-        want.node_index_map().num_local(),
+        want.num_nodes,
         "{at}: child node count"
     );
     let bits = |x: &[F]| -> Vec<i64> { x.iter().map(|v| v.widen().to_bits() as i64).collect() };
@@ -1849,13 +1946,12 @@ where
     got.extend(all.chunks_exact(gd));
     got.sort_unstable();
     if rank == 0 {
-        let reference = bits(&want.nodes().to_host()?);
-        let mut reference: Vec<&[i64]> = reference.chunks_exact(gd).collect();
-        reference.sort_unstable();
-        assert!(
-            got == reference,
-            "{at}: owned child nodes are not each node once"
-        );
+        let equal = got.len() == want.sorted_node_bits.len()
+            && got
+                .iter()
+                .zip(&want.sorted_node_bits)
+                .all(|(g, w)| *g == w.as_slice());
+        assert!(equal, "{at}: owned child nodes are not each node once");
     }
     let me = rank as i32;
     let owner = |m: &IndexMap, i: u32| {
@@ -1890,6 +1986,11 @@ where
     Ok(())
 }
 
+static SUBMESH_TOPO_SERIAL: SerialCache<
+    (usize, Family, u32, usize),
+    (ChildTopologyRef, ChildTopologyRef),
+> = SerialCache::new();
+
 /// The child topology check of one case on `comm`, in scalar `F`: `boundary()` and the
 /// `facet_submesh` of the facets tagged 100 against a one-rank build's, with their `EntityMap`s,
 /// outward normals and ∮ x·n = gdim · V on the boundary.
@@ -1905,17 +2006,30 @@ where
     let at = format!("{case}, rank {rank}");
     let tol = if size_of::<F>() == 8 { 1e-10 } else { TOL_F32 };
     let fdim = TD::N - 1;
-    let serial = ok(
-        build::<F, TD, GD, _>(Serial, client, host, case, CellOrdering::Input),
-        &at,
+    let degree = 3 * case.degree;
+    let want_cell = SUBMESH_TOPO_SERIAL.get_or_init(
+        (client_key(client), case.family, case.degree, size_of::<F>()),
+        || {
+            let serial = ok(
+                build::<F, TD, GD, _>(Serial, client, host, case, CellOrdering::Input),
+                &at,
+            );
+            let (mut want_b, _) = ok(serial.boundary(), &at);
+            let ref_b = ok(ChildTopologyRef::from_serial(&mut want_b, degree), &at);
+            let (mut want_f, _) = ok(
+                serial.facet_submesh(&ok(serial.tags().group(fdim, 100), &at)),
+                &at,
+            );
+            let ref_f = ok(ChildTopologyRef::from_serial(&mut want_f, degree), &at);
+            (ref_b, ref_f)
+        },
     );
+    let (want_boundary, want_facet) = want_cell.get().expect("initialised");
     let mesh = ok(
         build::<F, TD, GD, _>(comm.clone(), client, host, case, CellOrdering::Input),
         &at,
     );
-    let degree = 3 * case.degree;
     let (mut got, map) = ok(mesh.boundary(), &at);
-    let (mut want, _) = ok(serial.boundary(), &at);
     ok(
         check_entity_map(&mesh, &got, &map, &format!("{at}: boundary")),
         &at,
@@ -1935,7 +2049,7 @@ where
         child_topology_matches(
             client,
             &mut got,
-            &mut want,
+            want_boundary,
             degree,
             rank,
             tol,
@@ -1949,15 +2063,11 @@ where
         check_entity_map(&mesh, &got, &map, &format!("{at}: facet_submesh")),
         &at,
     );
-    let (mut want, _) = ok(
-        serial.facet_submesh(&ok(serial.tags().group(fdim, 100), &at)),
-        &at,
-    );
     ok(
         child_topology_matches(
             client,
             &mut got,
-            &mut want,
+            want_facet,
             degree,
             rank,
             tol,
@@ -2042,6 +2152,9 @@ where
 }
 
 /// One corner case of [`submesh_corner_cases`] in scalar `F`.
+type CornerKey = (usize, Family, u32, usize, Option<Vec<Vec<i64>>>);
+static CORNER_SERIAL: SerialCache<CornerKey, ChildTopologyRef> = SerialCache::new();
+
 fn corner_case<F: Real, C: Comm>(
     comm: &C,
     client: &Client,
@@ -2055,27 +2168,42 @@ fn corner_case<F: Real, C: Comm>(
         keys.map(<[_]>::len)
     );
     let tol = if size_of::<F>() == 8 { 1e-10 } else { TOL_F32 };
-    let serial = ok(
-        build::<F, D3, D3, _>(Serial, client, host, case, CellOrdering::Input),
-        &at,
+    let want_cell = CORNER_SERIAL.get_or_init(
+        (
+            client_key(client),
+            case.family,
+            case.degree,
+            size_of::<F>(),
+            keys.map(<[_]>::to_vec),
+        ),
+        || {
+            let serial = ok(
+                build::<F, D3, D3, _>(Serial, client, host, case, CellOrdering::Input),
+                &at,
+            );
+            let (mut want, _) = ok(facet_child(&serial, keys), &at);
+            ok(
+                ChildTopologyRef::from_serial(&mut want, 2 * case.degree),
+                &at,
+            )
+        },
     );
+    let want = want_cell.get().expect("initialised");
     let mesh = ok(
         build::<F, D3, D3, _>(comm.clone(), client, host, case, CellOrdering::Input),
         &at,
     );
     let (mut got, map) = ok(facet_child(&mesh, keys), &at);
     ok(check_entity_map(&mesh, &got, &map, &at), &at);
-    let (mut want, _) = ok(facet_child(&serial, keys), &at);
     if let Some(keys) = keys {
-        let blocks: Vec<i64> = want
-            .cell_blocks()
-            .iter()
-            .map(|b| b.index_map.size_global())
-            .collect();
-        assert_eq!(blocks, vec![1; keys.len()], "{at}: one child per block");
+        assert_eq!(
+            want.cell_block_counts,
+            vec![1; keys.len()],
+            "{at}: one child per block"
+        );
     }
     ok(
-        child_topology_matches(client, &mut got, &mut want, 2 * case.degree, rank, tol, &at),
+        child_topology_matches(client, &mut got, want, 2 * case.degree, rank, tol, &at),
         &at,
     );
 }
@@ -2249,6 +2377,11 @@ where
     Ok((flags, min))
 }
 
+type OrientRef = std::result::Result<HashMap<i64, u32>, (Discriminant<GridError>, String)>;
+
+static ORIENT_SERIAL: SerialCache<(usize, Family, u32, usize, usize), OrientRef> =
+    SerialCache::new();
+
 /// The orient check of one case on `comm`, in scalar `F`.
 fn orient_case<F, TD, GD, C>(comm: &C, client: &Client, case: &Case, host: &HostMesh)
 where
@@ -2259,20 +2392,35 @@ where
 {
     let rank = comm.rank();
     let host = host.with_flipped_cells(17 + u64::from(case.degree), 0.5);
-    for (rule, error) in orient_expectations(case.family) {
+    for (rule_idx, (rule, error)) in orient_expectations(case.family).into_iter().enumerate() {
         let at = format!("{case}, {rule:?}, rank {rank}");
-        let mut serial = ok(
-            build::<F, TD, GD, _>(Serial, client, &host, case, CellOrdering::Input),
-            &at,
+        let want_cell = ORIENT_SERIAL.get_or_init(
+            (
+                client_key(client),
+                case.family,
+                case.degree,
+                size_of::<F>(),
+                rule_idx,
+            ),
+            || {
+                let mut serial = ok(
+                    build::<F, TD, GD, _>(Serial, client, &host, case, CellOrdering::Input),
+                    &at,
+                );
+                match oriented(&mut serial, rule, case.degree) {
+                    Ok((flags, _)) => Ok(flags),
+                    Err(e) => Err((std::mem::discriminant(&e), e.to_string())),
+                }
+            },
         );
+        let want = want_cell.get().expect("initialised");
         let mut mesh = ok(
             build::<F, TD, GD, _>(comm.clone(), client, &host, case, CellOrdering::Input),
             &at,
         );
-        let want = oriented(&mut serial, rule, case.degree);
         let got = oriented(&mut mesh, rule, case.degree);
         match (error, want, got) {
-            (None, Ok((want, _)), Ok((got, min))) => {
+            (None, Ok(want), Ok((got, min))) => {
                 for (id, flag) in &got {
                     assert_eq!(Some(flag), want.get(id), "{at}: flag of cell {id}");
                 }
@@ -2281,14 +2429,14 @@ where
                     "{at}: a normal has the wrong direction ({min:e})"
                 );
             }
-            (Some(e), Err(w), Err(g)) => {
-                let same = |x: &GridError| std::mem::discriminant(x) == std::mem::discriminant(&e);
-                assert!(same(&w), "{at}: one rank: {w}, not {e}");
-                assert!(same(&g), "{at}: {g}, not {e}");
+            (Some(e), Err((w_disc, w_msg)), Err(g)) => {
+                let want_disc = std::mem::discriminant(&e);
+                assert_eq!(*w_disc, want_disc, "{at}: one rank: {w_msg}, not {e}");
+                assert_eq!(std::mem::discriminant(&g), want_disc, "{at}: {g}, not {e}");
             }
             (e, w, g) => panic!(
                 "{at}: expected {e:?}; one rank gave {:?}, this build {:?}",
-                w.err(),
+                w.as_ref().err().map(|(_, msg)| msg),
                 g.err()
             ),
         }
@@ -2371,9 +2519,7 @@ where
     use crate::reference::{
         Amplification, jacobian_scale, pinv_scale, pull_back_scale, tolerance_scale,
     };
-    use tetraloma::{
-        PullBackOptions, detj_block, jacobians_block, physical_points_block, pseudo_inverse_block,
-    };
+    use tetraloma::{PullBackOptions, detj_block, jacobians_block, pseudo_inverse_block};
     let (out, ran) =
         tetraloma_geometry::testing::record_strategies(|| -> Result<Vec<BlockValues>> {
             let rule = QuadRule::for_grid(mesh, degree)?;
@@ -2405,7 +2551,7 @@ where
                 let mut quantities = vec![
                     CellValues {
                         name: "X",
-                        values: per_cell(&physical_points_block(mesh, b, pts)?, n)?,
+                        values: per_cell(&x_all.blocks[b], n)?,
                         scale: sx,
                     },
                     CellValues {
@@ -2495,6 +2641,9 @@ fn compare_per_cell<F: Real>(got: &[BlockValues], want: &[BlockValues], at: &str
     }
 }
 
+static HIGH_ORDER_SERIAL: SerialCache<(usize, Family, u32, usize, bool), Vec<BlockValues>> =
+    SerialCache::new();
+
 /// The parallel and one-rank meshes of `case` on `comm`, their values by `values`, compared.
 fn high_order_case<F, TD, GD, C>(
     comm: &C,
@@ -2511,17 +2660,29 @@ fn high_order_case<F, TD, GD, C>(
 {
     let at = format!("{case}, rank {}", comm.rank());
     let gpu = !crate::bitwise_device();
-    let serial = ok(
-        build::<F, TD, GD, _>(Serial, client, host, case, CellOrdering::Input),
-        &at,
+    let want_cell = HIGH_ORDER_SERIAL.get_or_init(
+        (
+            client_key(client),
+            case.family,
+            case.degree,
+            size_of::<F>(),
+            gpu,
+        ),
+        || {
+            let serial = ok(
+                build::<F, TD, GD, _>(Serial, client, host, case, CellOrdering::Input),
+                &at,
+            );
+            ok(values(&serial, gpu), &at)
+        },
     );
-    let want = ok(values(&serial, gpu), &at);
+    let want = want_cell.get().expect("initialised");
     let mesh = ok(
         build::<F, TD, GD, _>(comm.clone(), client, host, case, CellOrdering::Input),
         &at,
     );
     let got = ok(values_on(&mesh, false), &at);
-    compare_per_cell::<F>(&got, &want, &at);
+    compare_per_cell::<F>(&got, want, &at);
 }
 
 /// Facet normals per local cell of block `b` of the codimension-0 `mesh`, at the facet rule of
@@ -2688,5 +2849,42 @@ mod tests {
                 "MPI p = {p}"
             );
         }
+    }
+
+    #[test]
+    fn serial_cache_computes_once_per_key_under_concurrency() {
+        use std::sync::Barrier;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let cache: Arc<SerialCache<usize, usize>> = Arc::new(SerialCache::new());
+        let calls = Arc::new(AtomicUsize::new(0));
+        let barrier = Arc::new(Barrier::new(4));
+
+        let mut handles = Vec::new();
+        for _ in 0..4 {
+            let cache = Arc::clone(&cache);
+            let calls = Arc::clone(&calls);
+            let barrier = Arc::clone(&barrier);
+            handles.push(std::thread::spawn(move || {
+                barrier.wait();
+                let cell = cache.get_or_init(1, || {
+                    calls.fetch_add(1, Ordering::SeqCst);
+                    42
+                });
+                *cell.get().expect("initialised")
+            }));
+        }
+        for h in handles {
+            assert_eq!(h.join().expect("thread"), 42);
+        }
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+        // Distinct keys compute independently.
+        let other = cache.get_or_init(2, || {
+            calls.fetch_add(1, Ordering::SeqCst);
+            99
+        });
+        assert_eq!(*other.get().expect("initialised"), 99);
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
     }
 }

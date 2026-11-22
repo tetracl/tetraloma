@@ -33,7 +33,7 @@ use cubecl::prelude::Client;
 use tetraloma::prelude::*;
 
 use crate::oracle::{Oracle, repo};
-use crate::parallel::{decode_ids, gather_to_root};
+use crate::parallel::{SerialCache, client_key, decode_ids, gather_to_root};
 use crate::{HostMesh, supports};
 
 // ---------------------------------------------------------------------------------------------
@@ -74,7 +74,7 @@ impl Partitioner for BoxPartitioner {
 }
 
 /// The file of a read case.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Source {
     /// A file of the Gmsh fixture corpus.
     Fixture(String),
@@ -540,6 +540,8 @@ pub fn global_mesh_identical<C: Comm>(comm: &C, client: &Client, case: &ReadCase
     }
 }
 
+static IO_SERIAL_SNAPSHOT: SerialCache<(usize, Source, usize), Snapshot> = SerialCache::new();
+
 fn global_mesh_identical_in<F: Real, C: Comm>(
     comm: &C,
     client: &Client,
@@ -548,18 +550,29 @@ fn global_mesh_identical_in<F: Real, C: Comm>(
 ) {
     let rank = comm.rank();
     let at = format!("{case}, {} ranks, rank {rank}", comm.size());
-    // The one-rank read is the reference on rank 0; ParMETIS needs its cell count on every rank.
+    // The one-rank read is cached per (device, source, scalar size) across rank counts and ghost
+    // modes; ParMETIS needs its cell count on every rank.
     let one_rank = || {
-        let serial = ok(
-            gmsh::read::<F, Serial>(client, Serial, path, GmshOptions::default()),
-            &format!("{at}: one-rank read"),
-        );
-        ok(snapshot_any(&serial, true), &at)
+        IO_SERIAL_SNAPSHOT.get_or_init(
+            (client_key(client), case.source.clone(), size_of::<F>()),
+            || {
+                let serial = ok(
+                    gmsh::read::<F, Serial>(client, Serial, path, GmshOptions::default()),
+                    &format!("{at}: one-rank read"),
+                );
+                ok(snapshot_any(&serial, true), &at)
+            },
+        )
     };
     let read = read_on::<F, C>(client, comm.clone(), path, case.ghosts, case.partitioner);
     let mut want = None;
     if matches!(case.partitioner, Choice::Named("parmetis", _)) {
-        let cells = want.insert(one_rank()).cells.len();
+        let cells = want
+            .insert(one_rank())
+            .get()
+            .expect("initialised")
+            .cells
+            .len();
         if cells < comm.size() {
             // Fewer cells than ranks leave a read chunk empty, and ParMETIS 4 fails on a rank
             // without vertices (ADR-0029, item 12).
@@ -582,8 +595,9 @@ fn global_mesh_identical_in<F: Real, C: Comm>(
     let Some(global) = ok(gather_snapshot(comm, &local), &at) else {
         return;
     };
-    let want = want.unwrap_or_else(one_rank);
-    assert_same_snapshot(&global, &want, &at);
+    let want_cell = want.unwrap_or_else(one_rank);
+    let want = want_cell.get().expect("initialised");
+    assert_same_snapshot(&global, want, &at);
 }
 
 // ---------------------------------------------------------------------------------------------
