@@ -2,6 +2,7 @@
 
 mod fixtures;
 mod node_counts;
+mod node_families;
 mod node_maps;
 mod quadrature;
 mod tabulation;

@@ -1,12 +1,18 @@
 //! tetraloma-refcell against the fixtures exported from ndelement by tetraloma-conformance
-//! (docs/design.md, A.10): the workspace mirror of the conformance tests, needing neither
-//! ndelement nor BLAS. Regenerate with
+//! and from Basix by `scripts/fixtures/element/generate.py` (docs/design.md, A.10, A.11): the
+//! workspace mirror of the conformance tests, needing neither ndelement nor BLAS nor Python.
+//! Regenerate the ndelement fixtures with
 //! `cargo run --manifest-path conformance/Cargo.toml --bin export-fixtures`.
+//!
+//! Expected JSON schema of `gll_isaac.json` (Basix `gll_isaac` points, M11.T1 / A3):
+//! `{ "<Cell>": { "<p>": [f64; N(p) * tdim] } }` for `Triangle`, `Tetrahedron` and `Prism`,
+//! `p = 1..=15`, flat node-major in Basix's DOF order (converted here with Appendix A.11).
 
 use serde_json::Value;
 use tetraloma_dims::CellType;
 use tetraloma_refcell::{
-    NodeFamily, lagrange_points, orientation_bits, sub_entities, sub_entity_types, tdim, vertices,
+    NodeFamily, lagrange_entity_nodes, lagrange_points, num_sub_entities, orientation_bits,
+    sub_entities, sub_entity_types, tdim, vertices,
 };
 
 fn fixture(file: &str) -> Value {
@@ -185,6 +191,65 @@ fn lagrange_points_match_fixture() {
                     assert!(
                         (a - b).abs() <= 1e-14,
                         "{name} {family_name} p = {p}, entry {k}: {a} vs {b}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// Appendix A.11: Basix sub-entity index to tetraloma sub-entity index (an involution).
+fn a11_entity(cell: CellType, dim: usize, basix_e: usize) -> usize {
+    match (cell, dim) {
+        (CellType::Triangle, 1) => 2 - basix_e,
+        (CellType::Tetrahedron, 1) => 5 - basix_e,
+        (CellType::Tetrahedron, 2) => 3 - basix_e,
+        _ => basix_e,
+    }
+}
+
+/// M11 acceptance A3: GLL points on triangles, tetrahedra and prisms equal Basix's `gll_isaac`
+/// points to 1e-14 for p = 1–15 (fixture exported in Basix's DOF order, converted with A.11).
+#[test]
+#[ignore = "pending M11.T2"]
+fn gll_points_match_basix_isaac() {
+    let data = fixture("gll_isaac.json");
+    let cells = data.as_object().unwrap();
+
+    let mut names: Vec<&str> = cells.keys().map(String::as_str).collect();
+    names.sort_unstable();
+    assert_eq!(names, ["Prism", "Tetrahedron", "Triangle"]);
+
+    let want_ps: Vec<u32> = (1..=15).collect();
+    for (name, degrees_val) in cells {
+        let c = cell(name);
+        let td = tdim(c);
+        let degrees = degrees_val.as_object().unwrap();
+        let mut ps: Vec<u32> = degrees.keys().map(|d| d.parse().unwrap()).collect();
+        ps.sort_unstable();
+        assert_eq!(ps, want_ps, "degrees of {name}");
+
+        for p in ps {
+            let want = floats(&degrees[&p.to_string()]);
+            let ours = lagrange_points(c, p, NodeFamily::Gll).unwrap();
+            assert_eq!(ours.len(), want.len(), "{name} p = {p}");
+
+            let mut basix_to_tetra = Vec::with_capacity(ours.len() / td);
+            for dim in 0..=td {
+                for basix_e in 0..num_sub_entities(c, dim) {
+                    let tetra_e = a11_entity(c, dim, basix_e);
+                    basix_to_tetra.extend(lagrange_entity_nodes(c, p, dim, tetra_e));
+                }
+            }
+            assert_eq!(basix_to_tetra.len() * td, ours.len(), "{name} p = {p}: map");
+
+            for (basix_k, &tetra_k) in basix_to_tetra.iter().enumerate() {
+                for coord in 0..td {
+                    let a = ours[tetra_k * td + coord];
+                    let b = want[basix_k * td + coord];
+                    assert!(
+                        (a - b).abs() <= 1e-14,
+                        "{name} p = {p}, basix node {basix_k} (tetra {tetra_k}) coord {coord}: {a} vs {b}"
                     );
                 }
             }

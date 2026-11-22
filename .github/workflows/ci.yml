@@ -83,6 +83,11 @@ jobs:
           rc=0
           scripts/check-workspace-deps.sh --features tetraloma-mpi-tests/mpi || rc=$?
           test "$rc" -eq 3
+      # Negative check: the script must find CubeCL (exit 3) on a crate that depends on it (M11 A13).
+      - run: |
+          rc=0
+          scripts/check-workspace-deps.sh --no-cubecl tetraloma-geometry || rc=$?
+          test "$rc" -eq 3
 
   # tetraloma's tests, the larger half of `cargo test --workspace` (with the cpu job's), in the twelve
   # shards of scripts/ci-tetraloma-shard.sh, eleven jobs: in one job they took 52-59 min (M8 review).
