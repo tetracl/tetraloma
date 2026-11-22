@@ -247,7 +247,7 @@ Fixed by M0; the verify skill, the test-runner and the hpc-test skill use them.
 | rank-count guard (a singleton launch must fail, and every rank of `-n N` with `TETRALOMA_EXPECT_RANKS=N+1`; default N = 2) | `scripts/check-rank-guard.sh [--ranks N]` |
 | rank-count guard on two Kathleen nodes (the variable reaches the second node) | `scripts/hpc/remote-test.sh kathleen --nodes 2 --ranks 16 -- 'TETRALOMA_MPIRUN_FLAGS="--map-by node:PE=5 --bind-to core" scripts/check-rank-guard.sh --ranks 16'` (16 ranks of 5 cores need both 40-core nodes) |
 | CI shards run every test of tetraloma once, and both CI matrices hold shards 1–12 (lists the tests, runs none; E3) | `scripts/check-ci-shards.sh` |
-| one test file (the integration tests of a crate are one executable, `integration`, with a module per file) | `cargo test -p tetraloma --test integration io_threads::` |
+| one test file (a crate's integration tests are one executable, `integration`, with a module per file; `tetraloma`'s `trybuild` UI test is its own target `compile`) | `cargo test -p tetraloma --test integration io_threads::`; `cargo test -p tetraloma --test compile` |
 | MPI on CUDA (Myriad V100; both ranks use GPU 0 until per-rank selection) | `scripts/hpc/remote-test.sh myriad-v100 --gpus 2 --ranks 2 -- scripts/mpi-test.sh` |
 | conformance | `cargo test --manifest-path conformance/Cargo.toml` |
 | dependency check | `scripts/check-workspace-deps.sh` |
@@ -375,3 +375,4 @@ From `IMPLEMENTATION.md` of the earlier workflow (ADR-0069).
 | 2026-11-20 | D1 T1 (ADR-0067): User documentation (D1): the pinned book tools (mdBook 0.5.3, mdbook-katex 0.10.0), local flags, output and commands of the book and its checks; local tools row. |
 | 2026-11-21 | E3: `high_order_invariance::vector_size_invariance` at p = 4 moves from shard 11 to a shard 12 of `scripts/ci-tetraloma-shard.sh`, with a job vulkan-12: p = 3 and p = 4 in one process on lavapipe took 885 s on main's run 44833612710 and over 30 min on the next, 44833632046, whose vulkan-11 hit the 40-min limit (kept, so a runaway job ends with its log). cpu-tetraloma runs shards 11 and 12 in one job (7 min together), followed by `scripts/check-ci-shards.sh`, which lists the shards' tests through the script's listing mode (`TETRALOMA_SHARD_LIST=1`) and fails on a test in no shard or in two, and on a CI matrix that lacks a shard; cpu runs shellcheck on the two shard scripts. |
 | 2026-11-21 | Agent workflow (ADR-0069): rules now in `AGENTS.md`; the troubleshooting table moved here from `IMPLEMENTATION.md`. |
+| 2026-11-22 | `tetraloma/tests/compile.rs` (`trybuild`) moved out of `integration` into its own `[[test]] name = "compile"` target (`scripts/ci-tetraloma-shard.sh` shard 5 and `scripts/check-ci-shards.sh` updated). |

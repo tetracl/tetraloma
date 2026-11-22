@@ -74,8 +74,15 @@ tag() {
         /^\+ cargo test / {
             t = "integration"
             if ($0 ~ / --lib( |$)/) t = "lib"
-            else if ($0 ~ / --test compile( |$)/) t = "compile"
             else if ($0 ~ / --doc( |$)/) t = "doc"
+            else {
+                for (i = 1; i < NF; i++) {
+                    if ($i == "--test") {
+                        t = $(i + 1)
+                        break
+                    }
+                }
+            }
             next
         }
         /: test$/ { sub(/: test$/, ""); print t " " $0 }
