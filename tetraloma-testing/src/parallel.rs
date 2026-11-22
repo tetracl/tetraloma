@@ -42,7 +42,6 @@ use crate::{HostChunk, HostMesh, TOL_F32, TOL_F64, supports};
 /// Precondition: callers must include every input that affects the serial reference in `K`, and
 /// must not call cached helpers inside scoped thread-local device/geometry hooks (`with_strategy`,
 /// `with_vector_size`, `with_properties`, etc.).
-#[doc(hidden)]
 pub struct SerialCache<K, V>(LazyLock<Mutex<HashMap<K, Arc<OnceLock<V>>>>>);
 
 impl<K: Eq + Hash, V> SerialCache<K, V> {
@@ -70,8 +69,7 @@ impl<K: Eq + Hash, V> Default for SerialCache<K, V> {
 
 /// Identifies the device server behind a [`Client`], retaining the shared `DeviceProperties`
 /// `Arc` so the allocation address cannot be freed and reused while cached.
-#[doc(hidden)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ClientKey(Arc<cubecl::ir::DeviceProperties>);
 
 impl PartialEq for ClientKey {
@@ -89,21 +87,21 @@ impl Hash for ClientKey {
 }
 
 /// Returns the [`ClientKey`] identifying `client`'s device server.
-#[doc(hidden)]
 pub fn client_key(client: &Client) -> ClientKey {
     ClientKey(client.properties_shared())
 }
 
 /// Cheap host-mesh fingerprint `(num_cells, num_nodes, gdim)` included in cache keys where a
 /// caller passes a `HostMesh` directly.
-#[doc(hidden)]
 pub fn host_fingerprint(host: &HostMesh) -> (usize, usize, usize) {
     (host.num_cells(), host.num_nodes(), host.gdim)
 }
 
 /// Normalised case for cached one-rank (`Serial`) reference builds so the cached reference is
-/// independent of which ghost mode or distribution runs first. One-rank builds have no ghosts
-/// and skip the partitioner; `n = 1` `ThreadComm`/MPI runs still exercise every ghost mode.
+/// independent of which ghost mode or distribution runs first. One-rank builds skip the
+/// partitioner and produce no ghost cells; `Serial` under every ghost mode is verified directly
+/// by `parallel::tests::serial_ghost_modes_match_none`, and `n = 1` `ThreadComm`/MPI runs
+/// continue to exercise every ghost mode.
 fn serial_case(case: &Case) -> Case {
     Case {
         ghosts: GhostMode::None,
@@ -734,6 +732,10 @@ where
 }
 
 /// The parallel-invariance check of one case on `comm`.
+///
+/// The cached one-rank reference is keyed by `(client, family, degree, scalar_size,
+/// host_fingerprint)`; callers should pass `case.family.host(case.degree)` (not a distinct mesh
+/// with identical cell/node counts) and avoid calling inside scoped device/geometry hooks.
 pub struct Invariance<'a, C: Comm> {
     /// The communicator of the parallel build.
     pub comm: &'a C,
@@ -2979,5 +2981,89 @@ mod tests {
         // A subsequent caller retries and populates the cell without hanging or poisoning.
         let cell = cache.get_or_init(1, || 7);
         assert_eq!(*cell.get().expect("initialised"), 7);
+    }
+
+    #[test]
+    fn client_key_matches_for_same_device_server() {
+        let a = crate::test_client();
+        let b = crate::test_client();
+        assert_eq!(client_key(&a), client_key(&b));
+    }
+
+    #[test]
+    fn serial_case_normalises_ghosts_and_distribution() {
+        let case = Case {
+            family: Family::Cube(Cell3::Tetrahedron),
+            degree: 2,
+            ghosts: GhostMode::SharedVertex { layers: 2 },
+            distribution: Distribution::RoundRobin,
+            double: true,
+        };
+        let norm = serial_case(&case);
+        assert_eq!(norm.family, case.family);
+        assert_eq!(norm.degree, case.degree);
+        assert_eq!(norm.double, case.double);
+        assert_eq!(norm.ghosts, GhostMode::None);
+        assert_eq!(norm.distribution, Distribution::Even);
+    }
+
+    #[test]
+    fn serial_ghost_modes_match_none() {
+        let client = crate::test_client();
+        for family in [
+            Family::Square(Cell2::Triangle),
+            Family::Cube(Cell3::Tetrahedron),
+        ] {
+            let host = family.host(1);
+            let base = Case {
+                family,
+                degree: 1,
+                ghosts: GhostMode::None,
+                distribution: Distribution::Even,
+                double: false,
+            };
+            let check = |ghosts: GhostMode| {
+                let c = Case { ghosts, ..base };
+                match family {
+                    Family::Square(_) => {
+                        let m = build::<f32, D2, D2, _>(
+                            Serial,
+                            &client,
+                            &host,
+                            &c,
+                            CellOrdering::Input,
+                        )
+                        .expect("serial build");
+                        summarise(&m, 2).expect("summarise")
+                    }
+                    Family::Cube(_) => {
+                        let m = build::<f32, D3, D3, _>(
+                            Serial,
+                            &client,
+                            &host,
+                            &c,
+                            CellOrdering::Input,
+                        )
+                        .expect("serial build");
+                        summarise(&m, 2).expect("summarise")
+                    }
+                    _ => unreachable!(),
+                }
+            };
+            let want = check(GhostMode::None);
+            for &mode in &GHOST_MODES {
+                if mode == GhostMode::None {
+                    continue;
+                }
+                let got = check(mode);
+                assert_eq!(got.counts, want.counts, "{family:?} {mode:?}: counts");
+                assert_eq!(got.entities, want.entities, "{family:?} {mode:?}: entities");
+                assert_eq!(got.cell_ids, want.cell_ids, "{family:?} {mode:?}: cell_ids");
+                assert_eq!(
+                    got.local_bits, want.local_bits,
+                    "{family:?} {mode:?}: local_bits"
+                );
+            }
+        }
     }
 }
