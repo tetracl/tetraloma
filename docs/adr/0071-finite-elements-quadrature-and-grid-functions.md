@@ -1033,3 +1033,9 @@ Runs: the benchmark platforms of section 8 for p = 1, 4, 8 and 16; MFEM or libCE
 > Accept the ADR with Option 3, 2026-11-22, said to the agent in a session.
 
 The answer names option 3, the recommendation, and does not change the numbers proposed under Recommendation, so they apply as written in parts A–C.
+
+After the apply commit, the agent listed four passages that the ADR did not name and that disagreed with the applied text. Asked whether to fix them in this pull request or in a follow-up ADR, the maintainer answered:
+
+> Please add as third commit, 2026-11-22, said to the agent in a session.
+
+The third commit corrects them, each marked (ADR-0071): section 2's introduction (three topics out of scope); "nine" crates in sections 14 ("Checks"), 18 (CI matrix, `docs`) and 22 (User documentation); GLL node families in section 10 (Tabulation) and section 20 (A.5); and section 18's tetraloma-device row.

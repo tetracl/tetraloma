@@ -24,7 +24,7 @@ tetraloma is a GPU-resident mesh library in Rust built on CubeCL 0.11. It serves
 
 ## 2. Requirements and decisions
 
-The requirements are unchanged from the draft, apart from the development targets and CPU performance. Eleven design decisions are fixed, two topics are out of scope, and the review settled five open questions.
+The requirements are unchanged from the draft, apart from the development targets, CPU performance, and elements and grid functions (ADR-0071). Eleven design decisions are fixed, three topics are out of scope (ADR-0071), and the review settled five open questions.
 
 ### Requirements
 
@@ -1310,7 +1310,7 @@ Geometry is a vector-valued Lagrange field of arbitrary degree, evaluated by dev
 ### Tabulation and quadrature
 
 - **Tabulation** happens on the host in tetraloma-refcell, in f64. It uses an orthonormal basis (Legendre, Dubiner, or orthonormal rationomials for pyramids) and the generalised Vandermonde matrix. The matrix is solved with tetraloma-refcell's own dense LU with partial pivoting, so the crate needs no linear-algebra dependency.
-    - Equispaced points are well conditioned up to about p = 10; above that, GLL points (tensor cells) are recommended.
+    - Equispaced points are well conditioned up to about p = 10; above that, GLL points (every cell except pyramids; section 6) are recommended (ADR-0071).
     - Values and reference derivatives are uploaded once per (element, point set) and narrowed to `F`.
     - The pull-back evaluates the same orthonormal bases on the device by recurrence, with `LagrangeElement::coefficients` uploaded once per geometry block; pyramid ζ is clamped to at most 1 − 2^−10 (ADR-0039).
     - Tensor rules (Gauss on quadrilaterals and hexahedra, triangle × Gauss on prisms) keep their 1D (or triangle × 1D) factors; sum-factorised kernels use 1D tabulations and a lexicographic node permutation, uploaded with the tabulation (ADR-0042).
@@ -1717,7 +1717,7 @@ Users learn tetraloma from a book and from API documentation written for them, p
     - a fenced block without a language tag, an indented code block, or an `ignore` block that is not an include of a program that `scripts/run-examples.sh` runs;
     - while D1 is open, a difference from D1's base commit in the sources (`src/**/*.rs`) of the nine library crates other than in comments. A stdlib tokenizer strips `//`, `///`, `//!` and block comments, respecting strings, raw strings, characters and lifetimes, and compares the remaining tokens file by file.
 
-  The audit reads the generated HTML, so it sees exactly the items users see, and fails if it finds no items (a changed rustdoc markup). The `docs` job also runs the book's doctests and `cargo test --doc` of the nine crates with the site's features, and the audit once more for tetraloma-partition with `parmetis`.
+  The audit reads the generated HTML, so it sees exactly the items users see, and fails if it finds no items (a changed rustdoc markup). The `docs` job also runs the book's doctests and `cargo test --doc` of the eleven crates with the site's features (ADR-0071), and the audit once more for tetraloma-partition with `parmetis`.
 - **Keeping it current.** From D1 on, a milestone that adds or changes public items documents them by the rules above and updates the book in the same task; `scripts/check-user-docs.sh` runs in the `full` check tier of every such task and in the gate's `milestone` tier (`AGENTS.md`, Checks; ADR-0070).
 
 ## 15. Tags, regions and submeshes
@@ -1846,7 +1846,7 @@ The crate graph keeps serial builds free of MPI and lets kernels live in the cra
 | --- | --- | --- |
 | tetraloma-dims | Dimension markers, `EmbeddedIn`/`Codim`, `CellType`, `Cell1`–`Cell3`, `TopoDim` | – |
 | tetraloma-refcell | Reference cells, sub-entity tables, Lagrange layouts for any p (including the prism and pyramid rules), point families, quadrature, tabulation with its own dense LU, orientation bits, A.6 storage slots, reference facet normals and facet point maps, format permutation generators; the public orthonormal sets (`polyset`) and `DenseLu`, `QuadratureType` and `quadrature_rule` with the stored tables of `tables/`, `sub_entity_points_to_cell`, `rule_permutation` and `permute_vertices` (sections 26–27; ADR-0071). Tests read committed JSON fixtures. | tetraloma-dims; dev: serde_json |
-| tetraloma-device | `DeviceBuffer` family, `GridError` and `ConnKey`, capability and limit checks, launch plans and the vector policy, primitives, pack/unpack kernels, re-exports of `Client` and `CubeElement` (ADR-0026), (GPU-aware pointer access deferred, ADR-0059), test hooks (feature `testing`). The only crate that uses CubeCL runtime types. | cubecl; toml; libc (macOS, ADR-0017); dev: proptest |
+| tetraloma-device | `DeviceBuffer` family, `GridError` and `ConnKey`, capability and limit checks, launch plans and the vector policy, primitives, pack/unpack kernels, re-exports of `Client` and `CubeElement` (ADR-0026), (GPU-aware pointer access deferred, ADR-0059), test hooks (feature `testing`); the `KernelKind` variants and `GridError` variants of sections 8 and 28, and the hidden `Strategy` and degree-policy reader shared by tetraloma-geometry and tetraloma-function (section 10; ADR-0071). The only crate that uses CubeCL runtime types. | cubecl; toml; libc (macOS, ADR-0017); dev: proptest |
 | tetraloma-parallel | `CommDyn`, `Comm`, `CommExt`, `Serial`, `Mpi` (feature `mpi`), `IndexMap`, `Scatterer`, neighbourhood exchange, wrappers over `mpi::ffi` | tetraloma-device; bytemuck; mpi (optional); dev: tetraloma-testing (ADR-0067) |
 | tetraloma-topology | Cell and entity blocks, sort-based entity creation, ownership, connectivity, permutation info, benchmark hooks (feature `bench`) | dims, refcell, device, parallel, cubecl; dev: tetraloma-testing |
 | tetraloma-geometry | Coordinate elements, geometry blocks, `DeviceGrid`, point sets and quadrature rules, factor kernels, orientation, E-vectors, pull-back, GLL → equispaced conversion (`equispaced_nodes`); `QuadRule::new`, `FacetQuadRule::new`, `PointSet::from_points` and `tabulate_element`, `CellPoints` (section 27; ADR-0071) | dims, refcell, element (ADR-0071), device, parallel, topology, cubecl; dev: tetraloma-testing |
@@ -1891,7 +1891,7 @@ The crate graph keeps serial builds free of MPI and lets kernels live in the cra
 | mpi-mpich, mpi-openmpi | hosted Linux; the MPICH jobs on Ubuntu 26.04 with its MPICH 4.3.2 (Ubuntu 24.04's MPICH starts singletons, Launchpad bug 2072338; ADR-0068) | tetraloma-mpi-tests on 1–4 ranks with the Python oracles, and the VTKHDF targets with Ubuntu's parallel HDF5 (`--oversubscribe` for Open MPI); the MPI programs of tetraloma-examples on 1–4 ranks (`scripts/run-examples.sh --mpi`; ADR-0067); every run checks that the world size equals the rank count requested | every push |
 | vulkan | hosted Linux with a software Vulkan driver (Mesa lavapipe) | `TETRALOMA_TEST_DEVICE=vulkan`, f32, plus f64 if the adapter supports it | every push |
 | ptscotch | hosted Linux image with PT-Scotch | partitioner tests | changes to tetraloma-partition; nightly |
-| docs | hosted Linux, the image of the `ptscotch` job with MPI, parallel HDF5 and Scotch | `scripts/check-user-docs.sh` (the checks of "User documentation"); the book's doctests; `cargo test --doc` of the nine library crates with the site's features; the audit of tetraloma-partition with `parmetis` (ADR-0067) | every push |
+| docs | hosted Linux, the image of the `ptscotch` job with MPI, parallel HDF5 and Scotch | `scripts/check-user-docs.sh` (the checks of "User documentation"); the book's doctests; `cargo test --doc` of the eleven library crates with the site's features (ADR-0071); the audit of tetraloma-partition with `parmetis` (ADR-0067) | every push |
 | pages | hosted Linux (GitHub Actions) | builds the site and deploys it to GitHub Pages (ADR-0067) | pushes to `main` |
 | conformance | hosted Linux with OpenBLAS, or the local Mac with Accelerate | `cargo test --manifest-path conformance/Cargo.toml` | nightly; every ndelement pin bump |
 | cuda-v100 | Myriad E/F node through `scripts/hpc` | `TETRALOMA_TEST_DEVICE=cuda`, f32 and f64 | multi-GPU; fallback |
@@ -2008,7 +2008,7 @@ The pyramid count equals the dimension of DefElement's Lagrange pyramid space (A
 - **Pyramid interior** (tetraloma rule): points (i0/p, i1/p, i2/p) with 1 ≤ i2 ≤ p−2 and 1 ≤ i0, i1 ≤ p−1−i2; i2 outermost, i0 innermost.
 - **Pyramid space:** DefElement's Lagrange pyramid space (Definition 9 of the DefElement paper), spanned by x^a y^b z^c / (1−z)^min(a,b) with a + c ≤ p and b + c ≤ p. Tabulate it with an orthonormal rationomial basis.
 - **Agreement:** the interval, triangle, quadrilateral, tetrahedron and hexahedron layouts are exactly ndelement's at f8cbffe. The prism and pyramid rules coincide with Basix's equispaced lattices, so DOLFINx's Gmsh maps for those cells apply unchanged.
-- **Node families:** equispaced points on all cells. GLL points on intervals, quadrilaterals and hexahedra only, matching ndelement; GLL replaces the 1D equispaced points in the constructions above.
+- **Node families:** equispaced points on all cells. GLL points on intervals, quadrilaterals and hexahedra, where GLL replaces the 1D equispaced points in the constructions above; on triangles and tetrahedra (Isaac's recursive GLL points) and on prisms (their product), as section 6 states; not on pyramids (ADR-0071).
 
 ### A.6 Orientation and permutation bits
 
@@ -2354,8 +2354,8 @@ These rules apply to all code in the workspace (ADR-0069). They were the code ru
   (Scotch, PT-Scotch, ParMETIS; ADR-0029), behind safe wrappers; a -sys crate's own tests
   and examples may call its declarations (ADR-0039). Every unsafe block needs a SAFETY comment.
 - User documentation (ADR-0067): the book lives in docs/user/ (docs/README.md says which
-  documents are for users and which for developers). Public items of the nine published
-  library crates are documented for users:
+  documents are for users and which for developers). Public items of the eleven published
+  library crates are documented for users (ADR-0071):
   - no developer citations (docs/ paths, ADR numbers, plan questions, milestone ids) in
     `///` or `//!`; the provenance goes in a `//` comment directly above the doc comment;
   - a link to a book section (absolute URL under the site) on each crate root, public
