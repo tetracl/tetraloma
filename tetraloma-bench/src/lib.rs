@@ -34,3 +34,14 @@ pub mod families;
 pub mod protocol;
 pub mod record;
 pub mod report;
+
+/// Serialises the crate's unit tests that drive the shared CubeCL device client so that parallel
+/// test threads do not queue work behind each other on the CPU runtime or skew timing assertions.
+#[cfg(test)]
+pub(crate) fn device_test_lock() -> std::sync::MutexGuard<'static, ()> {
+    use std::sync::{Mutex, OnceLock};
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
