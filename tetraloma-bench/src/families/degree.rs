@@ -1862,9 +1862,9 @@ mod tests {
         }
     }
 
-    /// A timed run of J and the pull-back (1 and 9 iterations) on quadrilaterals (p = 4 and 10^6
-    /// points on CPUs so 9 vs 1 iterations exceeds runner timing noise; p = 2 and 10^5 points on
-    /// GPUs), four times: two timed runs each, and the cached runs compile nothing.
+    /// A timed run of J and the pull-back (1 and 9 iterations) on quadrilaterals at p = 2 (10^6
+    /// points on CPUs so 9 vs 1 iterations exceeds runner timing noise; 10^5 points on GPUs),
+    /// four times: two timed runs each, and the cached runs compile nothing.
     #[test]
     fn timed_smoke_and_second_call_compile_time() {
         let _guard = crate::device_test_lock();
@@ -1875,13 +1875,12 @@ mod tests {
             &[CellType::Quadrilateral],
             false,
         );
-        // On CPUs, p = 4 at 10^6 points (~2 ms for 1 iteration vs ~14 ms for 9 on the Mac mini,
-        // larger on hosted CI) leaves a wide margin over runner load; at p = 2 and 10^5 points
-        // M10c's vector size 4 brought 1 vs 9 iterations under 1 ms apart, which hosted CI load
-        // inverted (#62). On GPUs, 10^5 points at p = 2 stays fast on software Vulkan and the
-        // ordering assertion does not apply.
+        // On CPUs, 10^6 points at p = 2 (~0.6 ms for 1 iteration vs ~6.3 ms for 9 on the Mac mini)
+        // leaves a wide margin over runner load; at 10^5 points M10c's vector size 4 brought 1 vs
+        // 9 iterations under 1 ms apart, which hosted CI load inverted (#62). On GPUs, 10^5 points
+        // stays fast on software Vulkan and the ordering assertion does not apply.
         let cpu = is_cpu(machine.class);
-        o.degrees = vec![if cpu { 4 } else { 2 }];
+        o.degrees = vec![2];
         o.node_families = vec![NodeFamily::Equispaced];
         o.scalars = vec![Scalar::F32];
         o.sizes = vec![if cpu { 1_000_000 } else { 100_000 }];
@@ -1924,7 +1923,7 @@ mod tests {
                 .map(|r| r[i].median_s)
                 .fold(f64::INFINITY, f64::min)
         };
-        if is_cpu(machine.class) {
+        if cpu {
             assert!(least(2) > least(1), "{} s, {} s", least(2), least(1));
         }
     }
