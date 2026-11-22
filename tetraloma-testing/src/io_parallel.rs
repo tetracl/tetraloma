@@ -33,7 +33,7 @@ use cubecl::prelude::Client;
 use tetraloma::prelude::*;
 
 use crate::oracle::{Oracle, repo};
-use crate::parallel::{SerialCache, client_key, decode_ids, gather_to_root};
+use crate::parallel::{ClientKey, SerialCache, client_key, decode_ids, gather_to_root};
 use crate::{HostMesh, supports};
 
 // ---------------------------------------------------------------------------------------------
@@ -540,7 +540,7 @@ pub fn global_mesh_identical<C: Comm>(comm: &C, client: &Client, case: &ReadCase
     }
 }
 
-static IO_SERIAL_SNAPSHOT: SerialCache<(usize, Source, usize), Snapshot> = SerialCache::new();
+static IO_SERIAL_SNAPSHOT: SerialCache<(ClientKey, Source, usize), Snapshot> = SerialCache::new();
 
 fn global_mesh_identical_in<F: Real, C: Comm>(
     comm: &C,

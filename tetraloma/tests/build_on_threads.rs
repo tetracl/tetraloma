@@ -2,15 +2,13 @@
 //! builds, and the global cell, vertex and node counts, the owned cell ids and the volume agree
 //! with one rank.
 
-use std::collections::HashMap;
-use std::sync::{Arc, LazyLock, Mutex, OnceLock};
-
 use tetraloma::prelude::*;
 use tetraloma::{CommDyn, GhostMode};
 use tetraloma_device::Client;
 
 use tetraloma_testing::parallel::{
-    self, Case, Coverage, Distribution, Family, MeshCheck, RoundRobin,
+    self, Case, ClientKey, Coverage, Distribution, Family, MeshCheck, RoundRobin, SerialCache,
+    client_key, host_fingerprint,
 };
 use tetraloma_testing::{HostChunk, HostMesh, ThreadComm};
 
@@ -21,9 +19,8 @@ struct SerialBuildRef {
     ids: Vec<i64>,
 }
 
-type SerialKey = (usize, Family, u32, usize);
-static BUILD_SERIAL: LazyLock<Mutex<HashMap<SerialKey, Arc<OnceLock<SerialBuildRef>>>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
+type SerialKey = (ClientKey, Family, u32, usize, (usize, usize, usize));
+static BUILD_SERIAL: SerialCache<SerialKey, SerialBuildRef> = SerialCache::new();
 
 /// The global counts and the volume of a mesh, and the sorted origin ids of the cells this
 /// rank owns, gathered on rank 0.
@@ -65,31 +62,31 @@ impl MeshCheck for Build<'_> {
     {
         let rank = self.comm.rank();
         let at = format!("{case}, rank {rank}");
-        let key = (
-            Arc::as_ptr(&self.client.properties_shared()) as usize,
-            case.family,
-            case.degree,
-            size_of::<F>(),
+        let want_cell = BUILD_SERIAL.get_or_init(
+            (
+                client_key(self.client),
+                case.family,
+                case.degree,
+                size_of::<F>(),
+                host_fingerprint(host),
+            ),
+            || {
+                let serial: Mesh<F, TD, GD> = host
+                    .chunk(0, 1)
+                    .builder(self.client)
+                    .unwrap()
+                    .build()
+                    .unwrap();
+                let (counts, volume, ids) = summary(&serial, case.degree);
+                SerialBuildRef {
+                    origin: serial.origin().as_ref().to_vec(),
+                    counts,
+                    volume,
+                    ids,
+                }
+            },
         );
-        let cell = {
-            let mut map = BUILD_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
-            Arc::clone(map.entry(key).or_insert_with(|| Arc::new(OnceLock::new())))
-        };
-        let want = cell.get_or_init(|| {
-            let serial: Mesh<F, TD, GD> = host
-                .chunk(0, 1)
-                .builder(self.client)
-                .unwrap()
-                .build()
-                .unwrap();
-            let (counts, volume, ids) = summary(&serial, case.degree);
-            SerialBuildRef {
-                origin: serial.origin().as_ref().to_vec(),
-                counts,
-                volume,
-                ids,
-            }
-        });
+        let want = want_cell.get().expect("initialised");
         let chunk = match case.distribution {
             Distribution::RankZero if rank != 0 => HostChunk::empty(host.gdim),
             Distribution::RankZero => host.chunk(0, 1),

@@ -5,7 +5,8 @@
 //! A check panics with the case, the rank and what differs; under MPI the panic aborts the job.
 //!
 //! - [`invariance`]: entity counts, total volume, tag counts and names, canonical entity vertex
-//!   lists and permutation bits equal a one-rank build ([`Serial`], on every rank).
+//!   lists and permutation bits equal a one-rank build ([`Serial`], cached once per process and
+//!   key).
 //! - [`scatter`]: a forward scatter of global ids gives the ghosts' global ids, and a reverse
 //!   `Add` of ones gives the number of ranks holding each index, for the cell, vertex, node and
 //!   entity maps at block sizes 1 and 3.
@@ -37,14 +38,21 @@ use crate::{HostChunk, HostMesh, TOL_F32, TOL_F64, supports};
 /// Process-local thread-safe cache for one-rank (`Serial`) reference snapshots, keyed per device
 /// server so concurrent `ThreadComm` ranks and repeated rank-count/ghost-mode runs compute each
 /// serial reference once instead of on every rank.
-pub(crate) struct SerialCache<K, V>(LazyLock<Mutex<HashMap<K, Arc<OnceLock<V>>>>>);
+///
+/// Precondition: callers must include every input that affects the serial reference in `K`, and
+/// must not call cached helpers inside scoped thread-local device/geometry hooks (`with_strategy`,
+/// `with_vector_size`, `with_properties`, etc.).
+#[doc(hidden)]
+pub struct SerialCache<K, V>(LazyLock<Mutex<HashMap<K, Arc<OnceLock<V>>>>>);
 
 impl<K: Eq + Hash, V> SerialCache<K, V> {
-    pub(crate) const fn new() -> Self {
+    /// Creates an empty cache.
+    pub const fn new() -> Self {
         Self(LazyLock::new(|| Mutex::new(HashMap::new())))
     }
 
-    pub(crate) fn get_or_init(&self, key: K, init: impl FnOnce() -> V) -> Arc<OnceLock<V>> {
+    /// Returns the cached cell for `key`, initialising it at most once across concurrent callers.
+    pub fn get_or_init(&self, key: K, init: impl FnOnce() -> V) -> Arc<OnceLock<V>> {
         let cell = {
             let mut map = self.0.lock().unwrap_or_else(|e| e.into_inner());
             Arc::clone(map.entry(key).or_insert_with(|| Arc::new(OnceLock::new())))
@@ -54,9 +62,54 @@ impl<K: Eq + Hash, V> SerialCache<K, V> {
     }
 }
 
-/// Identifies the device server behind `client` (two clients sharing a server share `properties`).
-pub(crate) fn client_key(client: &Client) -> usize {
-    Arc::as_ptr(&client.properties_shared()) as usize
+impl<K: Eq + Hash, V> Default for SerialCache<K, V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Identifies the device server behind a [`Client`], retaining the shared `DeviceProperties`
+/// `Arc` so the allocation address cannot be freed and reused while cached.
+#[doc(hidden)]
+#[derive(Clone)]
+pub struct ClientKey(Arc<cubecl::ir::DeviceProperties>);
+
+impl PartialEq for ClientKey {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl Eq for ClientKey {}
+
+impl Hash for ClientKey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        (Arc::as_ptr(&self.0) as usize).hash(state);
+    }
+}
+
+/// Returns the [`ClientKey`] identifying `client`'s device server.
+#[doc(hidden)]
+pub fn client_key(client: &Client) -> ClientKey {
+    ClientKey(client.properties_shared())
+}
+
+/// Cheap host-mesh fingerprint `(num_cells, num_nodes, gdim)` included in cache keys where a
+/// caller passes a `HostMesh` directly.
+#[doc(hidden)]
+pub fn host_fingerprint(host: &HostMesh) -> (usize, usize, usize) {
+    (host.num_cells(), host.num_nodes(), host.gdim)
+}
+
+/// Normalised case for cached one-rank (`Serial`) reference builds so the cached reference is
+/// independent of which ghost mode or distribution runs first. One-rank builds have no ghosts
+/// and skip the partitioner; `n = 1` `ThreadComm`/MPI runs still exercise every ghost mode.
+fn serial_case(case: &Case) -> Case {
+    Case {
+        ghosts: GhostMode::None,
+        distribution: Distribution::Even,
+        ..*case
+    }
 }
 
 /// A test mesh family.
@@ -688,7 +741,8 @@ pub struct Invariance<'a, C: Comm> {
     pub client: &'a Client,
 }
 
-static INVARIANCE_SERIAL: SerialCache<(usize, Family, u32, usize), Summary> = SerialCache::new();
+type InvarianceKey = (ClientKey, Family, u32, usize, (usize, usize, usize));
+static INVARIANCE_SERIAL: SerialCache<InvarianceKey, Summary> = SerialCache::new();
 
 impl<C: Comm> MeshCheck for Invariance<'_, C> {
     fn check<F, TD, GD>(&mut self, case: &Case, host: &HostMesh)
@@ -700,16 +754,18 @@ impl<C: Comm> MeshCheck for Invariance<'_, C> {
         let rank = self.comm.rank();
         let at = format!("{case}, rank {rank}");
         let quad = 2 * case.degree;
+        let s_case = serial_case(case);
         let want_cell = INVARIANCE_SERIAL.get_or_init(
             (
                 client_key(self.client),
                 case.family,
                 case.degree,
                 size_of::<F>(),
+                host_fingerprint(host),
             ),
             || {
                 let serial = ok(
-                    build::<F, TD, GD, _>(Serial, self.client, host, case, CellOrdering::Input),
+                    build::<F, TD, GD, _>(Serial, self.client, host, &s_case, CellOrdering::Input),
                     &at,
                 );
                 ok(summarise(&serial, quad), &at)
@@ -1675,7 +1731,7 @@ where
     })
 }
 
-static SUBMESH_SERIAL: SerialCache<(usize, Family, u32, usize), Submeshes> = SerialCache::new();
+static SUBMESH_SERIAL: SerialCache<(ClientKey, Family, u32, usize), Submeshes> = SerialCache::new();
 
 /// The submesh check of one case on `comm`, in scalar `F`.
 fn submesh_case<F, TD, GD, C>(comm: &C, client: &Client, case: &Case, host: &HostMesh)
@@ -1690,11 +1746,12 @@ where
     let at = format!("{case}, rank {rank}");
     let centre = bbox_centre(host);
     let tol = if size_of::<F>() == 8 { 1e-10 } else { TOL_F32 };
+    let s_case = serial_case(case);
     let want_cell = SUBMESH_SERIAL.get_or_init(
         (client_key(client), case.family, case.degree, size_of::<F>()),
         || {
             let mut serial = ok(
-                build::<F, TD, GD, _>(Serial, client, host, case, CellOrdering::Input),
+                build::<F, TD, GD, _>(Serial, client, host, &s_case, CellOrdering::Input),
                 &at,
             );
             ok(
@@ -1987,7 +2044,7 @@ where
 }
 
 static SUBMESH_TOPO_SERIAL: SerialCache<
-    (usize, Family, u32, usize),
+    (ClientKey, Family, u32, usize),
     (ChildTopologyRef, ChildTopologyRef),
 > = SerialCache::new();
 
@@ -2007,11 +2064,12 @@ where
     let tol = if size_of::<F>() == 8 { 1e-10 } else { TOL_F32 };
     let fdim = TD::N - 1;
     let degree = 3 * case.degree;
+    let s_case = serial_case(case);
     let want_cell = SUBMESH_TOPO_SERIAL.get_or_init(
         (client_key(client), case.family, case.degree, size_of::<F>()),
         || {
             let serial = ok(
-                build::<F, TD, GD, _>(Serial, client, host, case, CellOrdering::Input),
+                build::<F, TD, GD, _>(Serial, client, host, &s_case, CellOrdering::Input),
                 &at,
             );
             let (mut want_b, _) = ok(serial.boundary(), &at);
@@ -2151,10 +2209,17 @@ where
     }
 }
 
-/// One corner case of [`submesh_corner_cases`] in scalar `F`.
-type CornerKey = (usize, Family, u32, usize, Option<Vec<Vec<i64>>>);
+type CornerKey = (
+    ClientKey,
+    Family,
+    u32,
+    usize,
+    (usize, usize, usize),
+    Option<Vec<Vec<i64>>>,
+);
 static CORNER_SERIAL: SerialCache<CornerKey, ChildTopologyRef> = SerialCache::new();
 
+/// One corner case of [`submesh_corner_cases`] in scalar `F`.
 fn corner_case<F: Real, C: Comm>(
     comm: &C,
     client: &Client,
@@ -2168,17 +2233,19 @@ fn corner_case<F: Real, C: Comm>(
         keys.map(<[_]>::len)
     );
     let tol = if size_of::<F>() == 8 { 1e-10 } else { TOL_F32 };
+    let s_case = serial_case(case);
     let want_cell = CORNER_SERIAL.get_or_init(
         (
             client_key(client),
             case.family,
             case.degree,
             size_of::<F>(),
+            host_fingerprint(host),
             keys.map(<[_]>::to_vec),
         ),
         || {
             let serial = ok(
-                build::<F, D3, D3, _>(Serial, client, host, case, CellOrdering::Input),
+                build::<F, D3, D3, _>(Serial, client, host, &s_case, CellOrdering::Input),
                 &at,
             );
             let (mut want, _) = ok(facet_child(&serial, keys), &at);
@@ -2379,7 +2446,7 @@ where
 
 type OrientRef = std::result::Result<HashMap<i64, u32>, (Discriminant<GridError>, String)>;
 
-static ORIENT_SERIAL: SerialCache<(usize, Family, u32, usize, usize), OrientRef> =
+static ORIENT_SERIAL: SerialCache<(ClientKey, Family, u32, usize, usize), OrientRef> =
     SerialCache::new();
 
 /// The orient check of one case on `comm`, in scalar `F`.
@@ -2392,6 +2459,7 @@ where
 {
     let rank = comm.rank();
     let host = host.with_flipped_cells(17 + u64::from(case.degree), 0.5);
+    let s_case = serial_case(case);
     for (rule_idx, (rule, error)) in orient_expectations(case.family).into_iter().enumerate() {
         let at = format!("{case}, {rule:?}, rank {rank}");
         let want_cell = ORIENT_SERIAL.get_or_init(
@@ -2404,7 +2472,7 @@ where
             ),
             || {
                 let mut serial = ok(
-                    build::<F, TD, GD, _>(Serial, client, &host, case, CellOrdering::Input),
+                    build::<F, TD, GD, _>(Serial, client, &host, &s_case, CellOrdering::Input),
                     &at,
                 );
                 match oriented(&mut serial, rule, case.degree) {
@@ -2641,7 +2709,7 @@ fn compare_per_cell<F: Real>(got: &[BlockValues], want: &[BlockValues], at: &str
     }
 }
 
-static HIGH_ORDER_SERIAL: SerialCache<(usize, Family, u32, usize, bool), Vec<BlockValues>> =
+static HIGH_ORDER_SERIAL: SerialCache<(ClientKey, Family, u32, usize, bool), Vec<BlockValues>> =
     SerialCache::new();
 
 /// The parallel and one-rank meshes of `case` on `comm`, their values by `values`, compared.
@@ -2660,6 +2728,7 @@ fn high_order_case<F, TD, GD, C>(
 {
     let at = format!("{case}, rank {}", comm.rank());
     let gpu = !crate::bitwise_device();
+    let s_case = serial_case(case);
     let want_cell = HIGH_ORDER_SERIAL.get_or_init(
         (
             client_key(client),
@@ -2670,7 +2739,7 @@ fn high_order_case<F, TD, GD, C>(
         ),
         || {
             let serial = ok(
-                build::<F, TD, GD, _>(Serial, client, host, case, CellOrdering::Input),
+                build::<F, TD, GD, _>(Serial, client, host, &s_case, CellOrdering::Input),
                 &at,
             );
             ok(values(&serial, gpu), &at)
@@ -2855,20 +2924,31 @@ mod tests {
     fn serial_cache_computes_once_per_key_under_concurrency() {
         use std::sync::Barrier;
         use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::time::{Duration, Instant};
 
         let cache: Arc<SerialCache<usize, usize>> = Arc::new(SerialCache::new());
         let calls = Arc::new(AtomicUsize::new(0));
+        let entered = Arc::new(AtomicUsize::new(0));
         let barrier = Arc::new(Barrier::new(4));
 
         let mut handles = Vec::new();
         for _ in 0..4 {
             let cache = Arc::clone(&cache);
             let calls = Arc::clone(&calls);
+            let entered = Arc::clone(&entered);
             let barrier = Arc::clone(&barrier);
             handles.push(std::thread::spawn(move || {
                 barrier.wait();
+                entered.fetch_add(1, Ordering::SeqCst);
                 let cell = cache.get_or_init(1, || {
                     calls.fetch_add(1, Ordering::SeqCst);
+                    // Hold inside the initialiser until all four threads have entered so waiters
+                    // genuinely contend on the same `OnceLock`.
+                    let deadline = Instant::now() + Duration::from_secs(2);
+                    while entered.load(Ordering::SeqCst) < 4 && Instant::now() < deadline {
+                        std::thread::yield_now();
+                    }
+                    std::thread::sleep(Duration::from_millis(10));
                     42
                 });
                 *cell.get().expect("initialised")
@@ -2886,5 +2966,18 @@ mod tests {
         });
         assert_eq!(*other.get().expect("initialised"), 99);
         assert_eq!(calls.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn serial_cache_retries_after_panicking_init() {
+        let cache: SerialCache<usize, usize> = SerialCache::new();
+        let failed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = cache.get_or_init(1, || -> usize { panic!("boom") });
+        }));
+        assert!(failed.is_err());
+
+        // A subsequent caller retries and populates the cell without hanging or poisoning.
+        let cell = cache.get_or_init(1, || 7);
+        assert_eq!(*cell.get().expect("initialised"), 7);
     }
 }
