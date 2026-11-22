@@ -4453,6 +4453,15 @@ name = "tetraloma-dims"
 version = "0.1.0"
 
 [[package]]
+name = "tetraloma-element"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tetraloma-dims",
+ "tetraloma-refcell",
+]
+
+[[package]]
 name = "tetraloma-examples"
 version = "0.1.0"
 dependencies = [
