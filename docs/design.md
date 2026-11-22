@@ -880,11 +880,11 @@ The backend is chosen at run time through `cubecl::Device`, and no tetraloma typ
 
 | Backend | cubecl feature | Device | f64 | u64 arithmetic | Float atomic add | GPU-aware MPI | Tested on |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| CPU runtime | `cpu` | `Device::cpu()` | yes | yes | f32, f64 | no | the local Mac on every change; hosted Linux CI |
+| CPU runtime | `cpu` | `Device::cpu()` | yes | yes | f32, f64 | no | the local Mac on every change (host-only `full`-tier changes scoped via `scripts/test-cpu.sh`, ADR-0073); hosted Linux CI |
 | CUDA | `cuda` | `Device::cuda(i)` | yes | yes | f32; f64 from sm_60 | deferred (`gpu-aware-cuda` reserved; ADR-0059) | Locust; Myriad V100/A100 for multi-GPU, comparisons and fallback |
 | HIP/ROCm | `hip` | `Device::rocm(i)` | yes | yes | f32 | planned (`gpu-aware-hip`) | manual |
 | Vulkan via wgpu (SPIR-V) | `vulkan` | `Device::vulkan(kind)` | if the adapter has shaderFloat64 | if the adapter has shaderInt64 | f32 if supported | no | hosted Linux CI (software Vulkan) |
-| Metal via wgpu (MSL) | `metal` | `Device::metal_msl(kind)` | no | yes | f32 only | no | the local Mac on every change |
+| Metal via wgpu (MSL) | `metal` | `Device::metal_msl(kind)` | no | yes | f32 only | no | the local Mac on every change (host-only `full`-tier changes scoped to CubeCL reverse dependencies when hosted CI runs; full at every gate; ADR-0073) |
 | Metal native | `metal-native` | `Device::metal(kind)` | no | yes | f32 only | no | not gated |
 | wgpu WGSL (DX12, WebGPU) | `wgpu` | `Device::wgpu(kind)` | with SHADER_F64 | with SHADER_INT64 | f32 with SHADER_FLOAT32_ATOMIC | no | best effort |
 
@@ -1739,7 +1739,7 @@ Every acceptance test in the roadmap is automated and runs on the targets below.
 
 | Target | Backends and precisions | When |
 | --- | --- | --- |
-| Local Mac (macOS, arm64) | CubeCL CPU runtime in f32 and f64; Metal via wgpu in f32; MPI | every change |
+| Local Mac (macOS, arm64) | CubeCL CPU runtime in f32 and f64; Metal via wgpu in f32; MPI | every change (host-only `full`-tier changes scoped mechanically via `cargo metadata` when hosted CI runs; full at every gate; ADR-0073) |
 | Hosted CI, Linux x86-64 | CPU runtime in f32 and f64; Vulkan (software driver) in f32, plus f64 if supported; MPI under MPICH and Open MPI | every push |
 | Myriad V100 (sm_70, CUDA 12.x) | CUDA in f32 and f64 | multi-GPU tests; architecture comparisons; fallback after the A4000 workstation (ADR-0014, ADR-0037) |
 | Myriad A100 (sm_80) | CUDA in f32 and f64 | when required (see "Development environment and test targets") |
@@ -1789,11 +1789,11 @@ Every acceptance test in the roadmap is automated and runs on the targets below.
 
 ## 17. Development environment and test targets
 
-Claude Code runs on the local Apple-silicon Mac and tests there on every change; `docs/dev-environment.md` names the current machine (ADR-0034). CUDA work runs on UCL's clusters through a small remote-test runner. Milestone E0 sets this up and records the details in `docs/dev-environment.md`.
+Claude Code runs on the local Apple-silicon Mac and tests there on every change (with host-only `full`-tier changes scoped mechanically via `cargo metadata` when hosted CI runs; ADR-0073); `docs/dev-environment.md` names the current machine (ADR-0034). CUDA work runs on UCL's clusters through a small remote-test runner. Milestone E0 sets this up and records the details in `docs/dev-environment.md`.
 
 | Target | Hardware | Access | Role |
 | --- | --- | --- | --- |
-| Local Mac | Apple silicon, macOS, arm64 (current machine: `docs/dev-environment.md`) | local | Claude Code; CPU runtime (f32, f64) and Metal (f32) on every change; MPI up to 4 ranks |
+| Local Mac | Apple silicon, macOS, arm64 (current machine: `docs/dev-environment.md`) | local | Claude Code; CPU runtime (f32, f64, via `scripts/test-cpu.sh`) and Metal (f32) on every change (host-only `full`-tier changes scoped when hosted CI runs; ADR-0073); MPI up to 4 ranks |
 | Myriad V100 | E and F nodes: 36 cores (Xeon Gold 6140 or 6240, AVX-512) and 2 × V100 (sm_70) each | SGE batch jobs: `-l gpu=N` with `-ac allow=EF` | multi-GPU tests, architecture comparisons and fallback; oldest supported architecture |
 | Myriad A100 | L nodes: 36 cores and 4 × A100 40 GB (sm_80) each | SGE batch jobs: `-l gpu=N` with `-ac allow=L` | second CUDA architecture and CUDA 13; comparisons and fallback |
 | Myriad CPU | D nodes: 36 cores (Xeon Gold 6240, AVX-512), 192 GB, no GPU | SGE batch jobs with `-ac allow=D` | fallback for CPU-only runs (ADR-0014, ADR-0016) |
@@ -1886,7 +1886,7 @@ The crate graph keeps serial builds free of MPI and lets kernels live in the cra
 
 | Job | Runner | Runs | Trigger |
 | --- | --- | --- | --- |
-| local | the local Mac (developer machine) | CPU runtime in f32 and f64; Metal in f32; MPI on 1–4 ranks; kernel tests also at `TETRALOMA_VECTOR_SIZE=scalar` and `widest` | every change, by Claude (verify skill, test-runner) |
+| local | the local Mac (developer machine) | CPU runtime in f32 and f64 (`scripts/test-cpu.sh`, capping CubeCL-crate libtest concurrency) and Metal in f32 (both scoped mechanically via `cargo metadata` on host-only `full`-tier changes when hosted CI runs on the head commit; full at every milestone gate; ADR-0073); MPI on 1–4 ranks; kernel tests also at `TETRALOMA_VECTOR_SIZE=scalar` and `widest` | every change, by Claude (verify skill, test-runner) |
 | cpu | hosted Linux | `cargo test --workspace` on the CPU runtime in f32 and f64; clippy; rustdoc | every push |
 | mpi-mpich, mpi-openmpi | hosted Linux; the MPICH jobs on Ubuntu 26.04 with its MPICH 4.3.2 (Ubuntu 24.04's MPICH starts singletons, Launchpad bug 2072338; ADR-0068) | tetraloma-mpi-tests on 1–4 ranks with the Python oracles, and the VTKHDF targets with Ubuntu's parallel HDF5 (`--oversubscribe` for Open MPI); the MPI programs of tetraloma-examples on 1–4 ranks (`scripts/run-examples.sh --mpi`; ADR-0067); every run checks that the world size equals the rank count requested | every push |
 | vulkan | hosted Linux with a software Vulkan driver (Mesa lavapipe) | `TETRALOMA_TEST_DEVICE=vulkan`, f32, plus f64 if the adapter supports it | every push |
@@ -2394,7 +2394,7 @@ What the design leaves undecided; an agent that meets one stops and asks (ADR-00
 
 The terms and symbols of the user book's glossary (`docs/user/src/glossary.md`) apply here (ADR-0069). Terms used only in the design and the agent rules:
 
-- **Standing matrix:** the runs every milestone keeps (ADR-0057): the CPU runtime and Metal on every change, Locust after kernel tasks, MPI on 1–4 ranks under both flavours, f32 and f64, scalar and widest vector sizes, the review targets.
+- **Standing matrix:** the runs every milestone keeps (ADR-0057, amended by ADR-0073): the CPU runtime and Metal on every change (host-only `full`-tier changes scoped mechanically via `cargo metadata` when hosted CI runs; full at every gate), Locust after kernel tasks, MPI on 1–4 ranks under both flavours, f32 and f64, scalar and widest vector sizes, the review targets.
 - **Candidate protocol:** how benchmarks time and choose among candidates; section 8, "Benchmarks".
 - **Benchmark platform:** a machine and backend the policies are measured on; sections 8 ("Benchmarks") and 17.
 - **Cpu and Gpu device classes:** the two `DeviceClass` variants the vector and degree policies are keyed on; section 8 (ADR-0058).

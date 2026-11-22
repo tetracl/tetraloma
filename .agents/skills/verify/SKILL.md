@@ -1,7 +1,7 @@
 ---
 name: verify
 description: Run tetraloma's pre-commit checks - formatting, clippy and the tests of the crates touched by the pending change. Use before every commit of code changes.
-allowed-tools: Bash(cargo fmt *) Bash(cargo clippy *) Bash(cargo test *) Bash(git diff *) Bash(git status *) Bash(bash -n *) Bash(shellcheck *)
+allowed-tools: Bash(cargo fmt *) Bash(cargo clippy *) Bash(cargo test *) Bash(scripts/test-cpu.sh *) Bash(git diff *) Bash(git status *) Bash(bash -n *) Bash(shellcheck *)
 ---
 
 # Pre-commit checks
@@ -14,7 +14,8 @@ allowed-tools: Bash(cargo fmt *) Bash(cargo clippy *) Bash(cargo test *) Bash(gi
     1. `cargo fmt --all -- --check`. If it fails, run `cargo fmt --all` and include the result in
        the commit.
     2. `cargo clippy -p <crate> --all-targets -- -D warnings` for each touched crate.
-    3. `cargo test -p <crate>` for each touched crate, on the default CPU runtime.
+    3. `scripts/test-cpu.sh -p <crate>` on the local Mac (or `cargo test -p <crate>` on Linux)
+       for each touched crate, on the default CPU runtime (ADR-0073).
     4. If `conformance/` or `tetraloma-refcell` changed: `cargo test --manifest-path conformance/Cargo.toml`
        when BLAS/LAPACK is available here; otherwise say it was skipped.
     5. If shell scripts under `scripts/` changed: `bash -n <script>` for each, and `shellcheck <script>`
