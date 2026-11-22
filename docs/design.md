@@ -1859,7 +1859,7 @@ The crate graph keeps serial builds free of MPI and lets kernels live in the cra
 | parmetis-sys | bindgen FFI to ParMETIS, with `idx_t` and `real_t` width detection | mpi, bindgen, build-probe-mpi (all behind the crate's feature `mpi`) |
 | tetraloma-testing (unpublished) | `test_client()` chosen by the `TETRALOMA_TEST_DEVICE` environment variable, test-mesh generators, tolerance helpers, `test_client_at(index)` (ADR-0060), `ThreadComm` (an in-process multi-rank communicator; ADR-0026), the Python oracle helper and `gen-gmsh-box` (ADR-0035); forwards runtime features | tetraloma; tetraloma-device (feature `testing`); tetraloma-dims; tetraloma-refcell; cubecl with runtime features; serde_json; mpi (optional, for `CommDyn::raw` of `ThreadComm`; ADR-0028) |
 | tetraloma-mpi-tests (unpublished) | MPI integration tests as `[[test]]` targets with `harness = false`, run by `scripts/mpi-test.sh` | tetraloma, tetraloma-testing; nix (unix; getrusage; ADR-0035) |
-| tetraloma-examples (unpublished) | The examples of the API walkthrough and the programs of the user book, each over a tested `run(&Client)`; forwards runtime features (ADR-0060); the doctest harness of the book (a `#[cfg(doctest)]` module that includes every chapter) and the figure generator (the binary `figures`, from tetraloma-refcell's tables) (ADR-0067) | tetraloma, tetraloma-refcell, tetraloma-testing; cubecl with runtime features; mpi (optional) |
+| tetraloma-examples (unpublished) | The examples of the API walkthrough and the programs of the user book, each over a tested `run(&Client)`; forwards runtime features (ADR-0060); the doctest harness of the book (a `#[cfg(doctest)]` module that includes every chapter) and the figure generator (the binary `figures`, from tetraloma-refcell's tables) (ADR-0067) | tetraloma, tetraloma-refcell, tetraloma-element and tetraloma-function (for the book's examples of sections 26 to 32; ADR-0072), tetraloma-testing; cubecl with runtime features; mpi (optional) |
 | tetraloma-bench (unpublished) | Kernel benchmarks across vector sizes, tile widths and CPU block sizes; end-to-end throughput; JSON output for `docs/perf/`; the function families and the CEED BP1 and BP3 comparison benchmarks (sections 8, 29–30; ADR-0071) | tetraloma, tetraloma-device (feature `testing`), tetraloma-geometry (features `bench`, `testing`), tetraloma-dims, tetraloma-refcell, tetraloma-topology (feature `bench`), tetraloma-testing; cubecl with runtime features; serde_json, toml, bytemuck; mpi (optional, feature `mpi`, for `halo_exchange`; ADR-0060); dev: proptest (ADR-0039) |
 | conformance/ (tetraloma-conformance, outside the workspace) | Compares tetraloma-refcell with ndelement at the pinned commit and exports JSON fixtures, including those of tetraloma-element (A.10; ADR-0071). The only crate that depends on ndelement and BLAS/LAPACK. | tetraloma-refcell (path), ndelement (git), blas-src, lapack-src, openblas-src |
 | tools/env-check (outside the workspace) | Probe of a development target: devices, properties, sample kernels in f32 and f64, MPI allreduce; JSON report. Built in E0. | cubecl with the target's runtime features; mpi (optional) |
@@ -2466,7 +2466,8 @@ impl Element {
     pub fn embedded_superdegree(&self) -> u32;
     /// The basis in tetraloma-refcell's orthonormal set: [dim][polyset dim · reference value size].
     pub fn coefficients(&self) -> &[f64];
-    /// [derivative][point][basis][component], derivatives in tetraloma-refcell's order up to nderivs.
+    /// [derivative][point][basis][component], derivatives in tetraloma-refcell's order; nderivs is 0 or 1
+    /// (Derivative orders; ADR-0072).
     pub fn tabulate(&self, points: &[f64], nderivs: u32) -> Result<ElementTabulation, ElementError>;
     /// Reference points [m][tdim] and the matrix [dim][m · reference value size] such that the
     /// DOF values of a reference function û are M û(points).
@@ -2562,10 +2563,13 @@ With this convention, the traces of degree-p elements on a shared entity are the
 - **The dual basis** comes from the matrix D_ij = l_i(ψ_j) over the orthonormal set ψ, inverted with `DenseLu` in f64.
 - **Tensor cells** assemble their elements from 1D factors, so only 1D elements are inverted; the dense construction is used there only by tests, for p ≤ 8.
 
+**Derivative orders** (ADR-0072). `nderivs` is 0 or 1. Block 0 of a tabulation holds the values and block 1 + d the derivative along ξ_d, as in tetraloma-refcell. Above 1, `Element::tabulate` returns `ElementError::RefCell(RefCellError::UnsupportedDerivativeOrder)`; `polyset::tabulate` and `TensorFactors::tabulate_1d`, which return no `Result`, panic, as they do for a point array whose length is not a multiple of the dimension. Higher orders are a later extension. Their blocks will follow those of the first derivatives by total order, and within one order by decreasing power of ξ_0, then of ξ_1 (the order of ndelement and Basix), so the blocks of orders 0 and 1 keep their place.
+
 **Variants:**
 
 - **Point families** are tetraloma-refcell's `NodeFamily` (section 6), shared with coordinate elements; point sets on tensor cells are products of 1D sets.
-- **Element variants** are `Nodal(Equispaced)`, `Nodal(Gll)` and `Legendre`. `Nodal(Gll)` is unsupported on pyramids. A `Legendre` Lagrange element has only interior DOFs, so `discontinuous_only()` is true.
+- **Element variants** are `Nodal(Equispaced)`, `Nodal(Gll)` and `Legendre`. `Nodal(Gll)` is unsupported on pyramids. A `Legendre` Lagrange element, and a nodal one of degree 0, has only interior DOFs, so `discontinuous_only()` is true (ADR-0072).
+- **Degree 0** (ADR-0072). Every variant exists at degree 0 on the cells that offer it. A nodal element of degree 0 has one DOF, the value at the cell's midpoint (the mean of its vertices), and its basis function is 1. `Legendre` of degree 0 has the basis function 1/√|K̂|. Layouts and coordinate elements still need p ≥ 1: `lagrange_points` returns `UnsupportedDegree` for degree 0.
 - **Defaults:** `Nodal(Gll)` for Lagrange function spaces; `Nodal(Equispaced)` for geometry, unchanged.
 - **Conditioning:** applying an element's interpolation to its own basis gives the identity to 10^−12 for p ≤ 10 (Gll, Legendre, N1curl, RT) and for p ≤ 6 (Equispaced).
 
@@ -2594,7 +2598,7 @@ With this convention, the traces of degree-p elements on a shared entity are the
 
 **Tensor factors.** On quadrilaterals and hexahedra, every element is, per reference component, a tensor product of 1D elements, because its DOFs are tensor products of 1D functionals. There are three kinds of factor:
 
-- `NodalH1`: Lagrange at a point family; also the factor of nodal DG.
+- `NodalH1`: Lagrange at a point family; also the factor of nodal DG; at degree 0 it is the one function 1 (ADR-0072).
 - `MomentH1`: endpoint evaluations plus interior Legendre moments up to degree p − 2; the factor of N1curl and RT in their continuous directions.
 - `LegendreL2`: moments against P_{p−1}; their factor in the remaining direction, and the factor of Legendre DG.
 
@@ -2606,6 +2610,7 @@ The product of the factors reproduces the element's tabulation to 10^−12 for p
 - Crouzeix–Raviart and enriched (bubble) elements; Regge and HHJ (the double Piola maps); Buffa–Christiansen and other dual-mesh elements.
 - N1curl and RT on prisms and pyramids.
 - Point-evaluation DOFs for N1curl and RT; hierarchical bases for p-adaptivity; element construction on the device.
+- Second and higher derivatives of basis functions, and Hessians and Laplacians of grid functions, which also need second derivatives of the geometry (section 10) (ADR-0072).
 
 ## 27. Quadrature rules and point sets
 
