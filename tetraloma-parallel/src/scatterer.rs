@@ -52,15 +52,29 @@ impl SharedIndices {
     }
 }
 
-/// Waits for the work queued on `client`.
+/// Waits for the work queued on `client` without busy-spinning.
 fn sync(client: &Client) -> Result<()> {
+    struct ThreadWaker(std::thread::Thread);
+
+    impl std::task::Wake for ThreadWaker {
+        fn wake(self: Arc<Self>) {
+            self.0.unpark();
+        }
+        fn wake_by_ref(self: &Arc<Self>) {
+            self.0.unpark();
+        }
+    }
+
     let mut done = client.sync();
-    let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+    let waker = std::task::Waker::from(Arc::new(ThreadWaker(std::thread::current())));
+    let mut cx = std::task::Context::from_waker(&waker);
     loop {
         if let std::task::Poll::Ready(r) = done.as_mut().poll(&mut cx) {
             return r.map_err(GridError::from);
         }
-        std::thread::yield_now();
+        // Park until the future wakes us; a short timeout guards against any backend whose sync
+        // future relies on polling rather than invoking the waker.
+        std::thread::park_timeout(std::time::Duration::from_micros(200));
     }
 }
 
@@ -561,4 +575,20 @@ pub enum Transport {
     HostStaged,
     /// Reserved: device memory handed directly to a CUDA-aware MPI. No scatterer uses it yet.
     GpuAware,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sync_waits_for_queued_kernel() {
+        let client = tetraloma_testing::test_client();
+        let src = DeviceBuffer::from_host(&client, &[10u32, 20, 30, 40]).unwrap();
+        let idx = DeviceBuffer::from_host(&client, &[3u32, 1]).unwrap();
+        let mut dst = DeviceBuffer::<u32>::zeros(&client, 2).unwrap();
+        pack(&src, &idx, 1, &mut dst).unwrap();
+        sync(&client).unwrap();
+        assert_eq!(dst.to_host().unwrap(), [40, 20]);
+    }
 }

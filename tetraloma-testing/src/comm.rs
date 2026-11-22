@@ -33,52 +33,110 @@ struct State {
 /// The panic message of a rank that gives up because another rank panicked.
 const POISONED: &str = "ThreadComm: another rank panicked";
 
-/// The rank threads that the [`ThreadComm::run`] calls of a process may have at once: half
-/// the hardware threads, at least one. The ranks of every test of a test executable submit to
+/// Environment variable overriding the concurrent rank-thread budget of [`ThreadComm::run`].
+const THREAD_COMM_BUDGET_VAR: &str = "TETRALOMA_THREAD_COMM_BUDGET";
+
+fn default_budget_for(cores: usize, cpu_backend: bool) -> usize {
+    let divisor = if cpu_backend { 4 } else { 2 };
+    (cores / divisor).max(1)
+}
+
+fn parse_budget(override_val: Option<&str>, cores: usize, cpu_backend: bool) -> usize {
+    match override_val {
+        Some(raw) if !raw.is_empty() => raw
+            .parse::<usize>()
+            .ok()
+            .filter(|&n| n > 0)
+            .unwrap_or_else(|| {
+                panic!("{THREAD_COMM_BUDGET_VAR}={raw:?}: expected a positive integer")
+            }),
+        _ => default_budget_for(cores, cpu_backend),
+    }
+}
+
+struct BudgetState {
+    free: usize,
+    /// FIFO ticket queue so large requests (e.g. 5–8 ranks) cannot starve behind smaller ones.
+    queue: VecDeque<u64>,
+    next_ticket: u64,
+}
+
+/// The rank threads that the [`ThreadComm::run`] calls of a process may have at once: a quarter
+/// of the hardware threads on the CPU runtime and half on GPU backends, at least one (overridden
+/// by `TETRALOMA_THREAD_COMM_BUDGET`). The ranks of every test of a test executable submit to
 /// one CubeCL device thread, and CubeCL 0.11 spins while that device's queue is full
 /// (docs/cubecl-upstream.md, C14). Without a limit `io_threads` on the CPU runtime spent about
 /// 70% of its CPU time spinning and ran for over half an hour; with the hardware threads as the
 /// limit it took 808 s, with half 311 s and with a quarter 287 s (M6 Mac mini, 12 cores).
 struct RankBudget {
-    free: Mutex<usize>,
+    state: Mutex<BudgetState>,
     wake: Condvar,
     total: usize,
 }
 
-static RANK_BUDGET: LazyLock<RankBudget> = LazyLock::new(|| {
-    let total = std::thread::available_parallelism()
-        .map_or(2, |n| n.get() / 2)
-        .max(1);
-    RankBudget {
-        free: Mutex::new(total),
-        wake: Condvar::new(),
-        total,
+impl RankBudget {
+    fn new(total: usize) -> Self {
+        let total = total.max(1);
+        RankBudget {
+            state: Mutex::new(BudgetState {
+                free: total,
+                queue: VecDeque::new(),
+                next_ticket: 0,
+            }),
+            wake: Condvar::new(),
+            total,
+        }
     }
+
+    fn acquire(&self, n: usize) -> usize {
+        let n = n.min(self.total);
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let ticket = state.next_ticket;
+        state.next_ticket += 1;
+        state.queue.push_back(ticket);
+        while state.queue.front() != Some(&ticket) || state.free < n {
+            state = self.wake.wait(state).unwrap_or_else(|e| e.into_inner());
+        }
+        state.queue.pop_front();
+        state.free -= n;
+        if state.free > 0 && !state.queue.is_empty() {
+            self.wake.notify_all();
+        }
+        n
+    }
+
+    fn release(&self, n: usize) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        state.free += n;
+        self.wake.notify_all();
+    }
+}
+
+static RANK_BUDGET: LazyLock<RankBudget> = LazyLock::new(|| {
+    let cores = std::thread::available_parallelism().map_or(4, |n| n.get());
+    let device_env = std::env::var(crate::TEST_DEVICE_VAR).ok();
+    let cpu_backend = matches!(
+        crate::TestBackend::parse(device_env.as_deref()),
+        Ok(crate::TestBackend::Cpu)
+    );
+    let override_val = std::env::var(THREAD_COMM_BUDGET_VAR).ok();
+    RankBudget::new(parse_budget(override_val.as_deref(), cores, cpu_backend))
 });
 
 /// Rank threads taken from [`RANK_BUDGET`] until dropped.
 struct RankPermit(usize);
 
 impl RankPermit {
-    /// Waits for `n` rank threads, at most the whole budget, so that a run with more ranks than
-    /// hardware threads starts once it has the budget to itself.
+    /// Waits in FIFO order for `n` rank threads, at most the whole budget, so that a run with
+    /// more ranks than the budget starts once it has the budget to itself and cannot starve.
     fn take(n: usize) -> Self {
-        let budget = &*RANK_BUDGET;
-        let n = n.min(budget.total);
-        let mut free = budget.free.lock().unwrap_or_else(|e| e.into_inner());
-        while *free < n {
-            free = budget.wake.wait(free).unwrap_or_else(|e| e.into_inner());
-        }
-        *free -= n;
-        RankPermit(n)
+        RankPermit(RANK_BUDGET.acquire(n))
     }
 }
 
 impl Drop for RankPermit {
     fn drop(&mut self) {
-        let budget = &*RANK_BUDGET;
-        *budget.free.lock().unwrap_or_else(|e| e.into_inner()) += self.0;
-        budget.wake.notify_all();
+        RANK_BUDGET.release(self.0);
     }
 }
 
@@ -111,9 +169,10 @@ pub struct ThreadComm {
 
 impl ThreadComm {
     /// Runs `f` on `n` ranks, one thread each, and returns the results in rank order. The
-    /// calls of one process together run at most half as many rank threads as there are
-    /// hardware threads: a call waits until enough of the others have finished (a call with
-    /// more ranks than that, until it is the only one). Do not call it from inside `f`.
+    /// calls of one process share a FIFO rank-thread budget (a quarter of the hardware threads
+    /// on the CPU runtime, half on GPU backends, at least one, or `TETRALOMA_THREAD_COMM_BUDGET`
+    /// if set): a call waits in arrival order until enough earlier calls finish (a call with
+    /// more ranks than the budget, until it is the only one). Do not call it from inside `f`.
     ///
     /// # Panics
     ///
@@ -475,5 +534,58 @@ mod tests {
         fn neighbour_exchange_on_random_graphs(n in 1..=5_usize, seed in any::<u64>()) {
             ThreadComm::run(n, |comm| comm_checks::neighbour_exchange(&comm, seed));
         }
+    }
+
+    #[test]
+    fn budget_defaults_and_override() {
+        assert_eq!(parse_budget(None, 12, true), 3);
+        assert_eq!(parse_budget(None, 12, false), 6);
+        assert_eq!(parse_budget(None, 2, true), 1);
+        assert_eq!(parse_budget(Some(""), 12, true), 3);
+        assert_eq!(parse_budget(Some("5"), 12, true), 5);
+    }
+
+    #[test]
+    fn rank_budget_is_fifo_fair() {
+        let budget = Arc::new(RankBudget::new(4));
+        // Hold 2 permits so a 4-permit waiter must block at the head of the queue.
+        let held = budget.acquire(2);
+        let order = Arc::new(Mutex::new(Vec::new()));
+
+        let b1 = Arc::clone(&budget);
+        let o1 = Arc::clone(&order);
+        let large = std::thread::spawn(move || {
+            let got = b1.acquire(4);
+            o1.lock().unwrap().push("large");
+            b1.release(got);
+        });
+        // Wait until `large` is queued at the front.
+        loop {
+            if !budget.state.lock().unwrap().queue.is_empty() {
+                break;
+            }
+            std::thread::yield_now();
+        }
+
+        // A small 1-permit request arrives after `large`: even though 2 permits are free,
+        // FIFO admission must let `large` go first instead of starving it.
+        let b2 = Arc::clone(&budget);
+        let o2 = Arc::clone(&order);
+        let small = std::thread::spawn(move || {
+            let got = b2.acquire(1);
+            o2.lock().unwrap().push("small");
+            b2.release(got);
+        });
+        loop {
+            if budget.state.lock().unwrap().queue.len() == 2 {
+                break;
+            }
+            std::thread::yield_now();
+        }
+
+        budget.release(held);
+        large.join().unwrap();
+        small.join().unwrap();
+        assert_eq!(*order.lock().unwrap(), ["large", "small"]);
     }
 }
