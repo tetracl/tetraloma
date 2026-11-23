@@ -27,6 +27,10 @@
 - [File formats](elements/file-formats.md)
 - [Basix and DOLFINx](elements/basix-dolfinx.md)
 
+# Finite elements and grid functions
+
+- [Finite elements](fem/elements.md)
+
 # Tutorials
 
 - [Building a mesh](tutorials/build-mesh.md)

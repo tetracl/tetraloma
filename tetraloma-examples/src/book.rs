@@ -79,6 +79,12 @@ pub mod elements {
     pub mod basix_dolfinx {}
 }
 
+/// The chapters in docs/user/src/fem/.
+pub mod fem {
+    #[doc = include_str!("../../docs/user/src/fem/elements.md")]
+    pub mod elements {}
+}
+
 /// The chapters in docs/user/src/tutorials/.
 pub mod tutorials {
     #[doc = include_str!("../../docs/user/src/tutorials/build-mesh.md")]
