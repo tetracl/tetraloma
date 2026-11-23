@@ -26,9 +26,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # Default lists; enabling tasks add their crates here.
-no_cubecl_crates=("tetraloma-element")
-no_mesh_crates=()
-foundation_only_crates=()
+no_cubecl_crates=("tetraloma-element") # pending M18.T2 (tetraloma-comm), pending M18.T3 (tetraloma-partition)
+no_mesh_crates=()                      # pending M18.T2 (four foundation crates; widened to dev in M18.T7)
+foundation_only_crates=()              # pending M18.T7 (tetraloma-foundation-tests)
 tree_args=()
 
 has_item() {
