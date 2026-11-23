@@ -1,4 +1,8 @@
 // Design: section 26 ("Finite elements"), Listing E1; ADR-0071, ADR-0072.
+// Remaining `#[doc(hidden)]` stubs (`TransformationKind`, `Generator`, `ElementTabulation`,
+// `BaseTransformation`, `Factor1d`, `TensorFactors` and the unimplemented `Element` methods)
+// are not part of the stable API yet; they lose `#[doc(hidden)]` in M11.T5–T7 (dependency
+// rule 7).
 //! Finite elements in Ciarlet's sense on the reference cells of tetraloma.
 //!
 //! This crate computes finite-element definitions on the host in `f64`, with no device
@@ -15,9 +19,13 @@
 //! use tetraloma_element::{Element, ElementKey, Family, MapType, Variant};
 //! use tetraloma_refcell::NodeFamily;
 //!
-//! let el = Element::get(ElementKey {
-//!     family: Family::Lagrange, cell: CellType::Triangle, degree: 2, variant: Variant::Nodal(NodeFamily::Gll),
-//! })?;
+//! let key = ElementKey {
+//!     family: Family::Lagrange,
+//!     cell: CellType::Triangle,
+//!     degree: 2,
+//!     variant: Variant::Nodal(NodeFamily::Gll),
+//! };
+//! let el = Element::get(key)?;
 //! assert_eq!(el.dim(), 6);
 //! assert_eq!(el.map_type(), MapType::Identity);
 //! assert_eq!(el.entity_closure_dofs(1, 0), &[0, 1, 3]);
@@ -27,6 +35,7 @@
 //! [Finite elements]: https://tetracl.github.io/tetraloma/fem/elements.html
 
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::{Arc, OnceLock, RwLock};
 
 use tetraloma_dims::CellType;
@@ -100,6 +109,7 @@ pub enum MapType {
     L2Piola,
 }
 
+// M11.T0 stub, implemented in M11.T6; not part of the stable API yet (dependency rule 7).
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TransformationKind {
@@ -108,6 +118,7 @@ pub enum TransformationKind {
     Dense,
 }
 
+// M11.T0 stub, implemented in M11.T6; not part of the stable API yet (dependency rule 7).
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Generator {
@@ -136,11 +147,42 @@ pub struct ElementKey {
     pub variant: Variant,
 }
 
-/// Process-wide cache of constructed elements, keyed by [`ElementKey`].
-static ELEMENT_CACHE: OnceLock<RwLock<HashMap<ElementKey, Arc<Element>>>> = OnceLock::new();
+/// One per-key slot in the process-wide cache: inserted under the map lock and initialised
+/// outside it via `OnceLock`, guaranteeing each key is built strictly once without holding
+/// the map lock across construction (so recursive lookups of other keys cannot deadlock).
+type CacheSlot = Arc<OnceLock<Arc<Element>>>;
 
-fn element_cache() -> &'static RwLock<HashMap<ElementKey, Arc<Element>>> {
+static ELEMENT_CACHE: OnceLock<RwLock<HashMap<ElementKey, CacheSlot>>> = OnceLock::new();
+
+fn element_cache() -> &'static RwLock<HashMap<ElementKey, CacheSlot>> {
     ELEMENT_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+fn cache_get_or_build<F>(
+    cache: &RwLock<HashMap<ElementKey, CacheSlot>>,
+    key: ElementKey,
+    build: F,
+) -> Arc<Element>
+where
+    F: FnOnce(ElementKey) -> Element,
+{
+    if let Some(el) = cache
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(&key)
+        .and_then(|slot| slot.get().cloned())
+    {
+        return el;
+    }
+    let slot = {
+        let mut guard = cache.write().unwrap_or_else(|e| e.into_inner());
+        Arc::clone(
+            guard
+                .entry(key)
+                .or_insert_with(|| Arc::new(OnceLock::new())),
+        )
+    };
+    Arc::clone(slot.get_or_init(|| Arc::new(build(key))))
 }
 
 fn get_dofs<'a>(
@@ -178,16 +220,22 @@ fn get_dofs<'a>(
 /// use tetraloma_element::{Element, ElementKey, Family, MapType, Variant};
 /// use tetraloma_refcell::NodeFamily;
 ///
-/// let el = Element::get(ElementKey {
-///     family: Family::Lagrange, cell: CellType::Tetrahedron, degree: 2, variant: Variant::Nodal(NodeFamily::Equispaced),
-/// })?;
-/// assert_eq!((el.dim(), el.reference_value_size(), el.map_type()), (10, 1, MapType::Identity));
-/// assert_eq!((el.entity_dofs(0, 0), el.entity_dofs(1, 0)), (&[0][..], &[4][..]));
+/// let key = ElementKey {
+///     family: Family::Lagrange,
+///     cell: CellType::Tetrahedron,
+///     degree: 2,
+///     variant: Variant::Nodal(NodeFamily::Equispaced),
+/// };
+/// let el = Element::get(key)?;
+/// assert_eq!(el.dim(), 10);
+/// assert_eq!(el.reference_value_size(), 1);
+/// assert_eq!(el.map_type(), MapType::Identity);
+/// assert_eq!(el.entity_dofs(0, 0), &[0]);
+/// assert_eq!(el.entity_dofs(1, 0), &[4]);
 /// # Ok::<(), tetraloma_element::ElementError>(())
 /// ```
 ///
 /// [Elements and DOFs]: https://tetracl.github.io/tetraloma/fem/elements.html#elements-and-dofs
-#[derive(Debug)]
 pub struct Element {
     key: ElementKey,
     map_type: MapType,
@@ -197,6 +245,15 @@ pub struct Element {
     embedded_superdegree: u32,
     entity_dofs: Vec<Vec<Vec<usize>>>,
     entity_closure_dofs: Vec<Vec<Vec<usize>>>,
+}
+
+impl fmt::Debug for Element {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Element")
+            .field("key", &self.key)
+            .field("dim", &self.dim)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Element {
@@ -219,30 +276,22 @@ impl Element {
     /// use tetraloma_refcell::NodeFamily;
     ///
     /// let key = ElementKey {
-    ///     family: Family::Lagrange, cell: CellType::Quadrilateral, degree: 3, variant: Variant::Nodal(NodeFamily::Gll),
+    ///     family: Family::Lagrange,
+    ///     cell: CellType::Quadrilateral,
+    ///     degree: 3,
+    ///     variant: Variant::Nodal(NodeFamily::Gll),
     /// };
-    /// let (a, b) = (Element::get(key)?, Element::get(key)?);
-    /// assert!(Arc::ptr_eq(&a, &b) && a.dim() == 16);
+    /// let a = Element::get(key)?;
+    /// let b = Element::get(key)?;
+    /// assert!(Arc::ptr_eq(&a, &b));
+    /// assert_eq!(a.dim(), 16);
     /// # Ok::<(), tetraloma_element::ElementError>(())
     /// ```
     ///
     /// [Families and degrees]: https://tetracl.github.io/tetraloma/fem/elements.html#families-and-degrees
     pub fn get(key: ElementKey) -> Result<Arc<Element>, ElementError> {
         layout::validate_key(key)?;
-        let cache = element_cache();
-        if let Some(el) = cache
-            .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .get(&key)
-            .cloned()
-        {
-            return Ok(el);
-        }
-        // Build outside the write lock so concurrent reads proceed and recursive lookups (for
-        // tensor-product 1D factors) cannot deadlock.
-        let built = Arc::new(Self::build(key));
-        let mut guard = cache.write().unwrap_or_else(|e| e.into_inner());
-        Ok(guard.entry(key).or_insert(built).clone())
+        Ok(cache_get_or_build(element_cache(), key, Self::build))
     }
 
     fn build(key: ElementKey) -> Self {
@@ -268,7 +317,12 @@ impl Element {
     /// use tetraloma_dims::CellType;
     /// use tetraloma_element::{Element, ElementKey, Family, Variant};
     ///
-    /// let key = ElementKey { family: Family::Lagrange, cell: CellType::Interval, degree: 2, variant: Variant::Legendre };
+    /// let key = ElementKey {
+    ///     family: Family::Lagrange,
+    ///     cell: CellType::Interval,
+    ///     degree: 2,
+    ///     variant: Variant::Legendre,
+    /// };
     /// assert_eq!(Element::get(key)?.key(), key);
     /// # Ok::<(), tetraloma_element::ElementError>(())
     /// ```
@@ -289,10 +343,13 @@ impl Element {
     /// use tetraloma_element::{Element, ElementKey, Family, MapType, Variant};
     /// use tetraloma_refcell::NodeFamily;
     ///
-    /// let el = Element::get(ElementKey {
-    ///     family: Family::Lagrange, cell: CellType::Triangle, degree: 1, variant: Variant::Nodal(NodeFamily::Equispaced),
-    /// })?;
-    /// assert_eq!(el.map_type(), MapType::Identity);
+    /// let key = ElementKey {
+    ///     family: Family::Lagrange,
+    ///     cell: CellType::Triangle,
+    ///     degree: 1,
+    ///     variant: Variant::Nodal(NodeFamily::Equispaced),
+    /// };
+    /// assert_eq!(Element::get(key)?.map_type(), MapType::Identity);
     /// # Ok::<(), tetraloma_element::ElementError>(())
     /// ```
     ///
@@ -313,10 +370,13 @@ impl Element {
     /// use tetraloma_element::{Element, ElementKey, Family, Variant};
     /// use tetraloma_refcell::NodeFamily;
     ///
-    /// let el = Element::get(ElementKey {
-    ///     family: Family::Lagrange, cell: CellType::Hexahedron, degree: 2, variant: Variant::Nodal(NodeFamily::Gll),
-    /// })?;
-    /// assert_eq!(el.reference_value_size(), 1);
+    /// let key = ElementKey {
+    ///     family: Family::Lagrange,
+    ///     cell: CellType::Hexahedron,
+    ///     degree: 2,
+    ///     variant: Variant::Nodal(NodeFamily::Gll),
+    /// };
+    /// assert_eq!(Element::get(key)?.reference_value_size(), 1);
     /// # Ok::<(), tetraloma_element::ElementError>(())
     /// ```
     ///
@@ -336,10 +396,13 @@ impl Element {
     /// use tetraloma_element::{Element, ElementKey, Family, Variant};
     /// use tetraloma_refcell::NodeFamily;
     ///
-    /// let el = Element::get(ElementKey {
-    ///     family: Family::Lagrange, cell: CellType::Prism, degree: 2, variant: Variant::Nodal(NodeFamily::Equispaced),
-    /// })?;
-    /// assert_eq!(el.dim(), 18);
+    /// let key = ElementKey {
+    ///     family: Family::Lagrange,
+    ///     cell: CellType::Prism,
+    ///     degree: 2,
+    ///     variant: Variant::Nodal(NodeFamily::Equispaced),
+    /// };
+    /// assert_eq!(Element::get(key)?.dim(), 18);
     /// # Ok::<(), tetraloma_element::ElementError>(())
     /// ```
     ///
@@ -364,10 +427,16 @@ impl Element {
     /// use tetraloma_element::{Element, ElementKey, Family, Variant};
     /// use tetraloma_refcell::NodeFamily;
     ///
-    /// let el = Element::get(ElementKey {
-    ///     family: Family::Lagrange, cell: CellType::Triangle, degree: 3, variant: Variant::Nodal(NodeFamily::Equispaced),
-    /// })?;
-    /// assert_eq!((el.entity_dofs(0, 2), el.entity_dofs(1, 0), el.entity_dofs(2, 0)), (&[2][..], &[3, 4][..], &[9][..]));
+    /// let key = ElementKey {
+    ///     family: Family::Lagrange,
+    ///     cell: CellType::Triangle,
+    ///     degree: 3,
+    ///     variant: Variant::Nodal(NodeFamily::Equispaced),
+    /// };
+    /// let el = Element::get(key)?;
+    /// assert_eq!(el.entity_dofs(0, 2), &[2]);
+    /// assert_eq!(el.entity_dofs(1, 0), &[3, 4]);
+    /// assert_eq!(el.entity_dofs(2, 0), &[9]);
     /// # Ok::<(), tetraloma_element::ElementError>(())
     /// ```
     ///
@@ -392,10 +461,13 @@ impl Element {
     /// use tetraloma_element::{Element, ElementKey, Family, Variant};
     /// use tetraloma_refcell::NodeFamily;
     ///
-    /// let el = Element::get(ElementKey {
-    ///     family: Family::Lagrange, cell: CellType::Triangle, degree: 3, variant: Variant::Nodal(NodeFamily::Equispaced),
-    /// })?;
-    /// assert_eq!(el.entity_closure_dofs(1, 2), &[1, 2, 7, 8]);
+    /// let key = ElementKey {
+    ///     family: Family::Lagrange,
+    ///     cell: CellType::Triangle,
+    ///     degree: 3,
+    ///     variant: Variant::Nodal(NodeFamily::Equispaced),
+    /// };
+    /// assert_eq!(Element::get(key)?.entity_closure_dofs(1, 2), &[1, 2, 7, 8]);
     /// # Ok::<(), tetraloma_element::ElementError>(())
     /// ```
     ///
@@ -422,12 +494,19 @@ impl Element {
     /// use tetraloma_refcell::NodeFamily;
     ///
     /// let p0 = Element::get(ElementKey {
-    ///     family: Family::Lagrange, cell: CellType::Triangle, degree: 0, variant: Variant::Nodal(NodeFamily::Gll),
+    ///     family: Family::Lagrange,
+    ///     cell: CellType::Triangle,
+    ///     degree: 0,
+    ///     variant: Variant::Nodal(NodeFamily::Gll),
     /// })?;
     /// let p2 = Element::get(ElementKey {
-    ///     family: Family::Lagrange, cell: CellType::Triangle, degree: 2, variant: Variant::Nodal(NodeFamily::Gll),
+    ///     family: Family::Lagrange,
+    ///     cell: CellType::Triangle,
+    ///     degree: 2,
+    ///     variant: Variant::Nodal(NodeFamily::Gll),
     /// })?;
-    /// assert!(p0.discontinuous_only() && !p2.discontinuous_only());
+    /// assert!(p0.discontinuous_only());
+    /// assert!(!p2.discontinuous_only());
     /// # Ok::<(), tetraloma_element::ElementError>(())
     /// ```
     ///
@@ -447,10 +526,13 @@ impl Element {
     /// use tetraloma_element::{Element, ElementKey, Family, Variant};
     /// use tetraloma_refcell::NodeFamily;
     ///
-    /// let el = Element::get(ElementKey {
-    ///     family: Family::Lagrange, cell: CellType::Pyramid, degree: 3, variant: Variant::Nodal(NodeFamily::Equispaced),
-    /// })?;
-    /// assert_eq!(el.embedded_superdegree(), 3);
+    /// let key = ElementKey {
+    ///     family: Family::Lagrange,
+    ///     cell: CellType::Pyramid,
+    ///     degree: 3,
+    ///     variant: Variant::Nodal(NodeFamily::Equispaced),
+    /// };
+    /// assert_eq!(Element::get(key)?.embedded_superdegree(), 3);
     /// # Ok::<(), tetraloma_element::ElementError>(())
     /// ```
     ///
@@ -458,6 +540,9 @@ impl Element {
     pub fn embedded_superdegree(&self) -> u32 {
         self.embedded_superdegree
     }
+
+    // M11.T0 stubs below, implemented in M11.T5–T7; not part of the stable API yet (dependency
+    // rule 7).
 
     #[doc(hidden)]
     pub fn coefficients(&self) -> &[f64] {
@@ -505,6 +590,7 @@ impl Element {
     }
 }
 
+// M11.T0 stub, implemented in M11.T5; not part of the stable API yet (dependency rule 7).
 #[doc(hidden)]
 pub struct ElementTabulation {
     pub nderivs: u32,
@@ -514,6 +600,7 @@ pub struct ElementTabulation {
     pub values: Vec<f64>,
 }
 
+// M11.T0 stub, implemented in M11.T6; not part of the stable API yet (dependency rule 7).
 #[doc(hidden)]
 pub enum BaseTransformation {
     SignedPermutation { perm: Vec<u32>, negate: Vec<bool> },
@@ -523,21 +610,23 @@ pub enum BaseTransformation {
 #[cfg(test)]
 mod tests {
     use std::error::Error;
-    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Barrier};
 
     use tetraloma_dims::CellType;
-    use tetraloma_refcell::{NodeFamily, RefCellError, num_lagrange_nodes, tdim};
+    use tetraloma_refcell::{NodeFamily, RefCellError, tdim};
 
     use super::*;
 
-    const ALL_CELLS: [CellType; 7] = [
-        CellType::Interval,
-        CellType::Triangle,
-        CellType::Quadrilateral,
-        CellType::Tetrahedron,
-        CellType::Hexahedron,
-        CellType::Prism,
-        CellType::Pyramid,
+    /// Independent literal Lagrange dimensions for degrees 0..=3 on each cell (Appendix A.4).
+    const CELL_DIMS_0_TO_3: [(CellType, [usize; 4]); 7] = [
+        (CellType::Interval, [1, 2, 3, 4]),
+        (CellType::Triangle, [1, 3, 6, 10]),
+        (CellType::Quadrilateral, [1, 4, 9, 16]),
+        (CellType::Tetrahedron, [1, 4, 10, 20]),
+        (CellType::Hexahedron, [1, 8, 27, 64]),
+        (CellType::Prism, [1, 6, 18, 40]),
+        (CellType::Pyramid, [1, 5, 14, 30]),
     ];
 
     fn lagrange(cell: CellType, degree: u32, variant: Variant) -> ElementKey {
@@ -550,20 +639,45 @@ mod tests {
     }
 
     #[test]
-    fn cache_returns_same_arc_across_threads() {
+    fn cache_builds_strictly_once_and_returns_same_arc_across_threads() {
+        let local_cache = Arc::new(RwLock::new(HashMap::new()));
+        let builds = Arc::new(AtomicUsize::new(0));
+        let barrier = Arc::new(Barrier::new(8));
         let key = lagrange(CellType::Triangle, 4, Variant::Nodal(NodeFamily::Gll));
+
         let handles: Vec<_> = (0..8)
-            .map(|_| std::thread::spawn(move || Element::get(key).unwrap()))
+            .map(|_| {
+                let c = Arc::clone(&local_cache);
+                let b = Arc::clone(&builds);
+                let bar = Arc::clone(&barrier);
+                std::thread::spawn(move || {
+                    bar.wait();
+                    cache_get_or_build(&c, key, |k| {
+                        b.fetch_add(1, Ordering::SeqCst);
+                        Element::build(k)
+                    })
+                })
+            })
             .collect();
         let results: Vec<Arc<Element>> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+        assert_eq!(builds.load(Ordering::SeqCst), 1);
         assert!(results[1..].iter().all(|el| Arc::ptr_eq(&results[0], el)));
+
+        // Global cache also returns identical handles across threads.
+        let global: Vec<Arc<Element>> = (0..8)
+            .map(|_| std::thread::spawn(move || Element::get(key).unwrap()))
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|h| h.join().unwrap())
+            .collect();
+        assert!(global[1..].iter().all(|el| Arc::ptr_eq(&global[0], el)));
     }
 
     #[test]
     fn lagrange_accessors_and_degree_zero_behaviour() {
         // Keep degrees <= 3 on 3D cells here so dense construction in M11.T5 stays fast
         // (docs/plans/M11.md: no test builds a hexahedron above p = 10 before T7).
-        for cell in ALL_CELLS {
+        for (cell, expected_dims) in CELL_DIMS_0_TO_3 {
             let td = tdim(cell);
             let variants: &[Variant] = if cell == CellType::Pyramid {
                 &[Variant::Nodal(NodeFamily::Equispaced), Variant::Legendre]
@@ -575,20 +689,21 @@ mod tests {
                 ]
             };
             for &variant in variants {
-                for degree in 0..=3 {
+                for (degree, &want_dim) in expected_dims.iter().enumerate() {
+                    let degree = degree as u32;
                     let key = lagrange(cell, degree, variant);
                     let el = Element::get(key).unwrap();
                     assert_eq!(el.key(), key);
                     assert_eq!(el.map_type(), MapType::Identity);
                     assert_eq!(el.reference_value_size(), 1);
-                    assert_eq!(el.dim(), num_lagrange_nodes(cell, degree));
+                    assert_eq!(el.dim(), want_dim, "{key:?}");
                     assert_eq!(el.embedded_superdegree(), degree);
                     assert_eq!(
                         el.discontinuous_only(),
                         matches!(variant, Variant::Legendre) || degree == 0
                     );
                     if degree == 0 {
-                        assert_eq!((el.dim(), el.entity_dofs(td, 0)), (1, &[0][..]));
+                        assert_eq!(el.entity_dofs(td, 0), &[0]);
                         assert_eq!(el.entity_closure_dofs(td, 0), &[0]);
                         for d in 0..td {
                             assert!(el.entity_dofs(d, 0).is_empty());
@@ -598,10 +713,11 @@ mod tests {
                 }
             }
         }
-        for (cell, max_p) in [
-            (CellType::Interval, 20),
-            (CellType::Triangle, 15),
-            (CellType::Pyramid, 8),
+        // Independent literal dimensions at the upper degree boundary of small cells.
+        for (cell, max_p, want_dim) in [
+            (CellType::Interval, 20, 21),
+            (CellType::Triangle, 15, 136),
+            (CellType::Pyramid, 8, 285),
         ] {
             let el = Element::get(lagrange(
                 cell,
@@ -609,7 +725,7 @@ mod tests {
                 Variant::Nodal(NodeFamily::Equispaced),
             ))
             .unwrap();
-            assert_eq!(el.dim(), num_lagrange_nodes(cell, max_p));
+            assert_eq!(el.dim(), want_dim, "{cell:?} p={max_p}");
         }
     }
 

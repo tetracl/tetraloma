@@ -21,10 +21,16 @@ use crate::{Family, Variant};
 /// use tetraloma_refcell::NodeFamily;
 ///
 /// let key = ElementKey {
-///     family: Family::Lagrange, cell: CellType::Pyramid, degree: 2, variant: Variant::Nodal(NodeFamily::Gll),
+///     family: Family::Lagrange,
+///     cell: CellType::Pyramid,
+///     degree: 2,
+///     variant: Variant::Nodal(NodeFamily::Gll),
 /// };
 /// let err = Element::get(key).unwrap_err();
-/// assert!(matches!(err, ElementError::Unsupported { cell: CellType::Pyramid, degree: 2, .. }));
+/// assert!(matches!(
+///     err,
+///     ElementError::Unsupported { cell: CellType::Pyramid, degree: 2, .. }
+/// ));
 /// assert!(err.to_string().contains("Pyramid"));
 /// ```
 ///

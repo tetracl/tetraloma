@@ -3,8 +3,9 @@
 A finite element turns a function space on a reference cell into a concrete set of basis
 functions and a rule for attaching their coefficients to vertices, edges, faces and cells of a
 mesh. The crate `tetraloma-element` defines these reference elements on the host in `f64`,
-independently of any compute device. Downstream discretisation code looks up an element once
-through [`Element::get`](../api/tetraloma_element/struct.Element.html) and reads its metadata,
+independently of any compute device. Add `tetraloma-element` alongside `tetraloma` in
+`Cargo.toml` (the `tetraloma` facade does not re-export it yet), then look up an element once
+through [`Element::get`](../api/tetraloma_element/struct.Element.html) and read its metadata,
 degree-of-freedom layout and tables from the cached handle.
 
 ## Elements and DOFs
@@ -26,8 +27,9 @@ the DOFs attached to that sub-entity, which enforces continuity of the global fu
 boundaries.
 
 [`Element`](../api/tetraloma_element/struct.Element.html) exposes this association through two
-methods, indexed by sub-entity dimension `d` and local sub-entity index `e` (in the numbering of
-[Sub-entities](../concepts/reference-cells.md#sub-entities)):
+methods, indexed by dimension `d` (from vertices at `d = 0`, through edges and faces in the
+numbering of [Sub-entities](../concepts/reference-cells.md#sub-entities), up to the cell itself at
+`d = t`, `e = 0`) and local index `e`:
 
 - `entity_dofs(d, e)` returns the local DOF indices belonging strictly to the interior of
   sub-entity `(d, e)`, excluding its boundary. Across all `(d, e)` with $0 \le d \le t$, these
@@ -39,7 +41,8 @@ methods, indexed by sub-entity dimension `d` and local sub-entity index `e` (in 
 A reference function $\hat u(\xi)$ on $\hat K$ maps to a physical cell $X(\hat K)$ according
 to the element's [`MapType`](../api/tetraloma_element/enum.MapType.html) (`Element::map_type`),
 using the Jacobian $J$, pseudo-inverse $K$ and determinant $\det J$ of
-[Geometric factors](../concepts/geometric-factors.md) (with the pseudo-determinant when $t < g$):
+[Geometric factors](../concepts/geometric-factors.md) (with the pseudo-determinant when $t < g$,
+where $g$ is the geometric dimension):
 
 | `MapType` | Reference values | Push-forward $u(x)$ | Pull-back $\hat u(\xi)$ | Families |
 | --- | --- | --- | --- | --- |

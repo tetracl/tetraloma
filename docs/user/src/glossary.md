@@ -139,8 +139,11 @@ See [Installation](getting-started/installation.md#runtime-features-of-cubecl).
 
 Degree
 : Of a coordinate element, the polynomial degree $p$ of the map from the reference cell; of a
-quadrature rule, the degree $k$ up to which it integrates polynomials exactly.
-See [Coordinate elements](concepts/geometry.md#coordinate-elements) and
+finite element, its polyset superdegree $p$ ($p = 0$ is the lowest discontinuous element and
+$p = 1$ the lowest continuous element); of a quadrature rule, the degree $k$ up to which it
+integrates polynomials exactly.
+See [Coordinate elements](concepts/geometry.md#coordinate-elements),
+[Families and degrees](fem/elements.md#families-and-degrees) and
 [Quadrature rules](concepts/quadrature.md#quadrature-rules).
 
 DefElement, ndelement

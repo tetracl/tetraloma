@@ -185,18 +185,29 @@ mod tests {
         }
     }
 
+    /// Independent literal dimensions at degrees 0, 1, 2, 3 and `max_p` for each cell.
+    const EXPECTED_DIMS: [(CellType, u32, [usize; 5]); 7] = [
+        (CellType::Interval, 20, [1, 2, 3, 4, 21]),
+        (CellType::Triangle, 15, [1, 3, 6, 10, 136]),
+        (CellType::Quadrilateral, 20, [1, 4, 9, 16, 441]),
+        (CellType::Tetrahedron, 15, [1, 4, 10, 20, 816]),
+        (CellType::Hexahedron, 20, [1, 8, 27, 64, 9261]),
+        (CellType::Prism, 15, [1, 6, 18, 40, 2176]),
+        (CellType::Pyramid, 8, [1, 5, 14, 30, 285]),
+    ];
+
     #[test]
     fn lagrange_layouts_partition_dofs_and_match_sub_entity_counts() {
-        for cell in ALL_CELLS {
+        for (cell, max_p, want_dims) in EXPECTED_DIMS {
             let td = tdim(cell);
-            let max_p = lagrange_max_degree(cell).unwrap();
+            assert_eq!(lagrange_max_degree(cell), Some(max_p));
             for variant in [Variant::Nodal(NodeFamily::Equispaced), Variant::Legendre] {
-                for degree in [0, 1, 2, 3, max_p] {
+                for (&degree, &want_dim) in [0, 1, 2, 3, max_p].iter().zip(&want_dims) {
                     let k = make_key(Family::Lagrange, cell, degree, variant);
                     let layout = build_lagrange_layout(k);
                     let want_disc = matches!(variant, Variant::Legendre) || degree == 0;
                     assert_eq!(layout.discontinuous_only, want_disc, "{k:?}");
-                    assert_eq!(layout.dim, num_lagrange_nodes(cell, degree), "{k:?}");
+                    assert_eq!(layout.dim, want_dim, "{k:?}");
 
                     let flat: Vec<usize> = (0..=td)
                         .flat_map(|d| (0..num_sub_entities(cell, d)).map(move |e| (d, e)))

@@ -111,8 +111,9 @@ The book has seven parts, and the API documentation sits beside it.
 - **Help.** [Troubleshooting](troubleshooting.md) and a [Glossary](glossary.md).
 
 The [API documentation](api/tetraloma/index.html) describes every public type and function, with
-an example for each function. Start at the crate `tetraloma`, which re-exports everything a
-program needs; `use tetraloma::prelude::*;` brings the common names into scope.
+an example for each function. Start at the crate `tetraloma`, which re-exports the mesh, device
+and I/O types a program needs (`use tetraloma::prelude::*;` brings the common names into scope);
+reference finite elements live in `tetraloma-element`.
 
 Every Rust example in this book is compiled and run as a test. The longer programs live in the
 crate `tetraloma-examples` of the repository, and you can run each of them with
