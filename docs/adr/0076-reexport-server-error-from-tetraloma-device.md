@@ -1,6 +1,6 @@
 # ADR-0076: `tetraloma-device` re-exports `ServerError` for `tetraloma-parallel`
 
-Status: Proposed
+Status: Accepted
 Date: 2026-11-23
 Decision issue: #102
 Raised by: M18.T0 (#92, pull request #101, Round 1 review findings A-F3 and F-F1)
@@ -39,4 +39,6 @@ Option 2. It follows ADR-0026 item 12 (`Client` and `CubeElement`), keeps `tetra
 
 ## Decision
 
-*(Pending.)*
+> 1 and 2 as recommended., 2026-11-23, said to the agent in a session.
+
+Option 2 (this ADR's recommendation, presented as Question 1 option 1 in the session) is accepted: `tetraloma-device` publicly re-exports `cubecl::server::ServerError` beside `Client` and `CubeElement`, and `scripts/doc_audit.py` adds `tetraloma_device/enum.ServerError.html` to `FOREIGN_INLINED`. Question 2 (accepting M18.T0's diff size as-is) is recorded in the Decisions table of `docs/plans/M18.md`.
