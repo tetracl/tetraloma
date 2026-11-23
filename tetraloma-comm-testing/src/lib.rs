@@ -4,7 +4,8 @@
 //! [`EXPECT_RANKS_VAR`]).
 //!
 //! This crate lives in the repository and is not published. It is for the developers of tetraloma
-//! to test distributed code without depending on a mesh crate. Application programs use `Serial`
+//! to test distributed code without depending on a mesh crate (currently a shim re-exporting from
+//! `tetraloma-testing` until the test-support split completes). Application programs use `Serial`
 //! or `Mpi` as shown in the [Distributed meshes] tutorial of the [user book].
 //!
 //! [user book]: https://tetracl.github.io/tetraloma/

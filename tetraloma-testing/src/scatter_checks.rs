@@ -181,6 +181,10 @@ pub fn check_all_types(comm: &dyn CommDyn, l: &Layout, block: usize) {
 /// Checks `seed`'s ghost layout (up to 20 owned indices per rank) across every block size in
 /// `blocks` and every supported scalar type.
 pub fn check_seed(comm: &dyn CommDyn, seed: u64, blocks: &[usize]) {
+    assert!(
+        !blocks.is_empty(),
+        "check_seed requires at least one block size"
+    );
     let layout = Layout::new(comm, seed, 20);
     for &block in blocks {
         check_all_types(comm, &layout, block);
@@ -189,6 +193,7 @@ pub fn check_seed(comm: &dyn CommDyn, seed: u64, blocks: &[usize]) {
 
 /// Runs [`check_seed`] for every seed in `seeds` and every block size in `blocks`.
 pub fn check_seeds(comm: &dyn CommDyn, seeds: &[u64], blocks: &[usize]) {
+    assert!(!seeds.is_empty(), "check_seeds requires at least one seed");
     for &seed in seeds {
         check_seed(comm, seed, blocks);
     }

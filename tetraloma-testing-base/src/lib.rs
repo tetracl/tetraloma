@@ -6,7 +6,8 @@
 //! [`scatter_checks`]).
 //!
 //! This crate lives in the repository and is not published. It is for the developers of tetraloma
-//! to test the foundation crates without depending on a mesh crate. Application programs open
+//! to test the foundation crates without depending on a mesh crate (currently a shim re-exporting
+//! from `tetraloma-testing` until the test-support split completes). Application programs open
 //! devices directly through `cubecl::Device`, as [Compute devices] in the [user book] explains.
 //!
 //! [user book]: https://tetracl.github.io/tetraloma/

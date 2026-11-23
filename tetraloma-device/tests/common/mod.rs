@@ -31,29 +31,7 @@ pub fn prop_len() -> impl proptest::strategy::Strategy<Value = usize> {
     prop_oneof![0usize..=64, 0usize..=PROP_MAX_LEN]
 }
 
-/// Runs `$f::<T>($args)` for every `DeviceScalar` the device supports. f32, i32 and u32 must
-/// be supported everywhere; f64 runs where `supports_type` allows it.
-macro_rules! each_scalar {
-    ($client:expr, $f:ident $(, $arg:expr)* $(,)?) => {{
-        let client: &cubecl::prelude::Client = $client;
-        for (name, ok) in [
-            ("f32", tetraloma_testing::supports::<f32>(client)),
-            ("i32", tetraloma_testing::supports::<i32>(client)),
-            ("u32", tetraloma_testing::supports::<u32>(client)),
-        ] {
-            assert!(ok, "{name} must be supported on every device");
-        }
-        $f::<f32>(client $(, $arg)*);
-        if tetraloma_testing::supports::<f64>(client) {
-            $f::<f64>(client $(, $arg)*);
-        } else {
-            println!("{}: f64 skipped, unsupported on {}", stringify!($f), client.name());
-        }
-        $f::<i32>(client $(, $arg)*);
-        $f::<u32>(client $(, $arg)*);
-    }};
-}
-pub(crate) use each_scalar;
+pub(crate) use tetraloma_testing::each_scalar;
 
 /// The vector sizes of the invariance tests: 1 plus every power of two from 2 to 16 no wider
 /// than the device's widest IO-optimized size for `elem_bytes`.

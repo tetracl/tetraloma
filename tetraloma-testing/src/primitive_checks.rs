@@ -10,7 +10,7 @@ use cubecl::prelude::*;
 use tetraloma_device::copy;
 use tetraloma_device::*;
 
-use crate::{TOL_F32, TOL_F64, supports};
+use crate::{TOL_F32, TOL_F64};
 
 /// Fixed seed of the large primitive checks.
 pub const LARGE_SEED: u64 = 0x6772_6964_636c_0002;
@@ -192,19 +192,22 @@ impl TestScalar for u32 {
     }
 }
 
-/// Runs `$f::<T>($args)` for every `DeviceScalar` the device supports.
+/// Runs `$f::<T>($args)` for every `DeviceScalar` the device supports: `f32`, `i32` and `u32`
+/// must be supported on every device, and `f64` runs where [`supports`](crate::supports) reports
+/// support (printing a notice otherwise).
+#[macro_export]
 macro_rules! each_scalar {
     ($client:expr, $f:ident $(, $arg:expr)* $(,)?) => {{
-        let client: &Client = $client;
+        let client = $client;
         for (name, ok) in [
-            ("f32", supports::<f32>(client)),
-            ("i32", supports::<i32>(client)),
-            ("u32", supports::<u32>(client)),
+            ("f32", $crate::supports::<f32>(client)),
+            ("i32", $crate::supports::<i32>(client)),
+            ("u32", $crate::supports::<u32>(client)),
         ] {
             assert!(ok, "{name} must be supported on every device");
         }
         $f::<f32>(client $(, $arg)*);
-        if supports::<f64>(client) {
+        if $crate::supports::<f64>(client) {
             $f::<f64>(client $(, $arg)*);
         } else {
             println!("{}: f64 skipped, unsupported on {}", stringify!($f), client.name());
