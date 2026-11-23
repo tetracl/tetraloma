@@ -264,7 +264,7 @@ results with a relative tolerance, not with `==`.
 
 Interpolation on equispaced nodes becomes badly conditioned as the degree grows, so meshes of
 degree above about 10 lose accuracy. Use Gauss–Lobatto–Legendre nodes, `NodeFamily::Gll`, on
-intervals, quadrilaterals and hexahedra; on other cell types they give
+every cell except pyramids; on pyramids they give
 `GridError::UnsupportedNodeFamily` ([GLL and equispaced nodes](concepts/geometry.md#gll-and-equispaced-nodes)).
 In `f32`, rounding ends the gain from higher degrees much earlier than in `f64`
 ([High-order geometry](tutorials/quadrature.md#high-order-geometry)).

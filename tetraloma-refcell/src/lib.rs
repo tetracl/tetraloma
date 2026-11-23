@@ -45,6 +45,7 @@ mod cell;
 mod error;
 mod facet;
 mod generator;
+mod isaac;
 mod jacobi;
 mod lagrange;
 mod lu;

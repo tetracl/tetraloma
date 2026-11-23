@@ -541,6 +541,7 @@ mod tests {
             (CellType::Hexahedron, NodeFamily::Equispaced, 1..=4),
             (CellType::Hexahedron, NodeFamily::Gll, 1..=4),
             (CellType::Prism, NodeFamily::Equispaced, 1..=4),
+            (CellType::Prism, NodeFamily::Gll, 1..=4),
         ] {
             let td = tetraloma_refcell::tdim(cell);
             for degree in degrees {

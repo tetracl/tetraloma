@@ -3,8 +3,9 @@
 //!
 //! The child's Lagrange points of the same degree and family, mapped into the parent cell by
 //! `facet_points_to_cell` (A.5's affine rule over the sub-entity's vertex list), are matched
-//! against the parent's Lagrange points. Both sides use the same one-dimensional point sets,
-//! so the match is exact up to rounding.
+//! against the parent's Lagrange points. Each sub-entity's point set restricts from the parent's
+//! (tensor products on tensor cells and prisms, Isaac's restriction property on simplices), so
+//! the match is exact up to rounding.
 
 use tetraloma_device::{GridError, Result};
 use tetraloma_dims::CellType;
@@ -20,6 +21,7 @@ fn family_name(family: NodeFamily) -> &'static str {
     match family {
         NodeFamily::Equispaced => "equispaced",
         NodeFamily::Gll => "GLL",
+        _ => "unknown",
     }
 }
 
@@ -218,8 +220,8 @@ mod tests {
             let tdim = tetraloma_refcell::tdim(parent);
             for degree in 1..=max {
                 let families: &[NodeFamily] = match parent {
-                    Quadrilateral | Hexahedron => &[NodeFamily::Equispaced, NodeFamily::Gll],
-                    _ => &[NodeFamily::Equispaced],
+                    Pyramid => &[NodeFamily::Equispaced],
+                    _ => &[NodeFamily::Equispaced, NodeFamily::Gll],
                 };
                 for &family in families {
                     for (f, verts) in tetraloma_refcell::sub_entities(parent, tdim - 1)
@@ -258,8 +260,8 @@ mod tests {
             let max = if parent == Pyramid { 3 } else { 4 };
             for degree in 1..=max {
                 let families: &[NodeFamily] = match parent {
-                    Hexahedron => &[NodeFamily::Equispaced, NodeFamily::Gll],
-                    _ => &[NodeFamily::Equispaced],
+                    Pyramid => &[NodeFamily::Equispaced],
+                    _ => &[NodeFamily::Equispaced, NodeFamily::Gll],
                 };
                 for &family in families {
                     let table = edge_table(parent, degree, family).expect("edge table");

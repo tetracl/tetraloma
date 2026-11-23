@@ -115,15 +115,17 @@ Two families of nodes are available ([`NodeFamily`](../api/tetraloma/enum.NodeFa
 - Equispaced nodes lie on a uniform lattice: on an edge of degree $p$, at the fractions
   $i/p$. They exist on every cell type. Gmsh and VTK use them, so they are the nodes of every
   file tetraloma reads or writes.
-- Gauss–Lobatto–Legendre (GLL) nodes are the end points of the interval and the roots of
-  $P_p'$, the derivative of the Legendre polynomial of degree $p$, mapped to $[0, 1]$. They
-  cluster towards the ends. They exist on intervals, quadrilaterals and hexahedra, where they
-  form tensor grids. A GLL element on any other cell type gives
-  `GridError::UnsupportedNodeFamily`.
+- Gauss–Lobatto–Legendre (GLL) nodes cluster towards the boundaries. On intervals, quadrilaterals
+  and hexahedra they form tensor grids of the 1D GLL points (the end points of the interval and
+  the roots of $P_p'$, the derivative of the Legendre polynomial of degree $p$, mapped to
+  $[0, 1]$). On triangles and tetrahedra they are Isaac's recursive GLL points, which restrict on
+  every sub-entity to that sub-entity's GLL points, and on prisms their product with the 1D GLL
+  points. A GLL element on a pyramid gives `GridError::UnsupportedNodeFamily`.
 
 The family matters at high degree. Interpolation on equispaced nodes becomes badly conditioned
 as $p$ grows (the Runge phenomenon), while GLL nodes keep it well conditioned. Equispaced nodes
-are well conditioned up to about $p = 10$; above that, use GLL nodes on tensor cells. Both
+are well conditioned up to about $p = 10$; above that, use GLL nodes (offered on every cell
+except pyramids). Both
 families span the same polynomials, so one converts to the other exactly, up to rounding, by
 evaluating the map at the other family's nodes. The writers do this on the device and write
 GLL geometry as equispaced nodes.
@@ -147,7 +149,7 @@ for (x, w) in gll.iter().zip(want) {
     assert!((x - w).abs() < 1e-14);
 }
 
-// GLL nodes exist on tensor cells only.
-assert!(lagrange_points(CellType::Triangle, 4, NodeFamily::Gll).is_err());
+// GLL nodes are not offered on pyramids.
+assert!(lagrange_points(CellType::Pyramid, 4, NodeFamily::Gll).is_err());
 # Ok(()) }
 ```

@@ -290,9 +290,10 @@ if any rank has ghost cells.
 See [PVTU output](tutorials/parallel-io.md#pvtu-output).
 
 GLL nodes
-: Gauss–Lobatto–Legendre nodes: the end points of the interval and the roots of $P_p'$, mapped to
-$[0, 1]$. They keep interpolation well conditioned at high degree, and exist on intervals,
-quadrilaterals and hexahedra.
+: Gauss–Lobatto–Legendre nodes: tensor grids of the 1D GLL points (the end points of the interval
+and the roots of $P_p'$, mapped to $[0, 1]$) on intervals, quadrilaterals and hexahedra, Isaac's
+recursive GLL points on triangles and tetrahedra, and their product on prisms. They keep
+interpolation well conditioned at high degree, and are not offered on pyramids.
 See [GLL and equispaced nodes](concepts/geometry.md#gll-and-equispaced-nodes).
 
 Halo
@@ -375,7 +376,7 @@ vertex; a curved cell has further nodes on its edges, faces or interior.
 See [Cells and entities](concepts/meshes.md#cells-and-entities).
 
 Node family
-: The placement of the Lagrange nodes along each edge (`NodeFamily`): equispaced or
+: The placement of the Lagrange nodes on a reference cell (`NodeFamily`): equispaced or
 Gauss–Lobatto–Legendre.
 See [GLL and equispaced nodes](concepts/geometry.md#gll-and-equispaced-nodes).
 

@@ -19,15 +19,15 @@ use crate::NodeFamily;
 /// use tetraloma_dims::CellType;
 /// use tetraloma_refcell::{NodeFamily, RefCellError};
 ///
-/// let err = RefCellError::UnsupportedNodeFamily { cell: CellType::Triangle, family: NodeFamily::Gll };
-/// assert_eq!(err.to_string(), "node family Gll is not supported on Triangle cells");
+/// let err = RefCellError::UnsupportedNodeFamily { cell: CellType::Pyramid, family: NodeFamily::Gll };
+/// assert_eq!(err.to_string(), "node family Gll is not supported on Pyramid cells");
 /// ```
 ///
 /// [Lagrange nodes]: https://tetracl.github.io/tetraloma/elements/lagrange.html#node-families
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RefCellError {
-    /// The node family is not offered on this cell: GLL exists on intervals, quadrilaterals and
-    /// hexahedra only.
+    /// The node family is not offered on this cell: GLL exists on intervals, triangles,
+    /// quadrilaterals, tetrahedra, hexahedra and prisms, not on pyramids.
     UnsupportedNodeFamily {
         /// The cell type.
         cell: CellType,

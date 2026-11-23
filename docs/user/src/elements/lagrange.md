@@ -236,20 +236,23 @@ for (e, edge) in sub_entities(cell, 1).iter().enumerate() {
 ## Node families
 
 The constructions above place the edge nodes at the equispaced fractions $i/p$. tetraloma offers
-two families of 1D points, chosen by
-[`NodeFamily`](../api/tetraloma/enum.NodeFamily.html) in a cell block's
-[`CoordinateElement`](../api/tetraloma/struct.CoordinateElement.html):
+two node families, chosen by
+[`NodeFamily`](../api/tetraloma/enum.NodeFamily.html) (which is `#[non_exhaustive]`) in a cell
+block's [`CoordinateElement`](../api/tetraloma/struct.CoordinateElement.html):
 
 - **`Equispaced`** puts the nodes at $i/p$, on every cell. Gmsh and VTK files use these points,
   so every reader produces them and every writer converts to them before it writes.
-- **`Gll`** puts the nodes at the Gauss–Lobatto–Legendre points: the two ends of $[0, 1]$ and
-  the $p - 1$ roots of $P_p'$, the derivative of the Legendre polynomial of degree $p$, mapped
-  from $[-1, 1]$ to $[0, 1]$. They are offered on intervals, quadrilaterals and hexahedra only,
-  where they replace the equispaced points in every direction of the tensor grid.
+- **`Gll`** puts the nodes at the Gauss–Lobatto–Legendre points. On intervals, quadrilaterals and
+  hexahedra, the 1D GLL points—the two ends of $[0, 1]$ and the $p - 1$ roots of $P_p'$, the
+  derivative of the Legendre polynomial of degree $p$, mapped from $[-1, 1]$ to $[0, 1]$—replace
+  the equispaced points in every direction of the tensor grid. On triangles and tetrahedra, they
+  are Isaac's recursive GLL points (T. Isaac, *SIAM J. Sci. Comput.* 42(6), 2020), which restrict
+  on every sub-entity to that sub-entity's GLL points; on prisms, the product of the triangle's
+  GLL points with the 1D GLL points along $z$. They are not offered on pyramids.
 
 At high degree, interpolation at GLL points is far better conditioned than at equispaced points,
 which is why spectral-element codes use them. The order of the nodes is the same in both
-families. Asking for GLL points on any other cell is an error: tetraloma-refcell returns
+families. Asking for GLL points on a pyramid is an error: tetraloma-refcell returns
 [`RefCellError::UnsupportedNodeFamily`](../api/tetraloma_refcell/enum.RefCellError.html), and
 building a mesh with such a block returns
 [`GridError::UnsupportedNodeFamily`](../api/tetraloma/enum.GridError.html).
@@ -268,9 +271,16 @@ let want = [0.0, 1.0, 0.5 - s, 0.5, 0.5 + s];
 for (x, w) in points.iter().zip(want) {
     assert!((x - w).abs() < 1e-14);
 }
+// On a cubic triangle, edge nodes sit at the 1D GLL fractions and the interior node is the
+// centroid (1/3, 1/3).
+let tri = lagrange_points(CellType::Triangle, 3, NodeFamily::Gll)?;
+let a = 0.5 * (1.0 - 0.2f64.sqrt());
+assert!((tri[6] - a).abs() < 1e-14 && tri[7] == 0.0);
+assert!((tri[18] - 1.0 / 3.0).abs() < 1e-14 && (tri[19] - 1.0 / 3.0).abs() < 1e-14);
+
 assert!(matches!(
-    lagrange_points(CellType::Triangle, 4, NodeFamily::Gll),
-    Err(RefCellError::UnsupportedNodeFamily { cell: CellType::Triangle, family: NodeFamily::Gll })
+    lagrange_points(CellType::Pyramid, 4, NodeFamily::Gll),
+    Err(RefCellError::UnsupportedNodeFamily { cell: CellType::Pyramid, family: NodeFamily::Gll })
 ));
 # Ok::<(), RefCellError>(())
 ```

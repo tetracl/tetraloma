@@ -1,6 +1,7 @@
 //! M9h acceptance, bullet 1 (docs/plans/M9h.md, acceptance coverage; ADR-0042, items 2 and 3):
-//! on every cell type and (TD, GD) pair, at p = 1–8 (pyramids p ≤ 3) and with both node
-//! families where offered, X, J, det J, K, normals and facet normals from the device match the
+//! on every cell type and (TD, GD) pair, at p = 1–8 (pyramids p ≤ 3) and in each node family of
+//! [`node_families`] (equispaced on every cell, plus GLL on intervals, quadrilaterals and
+//! hexahedra), X, J, det J, K, normals and facet normals from the device match the
 //! f64 host reference (`tetraloma_testing::reference`, tetraloma-refcell's tabulation at the stored
 //! nodes), and the pull-back recovers the reference points, to the tolerance of the precision
 //! scaled by max(1, A / A_ref): the amplification factor of X for points, of J for J, det J and
@@ -204,7 +205,8 @@ crate::degree_tests!(pull_back_recovers_reference_points, pull_backs_at);
 
 /// The policy's open-ended last ranges at p = 9 and 10 (docs/design.md, "Geometric factors":
 /// the last range "resolves to a strategy known to compile at p = 9–10"; ADR-0042, item 3):
-/// on every cell type but pyramids, in each node family the cell offers, and for every
+/// on every cell type but pyramids, in each node family of [`node_families`] (equispaced on every
+/// cell, plus GLL on intervals, quadrilaterals and hexahedra), and for every
 /// (TD, GD) pair, every family launches under the policy of the device's class: unperturbed
 /// boxes (codimension 0, with the facet normals), lifted curves in 2D and 3D, the sphere and
 /// the mixed surface (codimension 1 with the normals; the kernels' comptime variants depend

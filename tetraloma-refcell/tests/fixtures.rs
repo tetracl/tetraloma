@@ -211,7 +211,6 @@ fn a11_entity(cell: CellType, dim: usize, basix_e: usize) -> usize {
 /// M11 acceptance A3: GLL points on triangles, tetrahedra and prisms equal Basix's `gll_isaac`
 /// points to 1e-14 for p = 1–15 (fixture exported in Basix's DOF order, converted with A.11).
 #[test]
-#[ignore = "pending M11.T2"]
 fn gll_points_match_basix_isaac() {
     let data = fixture("gll_isaac.json");
     let cells = data.as_object().unwrap();

@@ -783,8 +783,9 @@ pub fn assert_invariant<F: Real>(got: &[f64], want: &[f64], scale: f64, what: &s
     }
 }
 
-/// The node families of a mesh whose blocks all have the cell types `cells`: equispaced, and
-/// GLL where every cell offers it (intervals, quadrilaterals, hexahedra).
+/// The node families tested by the existing high-order sweeps for a mesh whose blocks all have
+/// the cell types `cells`: equispaced on every cell, plus GLL on the tensor cells (intervals,
+/// quadrilaterals and hexahedra) so hosted CI shards stay within budget.
 pub fn node_families(cells: &[CellType]) -> Vec<NodeFamily> {
     let gll = cells.iter().all(|c| {
         matches!(
@@ -829,7 +830,7 @@ pub enum MeshSet {
     Invariance,
 }
 
-/// Calls `v` on every mesh of `set` at degree `p`, in each node family it offers ([`node_families`]),
+/// Calls `v` on every mesh of `set` at degree `p`, in each node family of [`node_families`],
 /// with every (TD, GD) pair, skipping meshes with pyramids above p = 3.
 pub fn visit_high_order_meshes<F: Real>(set: MeshSet, p: u32, v: &mut impl MeshVisitor) {
     use tetraloma_testing::{ball, cube_box, interval_box, mixed_surface, sphere, square_box};

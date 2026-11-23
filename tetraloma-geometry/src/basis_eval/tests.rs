@@ -273,7 +273,7 @@ fn sample(cell: CellType, n: usize, seed: u64) -> Vec<f64> {
 }
 
 /// Every coordinate element of the tests of strategy `s`: degrees 1–4 under `direct` and 1–8
-/// under `loops` (pyramids 1–3), equispaced, and GLL where offered.
+/// under `loops` (pyramids 1–3), equispaced, and GLL on tensor cells.
 fn elements(s: Strategy) -> Vec<(CellType, u32, NodeFamily)> {
     let mut out = vec![];
     for cell in [
@@ -478,7 +478,7 @@ fn normalisation_matches_the_basis_size() {
     assert!((c[0] - 0.5).abs() < 1e-15 && (c[2] + 0.5).abs() < 1e-15);
     assert_eq!(c[4..], [0.0, 1.0]);
     assert!(matches!(
-        device_coefficients(Triangle, 3, NodeFamily::Gll),
+        device_coefficients(Pyramid, 3, NodeFamily::Gll),
         Err(GridError::UnsupportedNodeFamily { .. })
     ));
 }

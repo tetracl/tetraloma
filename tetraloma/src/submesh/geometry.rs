@@ -41,6 +41,7 @@ fn family_code(family: NodeFamily) -> u32 {
     match family {
         NodeFamily::Equispaced => 0,
         NodeFamily::Gll => 1,
+        other => panic!("node family {other:?} has no agreement code"),
     }
 }
 

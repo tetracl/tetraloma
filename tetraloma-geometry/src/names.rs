@@ -24,6 +24,7 @@ fn family_name(family: NodeFamily) -> &'static str {
     match family {
         NodeFamily::Equispaced => "Equispaced",
         NodeFamily::Gll => "Gll",
+        _ => "unknown",
     }
 }
 
@@ -54,13 +55,13 @@ mod tests {
     #[test]
     fn refcell_errors_map_to_static_names() {
         let e = element_error(RefCellError::UnsupportedNodeFamily {
-            cell: CellType::Triangle,
+            cell: CellType::Pyramid,
             family: NodeFamily::Gll,
         });
         assert!(matches!(
             e,
             GridError::UnsupportedNodeFamily {
-                cell: "Triangle",
+                cell: "Pyramid",
                 family: "Gll"
             }
         ));

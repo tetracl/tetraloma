@@ -1,5 +1,5 @@
 //! Test meshes with another node family (M9h, T0a): the same geometry, interpolated at the
-//! nodes of another 1D point family.
+//! nodes of another point family.
 
 use tetraloma::NodeFamily;
 use tetraloma_refcell::{LagrangeElement, lagrange_points};
@@ -18,8 +18,8 @@ impl HostMesh {
     ///
     /// # Panics
     ///
-    /// If a block's cell does not offer `family` (GLL is offered on intervals, quadrilaterals
-    /// and hexahedra only): a mesh that mixes them would give a shared facet two node layouts.
+    /// If a block's cell does not offer `family` (GLL is offered on every cell except pyramids):
+    /// a mesh that mixes them would give a shared facet two node layouts.
     ///
     /// # Example
     ///
@@ -79,7 +79,7 @@ mod tests {
     use tetraloma_dims::{Cell2, Cell3};
 
     use crate::reference::host;
-    use crate::{HostMesh, cube_box, interval_box, square_box, triangle_strip};
+    use crate::{HostMesh, cube_box, interval_box, square_box};
 
     /// X and J of `a` (equispaced) and `b` at the Gauss points of degree 2p agree to the f64
     /// tolerance scaled by `a`'s amplification (ADR-0042, item 2), and for J also by its node
@@ -123,6 +123,10 @@ mod tests {
             let meshes = [
                 ("interval box", interval_box(3, p).perturbed(0.05)),
                 (
+                    "triangle box",
+                    square_box(Cell2::Triangle, 2, p).perturbed(0.05),
+                ),
+                (
                     "quadrilateral box",
                     square_box(Cell2::Quadrilateral, 2, p).perturbed(0.05),
                 ),
@@ -132,9 +136,14 @@ mod tests {
                         .mapped(3, |x| vec![x[0], x[1], 0.3 * (x[0] * x[1] * 3.0).sin()]),
                 ),
                 (
+                    "tetrahedron box",
+                    cube_box(Cell3::Tetrahedron, 1, p).perturbed(0.05),
+                ),
+                (
                     "hexahedron box",
                     cube_box(Cell3::Hexahedron, 2, p).perturbed(0.05),
                 ),
+                ("prism box", cube_box(Cell3::Prism, 1, p).perturbed(0.05)),
             ];
             for (what, h) in meshes {
                 let g = h.with_node_family(NodeFamily::Gll);
@@ -174,8 +183,8 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Triangle")]
-    fn gll_is_rejected_on_triangles() {
-        triangle_strip(2).with_node_family(NodeFamily::Gll);
+    #[should_panic(expected = "Pyramid")]
+    fn gll_is_rejected_on_pyramids() {
+        cube_box(Cell3::Pyramid, 1, 1).with_node_family(NodeFamily::Gll);
     }
 }

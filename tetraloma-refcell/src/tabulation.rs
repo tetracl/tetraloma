@@ -66,9 +66,9 @@ impl LagrangeElement {
     /// let element = LagrangeElement::new(CellType::Hexahedron, 2, NodeFamily::Gll)?;
     /// assert_eq!(element.dim(), 27);
     ///
-    /// // GLL nodes exist on intervals, quadrilaterals and hexahedra only.
+    /// // GLL nodes are not offered on pyramids.
     /// assert!(matches!(
-    ///     LagrangeElement::new(CellType::Triangle, 2, NodeFamily::Gll),
+    ///     LagrangeElement::new(CellType::Pyramid, 2, NodeFamily::Gll),
     ///     Err(RefCellError::UnsupportedNodeFamily { .. })
     /// ));
     /// # Ok::<(), RefCellError>(())
@@ -392,7 +392,17 @@ mod tests {
         .into_iter()
         .map(|c| (c, NodeFamily::Equispaced))
         .collect();
-        out.extend([Interval, Quadrilateral, Hexahedron].map(|c| (c, NodeFamily::Gll)));
+        out.extend(
+            [
+                Interval,
+                Triangle,
+                Quadrilateral,
+                Tetrahedron,
+                Hexahedron,
+                Prism,
+            ]
+            .map(|c| (c, NodeFamily::Gll)),
+        );
         out
     }
 
@@ -544,9 +554,9 @@ mod tests {
             Err(RefCellError::UnsupportedDerivativeOrder(2))
         );
         assert_eq!(
-            LagrangeElement::new(Triangle, 3, NodeFamily::Gll).unwrap_err(),
+            LagrangeElement::new(Pyramid, 3, NodeFamily::Gll).unwrap_err(),
             RefCellError::UnsupportedNodeFamily {
-                cell: Triangle,
+                cell: Pyramid,
                 family: NodeFamily::Gll
             }
         );
