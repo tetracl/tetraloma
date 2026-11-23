@@ -11,7 +11,7 @@ use tetraloma_refcell::{LagrangeElement, NodeFamily, gauss_rule, tdim};
 const TOL: f64 = 1e-12;
 const MAX_DEGREE: u32 = 8;
 
-/// Every cell with D_TOP ≥ 1 with equispaced nodes, and the tensor cells with GLL nodes.
+/// Every cell with D_TOP ≥ 1 with equispaced nodes, and every cell except pyramids with GLL nodes.
 fn elements() -> Vec<(CellType, NodeFamily)> {
     use CellType::*;
     let mut out: Vec<_> = [
@@ -26,7 +26,17 @@ fn elements() -> Vec<(CellType, NodeFamily)> {
     .into_iter()
     .map(|c| (c, NodeFamily::Equispaced))
     .collect();
-    out.extend([Interval, Quadrilateral, Hexahedron].map(|c| (c, NodeFamily::Gll)));
+    out.extend(
+        [
+            Interval,
+            Triangle,
+            Quadrilateral,
+            Tetrahedron,
+            Hexahedron,
+            Prism,
+        ]
+        .map(|c| (c, NodeFamily::Gll)),
+    );
     out
 }
 

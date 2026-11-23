@@ -12,7 +12,7 @@ use tetraloma_dims::CellType;
 use crate::{RefCellError, sub_entities, sub_entity_types, tdim, vertices};
 
 // Design: "Reference cells and conventions", node families.
-/// The 1D point family of a Lagrange layout: where the nodes sit along each edge.
+/// The point family of a Lagrange layout: where the nodes sit.
 ///
 /// See [Node families] and [GLL and equispaced nodes].
 ///
@@ -22,7 +22,9 @@ use crate::{RefCellError, sub_entities, sub_entity_types, tdim, vertices};
 pub enum NodeFamily {
     /// Equispaced points, on every cell.
     Equispaced,
-    /// Gauss–Lobatto–Legendre points, on intervals, quadrilaterals and hexahedra only.
+    /// Gauss–Lobatto–Legendre points: tensor GLL on intervals, quadrilaterals and hexahedra,
+    /// Isaac's recursive GLL points on triangles and tetrahedra, and their product on prisms.
+    /// Unsupported on pyramids.
     Gll,
 }
 
@@ -152,8 +154,7 @@ fn block_size(entity: CellType, degree: u32) -> usize {
 /// # Errors
 ///
 /// - [`RefCellError::UnsupportedDegree`] if `degree == 0`;
-/// - [`RefCellError::UnsupportedNodeFamily`] for GLL on a cell other than an interval,
-///   quadrilateral or hexahedron.
+/// - [`RefCellError::UnsupportedNodeFamily`] for GLL on a pyramid or a point.
 ///
 /// # Panics
 ///
@@ -169,15 +170,22 @@ pub fn lagrange_points(
         return Err(RefCellError::UnsupportedDegree { cell, degree });
     }
     let p = degree as usize;
+    let isaac = match (family, cell) {
+        (NodeFamily::Equispaced, _) => None,
+        (NodeFamily::Gll, CellType::Triangle | CellType::Tetrahedron | CellType::Prism) => {
+            Some(crate::isaac::IsaacGll::new(p))
+        }
+        (NodeFamily::Gll, CellType::Interval | CellType::Quadrilateral | CellType::Hexahedron) => {
+            None
+        }
+        (NodeFamily::Gll, _) => return Err(RefCellError::UnsupportedNodeFamily { cell, family }),
+    };
     // The interior 1D points along an edge, as fractions of the edge.
     let line: Vec<f64> = match family {
         NodeFamily::Equispaced => (1..p).map(|i| i as f64 / p as f64).collect(),
-        NodeFamily::Gll => match cell {
-            CellType::Interval | CellType::Quadrilateral | CellType::Hexahedron => {
-                let gll = crate::jacobi::gll_points(p + 1);
-                gll[1..p].to_vec()
-            }
-            _ => return Err(RefCellError::UnsupportedNodeFamily { cell, family }),
+        NodeFamily::Gll => match &isaac {
+            Some(table) => table.line(p)[1..p].to_vec(),
+            None => crate::jacobi::gll_points(p + 1)[1..p].to_vec(),
         },
     };
     let td = tdim(cell);
@@ -210,7 +218,11 @@ pub fn lagrange_points(
                 CellType::Triangle => {
                     for i1 in 1..p {
                         for i0 in 1..p - i1 {
-                            push(&[frac(i0), frac(i1)], &[1, 2]);
+                            let t = match &isaac {
+                                Some(table) => table.triangle(i0, i1, p),
+                                None => [frac(i0), frac(i1)],
+                            };
+                            push(&t, &[1, 2]);
                         }
                     }
                 }
@@ -225,7 +237,11 @@ pub fn lagrange_points(
                     for i2 in 1..p {
                         for i1 in 1..p - i2 {
                             for i0 in 1..p - i2 - i1 {
-                                push(&[frac(i0), frac(i1), frac(i2)], &[1, 2, 3]);
+                                let t = match &isaac {
+                                    Some(table) => table.tetrahedron(i0, i1, i2, p),
+                                    None => [frac(i0), frac(i1), frac(i2)],
+                                };
+                                push(&t, &[1, 2, 3]);
                             }
                         }
                     }
@@ -240,10 +256,14 @@ pub fn lagrange_points(
                     }
                 }
                 CellType::Prism => {
-                    for i2 in 1..p {
+                    for &t2 in &line {
                         for i1 in 1..p {
                             for i0 in 1..p - i1 {
-                                push(&[frac(i0), frac(i1), frac(i2)], &[1, 2, 3]);
+                                let [t0, t1] = match &isaac {
+                                    Some(table) => table.triangle(i0, i1, p),
+                                    None => [frac(i0), frac(i1)],
+                                };
+                                push(&[t0, t1, t2], &[1, 2, 3]);
                             }
                         }
                     }
@@ -346,8 +366,10 @@ mod tests {
 
     fn families(cell: CellType) -> Vec<NodeFamily> {
         match cell {
-            Interval | Quadrilateral | Hexahedron => vec![NodeFamily::Equispaced, NodeFamily::Gll],
-            _ => vec![NodeFamily::Equispaced],
+            Interval | Triangle | Quadrilateral | Tetrahedron | Hexahedron | Prism => {
+                vec![NodeFamily::Equispaced, NodeFamily::Gll]
+            }
+            Pyramid | Point => vec![NodeFamily::Equispaced],
         }
     }
 
@@ -501,8 +523,8 @@ mod tests {
     }
 
     #[test]
-    fn gll_only_on_tensor_cells() {
-        for cell in [Triangle, Tetrahedron, Prism, Pyramid, Point] {
+    fn gll_unsupported_on_pyramids_and_points() {
+        for cell in [Pyramid, Point] {
             assert_eq!(
                 lagrange_points(cell, 2, NodeFamily::Gll),
                 Err(RefCellError::UnsupportedNodeFamily {
@@ -512,7 +534,14 @@ mod tests {
             );
         }
         // GLL points of degree 2 are the equispaced ones; they differ from degree 3 on.
-        for cell in [Interval, Quadrilateral, Hexahedron] {
+        for cell in [
+            Interval,
+            Triangle,
+            Quadrilateral,
+            Tetrahedron,
+            Hexahedron,
+            Prism,
+        ] {
             let gll = lagrange_points(cell, 2, NodeFamily::Gll).unwrap();
             let eq = lagrange_points(cell, 2, NodeFamily::Equispaced).unwrap();
             assert!(gll.iter().zip(&eq).all(|(a, b)| (a - b).abs() < 1e-15));

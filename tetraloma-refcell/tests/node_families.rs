@@ -29,7 +29,6 @@ fn map_sub_entity_points(cell: CellType, ety: CellType, everts: &[usize], pts: &
 /// M11 acceptance A4: on every sub-entity of a triangle, tetrahedron and prism, the GLL points
 /// restricted to it equal that sub-entity's GLL points to 1e-15 for p = 1–15.
 #[test]
-#[ignore = "pending M11.T2"]
 fn gll_restricts_to_sub_entities() {
     for cell in [CellType::Triangle, CellType::Tetrahedron, CellType::Prism] {
         let td = tdim(cell);
@@ -137,7 +136,6 @@ fn lebesgue_constant(el: &LagrangeElement, points: &[f64]) -> f64 {
 /// M11 acceptance A5: the Lebesgue constant of GLL points on triangles and tetrahedra, on a
 /// sample grid of 10^4 points, is below that of equispaced points for every p = 3–15.
 #[test]
-#[ignore = "pending M11.T2"]
 fn gll_lebesgue_constant_below_equispaced() {
     for cell in [CellType::Triangle, CellType::Tetrahedron] {
         let grid = sample_grid(cell);
