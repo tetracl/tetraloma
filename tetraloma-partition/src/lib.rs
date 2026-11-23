@@ -54,6 +54,7 @@ compile_error!(
 );
 
 mod block;
+mod error;
 mod graph;
 #[cfg(feature = "metis")]
 mod metis;
@@ -68,6 +69,8 @@ mod rank0;
 mod scotch;
 
 pub use block::Block;
+#[doc(hidden)]
+pub use error::PartitionError;
 pub use graph::{DistGraph, Partitioner};
 #[cfg(feature = "metis")]
 pub use metis::Metis;

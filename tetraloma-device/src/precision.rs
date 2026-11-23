@@ -73,6 +73,37 @@ impl Real for f64 {
     }
 }
 
+// M18.T0 stub (ADR-0074, Listing F2); implemented and unhidden in M18.T8.
+/// Coefficient scalars: real or complex floating-point values. Not part of the stable API while
+/// hidden.
+#[doc(hidden)]
+pub trait FieldScalar: Copy + Default + bytemuck::Pod + Send + Sync + 'static {
+    /// Underlying real scalar type (`f32` or `f64`).
+    type Real: Real;
+    /// Number of real components per coefficient (1 for real, 2 for complex).
+    const PARTS: usize;
+}
+
+impl FieldScalar for f32 {
+    type Real = f32;
+    const PARTS: usize = 0;
+}
+
+impl FieldScalar for f64 {
+    type Real = f64;
+    const PARTS: usize = 0;
+}
+
+impl FieldScalar for num_complex::Complex<f32> {
+    type Real = f32;
+    const PARTS: usize = 0;
+}
+
+impl FieldScalar for num_complex::Complex<f64> {
+    type Real = f64;
+    const PARTS: usize = 0;
+}
+
 // Listing S1.
 /// Checks that `client`'s device supports the scalar type `F`.
 ///
