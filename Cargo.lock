@@ -4441,8 +4441,10 @@ dependencies = [
 name = "tetraloma-device"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
  "cubecl",
  "libc",
+ "num-complex 0.4.6",
  "proptest",
  "tetraloma-testing",
  "toml",

@@ -20,6 +20,7 @@
 
 mod buffer;
 mod cores;
+mod device_error;
 mod error;
 mod plan;
 mod policy;
@@ -38,9 +39,18 @@ pub use buffer::{DeviceBuffer, DeviceCsr, DeviceStrided, VECTOR_PAD, pad_len};
 /// devices](https://tetracl.github.io/tetraloma/devices.html#choosing-a-device-at-run-time)
 /// shows how to get a client.
 pub use cubecl::prelude::{Client, CubeElement};
+// ADR-0076: re-exported for tetraloma-parallel's `ParallelError`, which has no cubecl dependency.
+/// CubeCL's compute-server error type, re-exported for callers that inspect server errors without
+/// depending on `cubecl` directly. See [Errors from the compute
+/// server](https://tetracl.github.io/tetraloma/troubleshooting.html#errors-from-the-compute-server).
+pub use cubecl::server::ServerError;
+#[doc(hidden)]
+pub use device_error::DeviceError;
 pub use error::{ConnKey, GridError, Result};
 pub use plan::{LaunchPlan, debug_assert_bindings};
 pub use policy::{CpuUnits, DeviceClass, KernelKind, VectorPolicy, VectorSizeOverride};
+#[doc(hidden)]
+pub use precision::FieldScalar;
 pub use precision::{Real, check_precision};
 pub use primitives::*;
 pub use testing::device_properties;

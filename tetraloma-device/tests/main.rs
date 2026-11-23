@@ -3,6 +3,7 @@
 mod buffer_limits;
 mod common;
 mod determinism;
+mod field_scalar;
 mod launch_plan;
 mod pack;
 mod policy;

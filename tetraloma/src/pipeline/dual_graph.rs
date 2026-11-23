@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use tetraloma_device::{GridError, Result};
 use tetraloma_parallel::{CommDyn, CommExt};
-use tetraloma_partition::{DistGraph, Partitioner};
+use tetraloma_partition::{DistGraph, PartitionError, Partitioner};
 
 use super::rendezvous::{Outbox, rendezvous_rank};
 use super::{BlockSpec, Cells, agree, facet_keys};
@@ -114,6 +114,15 @@ pub(crate) fn partition(
         .partition(comm, graph, p)
         .and_then(|dest| check_destinations(&dest, n, p).map(|()| dest));
     agree(comm, local)
+}
+
+/// Converts a [`PartitionError`] into its corresponding [`GridError`] variant.
+///
+/// Crate-private because `tetraloma-topology` does not depend on `tetraloma-partition`.
+// M18.T0 stub (ADR-0074, ADR-0075); implemented and called by `partition` in M18.T3.
+#[allow(dead_code)]
+pub(crate) fn partition_error(_: PartitionError) -> GridError {
+    unimplemented!("pending M18.T3")
 }
 
 /// `LengthMismatch` unless `dest` has `n` entries, `IndexOutOfRange` for an entry outside
@@ -233,5 +242,177 @@ mod tests {
             partition(&comm, &Block, &g).unwrap()
         });
         assert_eq!(ok, [vec![0, 0], vec![1, 1]]);
+    }
+
+    /// M18 A4: every variant of `CommError`, `DeviceError`, `ParallelError` (through `From`) and
+    /// `PartitionError` (through `partition_error`) converts into the exact `GridError` variant
+    /// and fields produced before the milestone.
+    #[test]
+    #[ignore = "pending M18.T5"]
+    fn foundation_errors_convert_to_their_grid_error_variants() {
+        use cubecl::server::{Collective, ServerError};
+        use tetraloma_device::DeviceError;
+        use tetraloma_parallel::{CommError, ParallelError};
+
+        macro_rules! check {
+            ($actual:expr, $expected:pat) => {
+                let actual = $actual;
+                assert!(matches!(actual, $expected), "got {actual:?}");
+            };
+        }
+
+        // CommError (5 variants).
+        check!(GridError::from(CommError::TooLarge), GridError::TooLarge);
+        check!(
+            GridError::from(CommError::LengthMismatch {
+                expected: 11,
+                found: 12
+            }),
+            GridError::LengthMismatch {
+                expected: 11,
+                found: 12
+            }
+        );
+        check!(
+            GridError::from(CommError::IndexOutOfRange { index: 13, len: 14 }),
+            GridError::IndexOutOfRange { index: 13, len: 14 }
+        );
+        check!(
+            GridError::from(CommError::MessageTooLarge { count: 15 }),
+            GridError::MessageTooLarge { count: 15 }
+        );
+        check!(
+            GridError::from(CommError::RemoteFailure { rank: 16 }),
+            GridError::RemoteFailure { rank: 16 }
+        );
+
+        // DeviceError (5 variants).
+        check!(GridError::from(DeviceError::TooLarge), GridError::TooLarge);
+        check!(
+            GridError::from(DeviceError::AllocationTooLarge { bytes: 21, max: 22 }),
+            GridError::AllocationTooLarge { bytes: 21, max: 22 }
+        );
+        check!(
+            GridError::from(DeviceError::UnsupportedPrecision {
+                scalar: "f64",
+                device: "device-a"
+            }),
+            GridError::UnsupportedPrecision {
+                scalar: "f64",
+                device: "device-a"
+            }
+        );
+        check!(
+            GridError::from(DeviceError::LengthMismatch {
+                expected: 23,
+                found: 24
+            }),
+            GridError::LengthMismatch {
+                expected: 23,
+                found: 24
+            }
+        );
+        check!(
+            GridError::from(DeviceError::Server(ServerError::no_device_transport(
+                Collective::AllReduce,
+            ))),
+            GridError::Server(ServerError::NoDeviceTransport {
+                operation: Collective::AllReduce,
+                ..
+            })
+        );
+
+        // ParallelError (8 variants).
+        check!(
+            GridError::from(ParallelError::TooLarge),
+            GridError::TooLarge
+        );
+        check!(
+            GridError::from(ParallelError::AllocationTooLarge { bytes: 31, max: 32 }),
+            GridError::AllocationTooLarge { bytes: 31, max: 32 }
+        );
+        check!(
+            GridError::from(ParallelError::UnsupportedPrecision {
+                scalar: "f64",
+                device: "device-b"
+            }),
+            GridError::UnsupportedPrecision {
+                scalar: "f64",
+                device: "device-b"
+            }
+        );
+        check!(
+            GridError::from(ParallelError::LengthMismatch {
+                expected: 33,
+                found: 34
+            }),
+            GridError::LengthMismatch {
+                expected: 33,
+                found: 34
+            }
+        );
+        check!(
+            GridError::from(ParallelError::Server(ServerError::no_device_transport(
+                Collective::Send,
+            ))),
+            GridError::Server(ServerError::NoDeviceTransport {
+                operation: Collective::Send,
+                ..
+            })
+        );
+        check!(
+            GridError::from(ParallelError::IndexOutOfRange { index: 35, len: 36 }),
+            GridError::IndexOutOfRange { index: 35, len: 36 }
+        );
+        check!(
+            GridError::from(ParallelError::MessageTooLarge { count: 37 }),
+            GridError::MessageTooLarge { count: 37 }
+        );
+        check!(
+            GridError::from(ParallelError::RemoteFailure { rank: 38 }),
+            GridError::RemoteFailure { rank: 38 }
+        );
+
+        // PartitionError (7 variants).
+        check!(
+            partition_error(PartitionError::PartitionerFailed {
+                name: "metis",
+                code: -41
+            }),
+            GridError::PartitionerFailed {
+                name: "metis",
+                code: -41
+            }
+        );
+        check!(
+            partition_error(PartitionError::NeedsMpiCommunicator("ptscotch")),
+            GridError::NeedsMpiCommunicator("ptscotch")
+        );
+        check!(
+            partition_error(PartitionError::TooLarge),
+            GridError::TooLarge
+        );
+        check!(
+            partition_error(PartitionError::LengthMismatch {
+                expected: 42,
+                found: 43
+            }),
+            GridError::LengthMismatch {
+                expected: 42,
+                found: 43
+            }
+        );
+        check!(
+            partition_error(PartitionError::IndexOutOfRange { index: 44, len: 45 }),
+            GridError::IndexOutOfRange { index: 44, len: 45 }
+        );
+        check!(
+            partition_error(PartitionError::MessageTooLarge { count: 46 }),
+            GridError::MessageTooLarge { count: 46 }
+        );
+        check!(
+            partition_error(PartitionError::RemoteFailure { rank: 47 }),
+            GridError::RemoteFailure { rank: 47 }
+        );
     }
 }

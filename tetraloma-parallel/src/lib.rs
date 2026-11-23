@@ -17,7 +17,9 @@
 //! it.
 
 mod comm;
+mod comm_error;
 mod counts;
+mod error;
 #[cfg(feature = "mpi")]
 mod graph;
 mod hash;
@@ -29,6 +31,10 @@ mod scatterer;
 mod serial;
 
 pub use comm::{Comm, CommDyn, CommExt, CommScalar, DType, Neighbourhood};
+#[doc(hidden)]
+pub use comm_error::CommError;
+#[doc(hidden)]
+pub use error::ParallelError;
 pub use hash::owner_hash;
 pub use index_map::IndexMap;
 pub use local_gpu::local_gpu_index;
