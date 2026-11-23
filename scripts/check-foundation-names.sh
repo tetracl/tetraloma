@@ -25,7 +25,8 @@
 set -euo pipefail
 
 caller_pwd=$PWD
-cd "$(dirname "$0")/.."
+script_path="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+cd "$(dirname "$script_path")/.."
 
 # pending M18.T2: add tetraloma-comm; pending M18.T6: enable in CI `cpu` and `scripts/check-user-docs.sh`.
 DEFAULT_CRATES="tetraloma-device,tetraloma-parallel,tetraloma-partition"
@@ -42,7 +43,7 @@ while [[ $# -gt 0 ]]; do
         --api) [[ $# -ge 2 && -n "$2" ]] || die "--api requires a directory"; api=$2; shift 2 ;;
         --api=*) api=${1#--api=}; [[ -n "$api" ]] || die "--api requires a directory"; shift ;;
         --self-test) self_test=1; shift ;;
-        -h | --help) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h | --help) sed -n '2,24p' "$script_path" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) die "unknown argument '$1' (see --help)" ;;
     esac
 done
@@ -191,17 +192,21 @@ def run_self_test():
     print("check-foundation-names: self-test ok")
 
 
-def scan_crate(api_dir: Path, crate: str) -> tuple[int, list[tuple[str, str, str]]]:
+def scan_crate(api_dir: Path, crate: str) -> tuple[int, int, list[tuple[str, str, str]]]:
     crate_dir = api_dir / crate.replace("-", "_")
     if not crate_dir.is_dir():
         sys.exit(f"check-foundation-names: no rustdoc directory {crate_dir} for crate '{crate}'")
     seen: set[tuple[str, str]] = set()
+    methods = 0
     hits: list[tuple[str, str, str]] = []
 
     def record(path: str, kind: str, name: str):
+        nonlocal methods
         if (path, kind) in seen:
             return
         seen.add((path, kind))
+        if kind == "method":
+            methods += 1
         if is_forbidden(name):
             hits.append((path, kind, name))
 
@@ -225,7 +230,7 @@ def scan_crate(api_dir: Path, crate: str) -> tuple[int, list[tuple[str, str, str
             record(item_path, kind, name)
             for mkind, mname in scanner.members:
                 record(f"{item_path}::{mname}", mkind, mname)
-    return len(seen), hits
+    return len(seen), methods, hits
 
 
 if sys.argv[1] == "1":
@@ -233,10 +238,10 @@ if sys.argv[1] == "1":
     sys.exit(0)
 
 api_dir, crates = Path(sys.argv[2]), sys.argv[3:]
-total, all_hits = 0, []
+total, total_methods, all_hits = 0, 0, []
 for crate in crates:
     try:
-        count, hits = scan_crate(api_dir, crate)
+        count, methods, hits = scan_crate(api_dir, crate)
     except SystemExit as e:
         print(e, file=sys.stderr)
         sys.exit(2)
@@ -244,7 +249,12 @@ for crate in crates:
         print(f"check-foundation-names: no items found for '{crate}' under {api_dir} (rustdoc markup changed?)", file=sys.stderr)
         sys.exit(2)
     total += count
+    total_methods += methods
     all_hits.extend(hits)
+
+if total_methods == 0:
+    print(f"check-foundation-names: no methods found under {api_dir} (rustdoc markup changed?)", file=sys.stderr)
+    sys.exit(2)
 
 if all_hits:
     print("check-foundation-names: forbidden public names found:", file=sys.stderr)

@@ -41,9 +41,8 @@ pub use buffer::{DeviceBuffer, DeviceCsr, DeviceStrided, VECTOR_PAD, pad_len};
 pub use cubecl::prelude::{Client, CubeElement};
 // ADR-0076: re-exported for tetraloma-parallel's `ParallelError`, which has no cubecl dependency.
 /// CubeCL's compute-server error type, re-exported for callers that inspect server errors without
-/// depending on `cubecl` directly. See [Compute
-/// devices](https://tetracl.github.io/tetraloma/devices.html) for how device operations run and
-/// report errors.
+/// depending on `cubecl` directly. See [Errors from the compute
+/// server](https://tetracl.github.io/tetraloma/troubleshooting.html#errors-from-the-compute-server).
 pub use cubecl::server::ServerError;
 #[doc(hidden)]
 pub use device_error::DeviceError;

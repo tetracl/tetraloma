@@ -23,7 +23,8 @@
 # Exit status: 0 if no forbidden crate is found, 3 if one is, anything else on an error.
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+script_path="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+cd "$(dirname "$script_path")/.."
 
 # Default lists; enabling tasks add their crates here.
 no_cubecl_crates=("tetraloma-element") # pending M18.T2 (tetraloma-comm), pending M18.T3 (tetraloma-partition)
@@ -67,7 +68,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -h | --help)
-            sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '2,23p' "$script_path" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *)
