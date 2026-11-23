@@ -6,7 +6,7 @@
 
 use tetraloma_dims::CellType;
 
-use crate::lu::Lu;
+use crate::lu::DenseLu;
 use crate::{NodeFamily, RefCellError, lagrange_points, num_lagrange_nodes, polynomials, tdim};
 
 /// A Lagrange element on a reference cell: its nodes and the coefficients of its basis in an
@@ -83,7 +83,7 @@ impl LagrangeElement {
         for i in 0..n {
             coefficients[i * n + i] = 1.0;
         }
-        Lu::factor(vandermonde, n)?.solve(&mut coefficients);
+        DenseLu::factor(vandermonde, n)?.solve(&mut coefficients, n);
         Ok(Self {
             cell,
             degree,

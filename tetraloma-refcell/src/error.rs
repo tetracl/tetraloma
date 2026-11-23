@@ -59,7 +59,8 @@ pub enum RefCellError {
         /// The degree.
         degree: u32,
     },
-    /// The generalised Vandermonde matrix is singular: the nodes are not unisolvent.
+    /// The matrix passed to [`DenseLu::factor`](crate::DenseLu::factor) (such as a generalised
+    /// Vandermonde matrix) is singular to working precision.
     Singular,
 }
 

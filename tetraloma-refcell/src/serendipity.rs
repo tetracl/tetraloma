@@ -20,7 +20,7 @@
 
 use tetraloma_dims::CellType;
 
-use crate::lu::Lu;
+use crate::lu::DenseLu;
 use crate::{RefCellError, gmsh_to_internal, lagrange_points, num_lagrange_nodes, tdim};
 
 /// The weights that give the missing nodes of a complete-P2 element from the nodes of Gmsh's
@@ -127,7 +127,7 @@ pub(crate) struct NodalBasis {
     exps: Vec<Exponents>,
     dim: usize,
     /// The factors of Vᵀ, Vᵢⱼ = mⱼ(nodeᵢ): φ(x) solves Vᵀ φ = m(x).
-    vt: Lu,
+    vt: DenseLu,
 }
 
 impl NodalBasis {
@@ -143,7 +143,7 @@ impl NodalBasis {
         Ok(NodalBasis {
             exps: exps.to_vec(),
             dim,
-            vt: Lu::factor(vt, n)?,
+            vt: DenseLu::factor(vt, n)?,
         })
     }
 
@@ -151,7 +151,7 @@ impl NodalBasis {
     pub(crate) fn eval(&self, x: &[f64]) -> Vec<f64> {
         assert_eq!(x.len(), self.dim);
         let mut phi = monomials(&self.exps, x);
-        self.vt.solve(&mut phi);
+        self.vt.solve(&mut phi, 1);
         phi
     }
 }
