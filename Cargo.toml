@@ -13,8 +13,11 @@ members = [
     "tetraloma",
     "ptscotch-sys",
     "parmetis-sys",
+    "tetraloma-comm-testing",
+    "tetraloma-testing-base",
     "tetraloma-testing",
     "tetraloma-mpi-tests",
+    "tetraloma-foundation-tests",
     "tetraloma-bench",
     "tetraloma-examples",
 ]

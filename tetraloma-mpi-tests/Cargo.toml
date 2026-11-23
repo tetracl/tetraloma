@@ -52,6 +52,11 @@ harness = false
 required-features = ["mpi"]
 
 [[test]]
+name = "foundation_scatter"
+harness = false
+required-features = ["mpi"]
+
+[[test]]
 name = "determinism"
 harness = false
 required-features = ["mpi"]
