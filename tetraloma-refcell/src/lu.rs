@@ -25,7 +25,7 @@ use crate::RefCellError;
 /// ```
 ///
 /// [Orthonormal polynomial sets]: https://tetracl.github.io/tetraloma/concepts/quadrature.html#orthonormal-polynomial-sets
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct DenseLu {
     n: usize,
     lu: Vec<f64>,

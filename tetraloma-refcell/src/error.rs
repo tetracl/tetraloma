@@ -96,10 +96,7 @@ impl fmt::Display for RefCellError {
                     "{format} has no node ordering for {cell:?} cells of degree {degree}"
                 )
             }
-            Self::Singular => write!(
-                f,
-                "the Vandermonde matrix is singular (nodes not unisolvent)"
-            ),
+            Self::Singular => write!(f, "the matrix is singular to working precision"),
         }
     }
 }

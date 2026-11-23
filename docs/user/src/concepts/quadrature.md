@@ -186,13 +186,12 @@ degree-$p$ space, exposed in `tetraloma_refcell` as
 `polyset::dim(cell, degree)` returns the number of basis functions (1 at degree 0 and on the
 point cell), and `polyset::tabulate(cell, degree, points, nderivs)` tabulates values
 (`nderivs == 0`) or values and first derivatives (`nderivs == 1`) in
-`[derivative][basis][point]` order: block 0 holds the values $\varphi_k(\xi_q)$ and block
-$1 + d$ holds $\partial \varphi_k / \partial \xi_d(\xi_q)$. Passing `nderivs > 1` or a point
+`[derivative][basis][point]` order: block 0 holds the values $\psi_k(\xi_q)$ and block
+$1 + d$ holds $\partial \psi_k / \partial \xi_d(\xi_q)$. Passing `nderivs > 1` or a point
 array whose length is not a multiple of the cell's topological dimension panics.
 
-[`LagrangeElement`](../api/tetraloma_refcell/struct.LagrangeElement.html) and downstream finite
-elements expand their bases in these orthonormal sets and solve the small dense Vandermonde or
-dual system on the host in `f64` with
+[`LagrangeElement`](../api/tetraloma_refcell/struct.LagrangeElement.html) expands its basis in
+these orthonormal sets and solves the Vandermonde system on the host in `f64` with
 [`DenseLu`](../api/tetraloma_refcell/struct.DenseLu.html), which factors a square matrix with
 partial pivoting (`DenseLu::factor`) and solves against any number of right-hand sides in place
 (`DenseLu::solve`).
@@ -208,13 +207,13 @@ let npts = rule.weights.len();
 let table = polyset::tabulate(CellType::Triangle, 2, &rule.points, 0);
 assert_eq!((nb, table.len()), (6, 6 * npts));
 
-// Integrate φ_0^2 over the reference triangle: L^2-orthonormal means 1.
+// Integrate ψ_0^2 over the reference triangle: L^2-orthonormal means 1.
 let norm_sq: f64 = (0..npts)
     .map(|q| rule.weights[q] * table[q] * table[q])
     .sum();
 assert!((norm_sq - 1.0).abs() < 1e-14);
 
-// Build the P2 Vandermonde matrix at the equispaced nodes and invert it with DenseLu.
+// Build the P2 Vandermonde matrix V[i, k] = ψ_k(x_i) at the equispaced nodes and invert it.
 let nodes = lagrange_points(CellType::Triangle, 2, NodeFamily::Equispaced)?;
 let at_nodes = polyset::tabulate(CellType::Triangle, 2, &nodes, 0);
 let mut vandermonde = vec![0.0; nb * nb];
@@ -228,6 +227,16 @@ for i in 0..nb {
     coeffs[i * nb + i] = 1.0;
 }
 DenseLu::factor(vandermonde, nb)?.solve(&mut coeffs, nb);
-assert_eq!(coeffs.len(), 36);
+
+// Check V * coeffs = I: each Lagrange basis function is 1 at its own node and 0 elsewhere.
+for i in 0..nb {
+    for j in 0..nb {
+        let val: f64 = (0..nb)
+            .map(|k| at_nodes[k * nb + i] * coeffs[k * nb + j])
+            .sum();
+        let want = if i == j { 1.0 } else { 0.0 };
+        assert!((val - want).abs() < 1e-12);
+    }
+}
 # Ok(()) }
 ```

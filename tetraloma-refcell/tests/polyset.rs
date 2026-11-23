@@ -1,7 +1,7 @@
 //! Public orthonormal polynomial sets (`polyset`) and dense LU (`DenseLu`) tests.
 
 use tetraloma_dims::CellType;
-use tetraloma_refcell::{DenseLu, RefCellError, gauss_rule, num_lagrange_nodes, polyset, tdim};
+use tetraloma_refcell::{DenseLu, RefCellError, gauss_rule, polyset, tdim};
 
 const ALL_CELLS: [CellType; 8] = [
     CellType::Point,
@@ -25,21 +25,33 @@ const NON_POINT_CELLS: [CellType; 7] = [
 ];
 
 #[test]
-fn polyset_dim_matches_lagrange_node_counts() {
-    for cell in ALL_CELLS {
-        for degree in 0..=8 {
-            assert_eq!(
-                polyset::dim(cell, degree),
-                num_lagrange_nodes(cell, degree),
-                "{cell:?} p = {degree}"
-            );
+fn polyset_dim_matches_space_dimensions() {
+    // Independent dimensions for degrees 0..=4 on every cell type.
+    let expected: [(CellType, [usize; 5]); 8] = [
+        (CellType::Point, [1, 1, 1, 1, 1]),
+        (CellType::Interval, [1, 2, 3, 4, 5]),
+        (CellType::Triangle, [1, 3, 6, 10, 15]),
+        (CellType::Quadrilateral, [1, 4, 9, 16, 25]),
+        (CellType::Tetrahedron, [1, 4, 10, 20, 35]),
+        (CellType::Hexahedron, [1, 8, 27, 64, 125]),
+        (CellType::Prism, [1, 6, 18, 40, 75]),
+        (CellType::Pyramid, [1, 5, 14, 30, 55]),
+    ];
+    for (cell, counts) in expected {
+        let rule = gauss_rule(cell, 1);
+        let npts = rule.weights.len();
+        for (degree, &want) in counts.iter().enumerate() {
+            let d = degree as u32;
+            assert_eq!(polyset::dim(cell, d), want, "{cell:?} p = {d}");
+            let table = polyset::tabulate(cell, d, &rule.points, 0);
+            assert_eq!(table.len(), want * npts, "{cell:?} p = {d}");
         }
     }
 }
 
 #[test]
 fn polyset_is_orthonormal_under_gauss_rule() {
-    for cell in NON_POINT_CELLS {
+    for cell in ALL_CELLS {
         for degree in 0..=6 {
             let rule = gauss_rule(cell, 2 * degree);
             let nb = polyset::dim(cell, degree);

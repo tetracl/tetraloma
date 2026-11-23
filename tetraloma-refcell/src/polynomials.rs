@@ -274,9 +274,11 @@ pub mod polyset {
     ///
     /// `points` is flat and node-major, with `tdim(cell)` coordinates per point; for the point
     /// cell, `points` must be empty and stands for its one point. `nderivs` is 0 (values only,
-    /// 1 block) or 1 (values in block 0, followed by ∂φₖ/∂ξ_d in block 1 + d for each reference
+    /// 1 block) or 1 (values in block 0, followed by ∂ψₖ/∂ξ_d in block 1 + d for each reference
     /// coordinate d). Entry `(deriv, basis, point)` sits at
-    /// `(deriv * num_basis + basis) * num_points + point`.
+    /// `(deriv * num_basis + basis) * num_points + point`. On a pyramid, the rational functions
+    /// have no directional-independent derivative limit at the apex `(0, 0, 1)`; their values and
+    /// derivatives there return the limit along the pyramid's axis (0).
     ///
     /// See [Orthonormal polynomial sets] for the basis of each cell type.
     ///
@@ -293,7 +295,7 @@ pub mod polyset {
     /// use tetraloma_dims::CellType;
     /// use tetraloma_refcell::polyset;
     ///
-    /// // On [0, 1], φ₀(ξ) = 1 and φ₁(ξ) = √3 (2ξ − 1), with derivatives 0 and 2√3.
+    /// // On [0, 1], ψ₀(ξ) = 1 and ψ₁(ξ) = √3 (2ξ − 1), with derivatives 0 and 2√3.
     /// let pts = [0.0, 0.5, 1.0];
     /// let table = polyset::tabulate(CellType::Interval, 1, &pts, 1);
     /// let nb = polyset::dim(CellType::Interval, 1);
