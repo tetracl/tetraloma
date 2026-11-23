@@ -4,7 +4,7 @@ A finite element turns a function space on a reference cell into a concrete set 
 functions and a rule for attaching their coefficients to vertices, edges, faces and cells of a
 mesh. The crate `tetraloma-element` defines these reference elements on the host in `f64`,
 independently of any compute device. Add `tetraloma-element` alongside `tetraloma` in
-`Cargo.toml` (the `tetraloma` facade does not re-export it yet), then look up an element once
+`Cargo.toml` (the `tetraloma` facade does not re-export it), then look up an element once
 through [`Element::get`](../api/tetraloma_element/struct.Element.html) and read its metadata,
 degree-of-freedom layout and tables from the cached handle.
 
@@ -23,8 +23,9 @@ In Ciarlet's definition, a finite element is a triple $(\hat K, \mathcal V, \mat
 Every DOF is associated with the interior of one sub-entity of $\hat K$: a vertex (dimension $0$),
 an edge (dimension $1$), a face (dimension $2$) or the cell interior (dimension $t$, where $t$ is
 the cell's topological dimension). Two neighbouring cells that share a vertex, edge or face share
-the DOFs attached to that sub-entity, which enforces continuity of the global function across cell
-boundaries.
+the DOFs attached to that sub-entity, which enforces the family's inter-element continuity (full
+continuity for Lagrange, tangential continuity for N1curl, and normal continuity for
+Raviart–Thomas).
 
 [`Element`](../api/tetraloma_element/struct.Element.html) exposes this association through two
 methods, indexed by dimension `d` (from vertices at `d = 0`, through edges and faces in the

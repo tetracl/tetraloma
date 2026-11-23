@@ -237,10 +237,13 @@ mod tests {
     }
 
     #[test]
-    fn facet_closure_dofs_match_mapped_facet_lagrange_points() {
+    fn sub_entity_closure_dofs_match_mapped_lagrange_points() {
+        use tetraloma_refcell::vertices;
+
         let eq = NodeFamily::Equispaced;
         for cell in ALL_CELLS {
             let td = tdim(cell);
+            let verts = vertices(cell);
             for degree in 1..=5 {
                 let layout = build_lagrange_layout(make_key(
                     Family::Lagrange,
@@ -249,6 +252,28 @@ mod tests {
                     Variant::Nodal(eq),
                 ));
                 let cell_pts = lagrange_points(cell, degree, eq).unwrap();
+
+                // Edges (d = 1) for every 2D and 3D cell: checks edges below facet dimension too.
+                if td >= 2 {
+                    let edge_pts = lagrange_points(CellType::Interval, degree, eq).unwrap();
+                    for (e, &ev) in sub_entities(cell, 1).iter().enumerate() {
+                        let closure = &layout.entity_closure_dofs[1][e];
+                        let (v0, v1) = (verts[ev[0]], verts[ev[1]]);
+                        assert_eq!(closure.len(), edge_pts.len());
+                        for (slot, (&dof, &t)) in closure.iter().zip(&edge_pts).enumerate() {
+                            let got = &cell_pts[dof * td..(dof + 1) * td];
+                            for j in 0..td {
+                                let want = v0[j] + t * (v1[j] - v0[j]);
+                                assert!(
+                                    (got[j] - want).abs() < 1e-14,
+                                    "{cell:?} p={degree} edge {e} slot {slot} dof {dof}: {got:?}"
+                                );
+                            }
+                        }
+                    }
+                }
+
+                // Facets (d = td - 1) against `facet_points_to_cell`.
                 for (f, &fty) in sub_entity_types(cell, td - 1).iter().enumerate() {
                     let closure = &layout.entity_closure_dofs[td - 1][f];
                     let mapped =
@@ -265,5 +290,14 @@ mod tests {
                 }
             }
         }
+
+        // Literal check for a 3D cell edge below facet dimension (tetrahedron p = 2, edge 5 = (2, 3)).
+        let tet2 = build_lagrange_layout(make_key(
+            Family::Lagrange,
+            CellType::Tetrahedron,
+            2,
+            Variant::Nodal(eq),
+        ));
+        assert_eq!(tet2.entity_closure_dofs[1][5], &[2, 3, 9]);
     }
 }

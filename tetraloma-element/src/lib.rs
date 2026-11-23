@@ -53,7 +53,9 @@ pub use tensor::{Factor1d, TensorFactors};
 ///
 /// One value names the family across every cell type. On quadrilaterals and hexahedra,
 /// `N1curl` and `RaviartThomas` are the tensor-product spaces (DefElement's RTCE, RTCF, NCE
-/// and NCF). See [Families and degrees] for the cells and degree ranges each family supports.
+/// and NCF). `N1curl` and `RaviartThomas` are declared here and currently return
+/// [`ElementError::Unsupported`] from [`Element::get`]. See [Families and degrees] for the
+/// cells and degree ranges each family supports.
 ///
 /// [Families and degrees]: https://tetracl.github.io/tetraloma/fem/elements.html#families-and-degrees
 #[non_exhaustive]
@@ -295,16 +297,23 @@ impl Element {
     }
 
     fn build(key: ElementKey) -> Self {
-        let dofs = layout::build_lagrange_layout(key);
-        Self {
-            key,
-            map_type: MapType::Identity,
-            reference_value_size: 1,
-            dim: dofs.dim,
-            discontinuous_only: dofs.discontinuous_only,
-            embedded_superdegree: key.degree,
-            entity_dofs: dofs.entity_dofs,
-            entity_closure_dofs: dofs.entity_closure_dofs,
+        match key.family {
+            Family::Lagrange => {
+                let dofs = layout::build_lagrange_layout(key);
+                Self {
+                    key,
+                    map_type: MapType::Identity,
+                    reference_value_size: 1,
+                    dim: dofs.dim,
+                    discontinuous_only: dofs.discontinuous_only,
+                    embedded_superdegree: key.degree,
+                    entity_dofs: dofs.entity_dofs,
+                    entity_closure_dofs: dofs.entity_closure_dofs,
+                }
+            }
+            Family::N1curl | Family::RaviartThomas => {
+                unreachable!("unsupported family {:?} passed validate_key", key.family)
+            }
         }
     }
 
