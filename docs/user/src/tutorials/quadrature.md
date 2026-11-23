@@ -137,7 +137,7 @@ off mainly in `f64`. The program `geometric_factors` shows the same convergence 
 sphere of [Measures](geometric-data.md#measures).
 
 Equispaced nodes interpolate well up to about degree 10. Above that, use
-Gauss–Lobatto–Legendre nodes on intervals, quadrilaterals and hexahedra, as
+Gauss–Lobatto–Legendre nodes (offered on every cell except pyramids), as
 [GLL and equispaced nodes](../concepts/geometry.md#gll-and-equispaced-nodes) explains. A
 coordinate element of high degree costs more per point, but tetraloma chooses a suitable
 kernel for each degree and device by itself.

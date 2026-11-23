@@ -162,7 +162,7 @@ assert!(error < 1e-3, "relative error {error}");
 
 [Quadrature on a mesh](quadrature.md#high-order-geometry) follows this error up to degree 8.
 Equispaced nodes exist on every cell type. Gauss–Lobatto–Legendre nodes
-(`NodeFamily::Gll`) exist on intervals, quadrilaterals and hexahedra only, and suit degrees
+(`NodeFamily::Gll`) exist on every cell type except pyramids, and suit degrees
 above about 10; [GLL and equispaced nodes](../concepts/geometry.md#gll-and-equispaced-nodes)
 compares the two.
 
@@ -208,13 +208,20 @@ let r = MeshBuilder::<f64, D2, D2>::new(&client)
     .build();
 assert!(matches!(r, Err(GridError::DuplicateOriginId(7))));
 
-// GLL nodes exist on intervals, quadrilaterals and hexahedra only.
-let gll = CoordinateElement::<D2> { family: NodeFamily::Gll, ..triangle };
-let r = MeshBuilder::<f64, D2, D2>::new(&client)
-    .nodes(&coords, None)
-    .cell_block(gll, &[0, 1, 2], None)
+// GLL nodes are not offered on pyramids.
+let pyramid_coords = [
+    0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0,
+];
+let gll = CoordinateElement::<D3> {
+    cell: Cell3::Pyramid,
+    degree: 1,
+    family: NodeFamily::Gll,
+};
+let r = MeshBuilder::<f64, D3, D3>::new(&client)
+    .nodes(&pyramid_coords, None)
+    .cell_block(gll, &[0, 1, 2, 3, 4], None)
     .build();
-assert!(matches!(r, Err(GridError::UnsupportedNodeFamily { cell: "Triangle", .. })));
+assert!(matches!(r, Err(GridError::UnsupportedNodeFamily { cell: "Pyramid", .. })));
 # Ok(())
 # }
 ```
