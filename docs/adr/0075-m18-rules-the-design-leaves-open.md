@@ -1,6 +1,6 @@
 # ADR-0075: M18, rules the design leaves open: the foundation-only test crate, its checks and the new error types in the facade
 
-Status: Proposed
+Status: Accepted
 Date: 2026-11-23
 Decision issue: #89
 Raised by: the plan of M18 (pull request #88, `docs/plans/M18.md`), its open questions 1 to 3, and findings G1, G3 and G9 of its review
@@ -92,3 +92,9 @@ For option 2 with P1a, P2a and P3a. Each edit carries the marker (ADR-0075).
 - **New tasks:** none.
 
 ## Decision
+
+> 1-4 as recommended., 2026-11-23, said to the agent in a session.
+
+The answer is to the open questions 1 to 4 of the plan of M18. The recommendations of questions 1 to 3 are option 2 of this ADR with P1a, P2a and P3a, so the changes listed for them apply as written. The answer was given to the plan's questions, before this text was written; the maintainer reads the wording of the design edits in this pull request, and the merge makes them binding. Question 4 (nine tasks) is not part of this ADR; the plan's Decisions table records it.
+
+`docs/plans/M18.md` is not on the main branch yet, so its changes (the answers in its Decisions table; tasks T1 to T5) are made in the plan's pull request #88, not in this one.
