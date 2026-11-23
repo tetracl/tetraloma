@@ -58,7 +58,6 @@ fn lagrange_key(cell: CellType, degree: u32, variant: Variant) -> ElementKey {
 /// M11 acceptance A12: degrees outside the table of section 26, and `Nodal(Gll)` on pyramids,
 /// return `ElementError::Unsupported`.
 #[test]
-#[ignore = "pending M11.T4"]
 fn unsupported_keys_return_unsupported() {
     let mut keys = Vec::new();
     for cell in ALL_CELLS {
