@@ -59,7 +59,8 @@ pub enum RefCellError {
         /// The degree.
         degree: u32,
     },
-    /// The generalised Vandermonde matrix is singular: the nodes are not unisolvent.
+    /// The matrix passed to [`DenseLu::factor`](crate::DenseLu::factor) (such as a generalised
+    /// Vandermonde matrix) is singular to working precision.
     Singular,
 }
 
@@ -95,10 +96,7 @@ impl fmt::Display for RefCellError {
                     "{format} has no node ordering for {cell:?} cells of degree {degree}"
                 )
             }
-            Self::Singular => write!(
-                f,
-                "the Vandermonde matrix is singular (nodes not unisolvent)"
-            ),
+            Self::Singular => write!(f, "the matrix is singular to working precision"),
         }
     }
 }

@@ -17,6 +17,9 @@
 //!   [`lagrange_entity_nodes`]: the Lagrange nodes of each degree, in tetraloma's order.
 //! - [`gauss_rule`]: a Gauss quadrature rule on every cell.
 //! - [`LagrangeElement`]: the values and first derivatives of a Lagrange basis.
+//! - [`polyset`]: the L²-orthonormal polynomial sets on every cell, with values and first
+//!   derivatives.
+//! - [`DenseLu`]: dense LU factorisation with partial pivoting, in f64.
 //! - [`orientation_bits`], [`canonical_order`]: the permutation bits of a cell and the stored
 //!   vertex order of an entity, from origin ids.
 //! - [`reference_facet_normals`], [`facet_points_to_cell`]: facet normals and facet point maps.
@@ -63,8 +66,10 @@ pub use lagrange::{
     NodeFamily, lagrange_entity_nodes, lagrange_points, num_interior_lagrange_nodes,
     num_lagrange_nodes,
 };
+pub use lu::DenseLu;
 pub use node_maps::{gmsh_to_internal, vtk_to_internal};
 pub use orientation::{canonical_order, orientation_bits};
+pub use polynomials::polyset;
 pub use quadrature::{QuadratureRule, gauss_rule};
 pub use serendipity::{SerendipityUpgrade, serendipity_upgrade};
 pub use tabulation::{LagrangeElement, Tabulation};

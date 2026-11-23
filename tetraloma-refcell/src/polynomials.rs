@@ -208,6 +208,146 @@ pub(crate) fn tabulate(cell: CellType, p: usize, points: &[f64], nderivs: usize)
     data
 }
 
+// Design: section 26 ("Finite elements"), Listing E1; ADR-0072.
+pub mod polyset {
+    //! Orthonormal polynomial sets on the reference cells, in `f64`.
+    //!
+    //! Each set is orthonormal in L² on its reference cell and spans the cell's Lagrange space of
+    //! degree p (for pyramids, the rational space). Values and first derivatives are tabulated on
+    //! the host with [`tabulate`]; [`dim`] gives the number of basis functions. See
+    //! [Orthonormal polynomial sets] for the bases of each cell.
+    //!
+    //! # Example
+    //!
+    //! ```
+    //! use tetraloma_dims::CellType;
+    //! use tetraloma_refcell::{gauss_rule, polyset};
+    //!
+    //! let rule = gauss_rule(CellType::Triangle, 4);
+    //! let nb = polyset::dim(CellType::Triangle, 2);
+    //! let npts = rule.weights.len();
+    //! let table = polyset::tabulate(CellType::Triangle, 2, &rule.points, 0);
+    //! assert_eq!((nb, table.len()), (6, 6 * npts));
+    //!
+    //! // The basis functions are L²-orthonormal on the reference triangle.
+    //! let norm_sq: f64 = (0..npts)
+    //!     .map(|q| rule.weights[q] * table[q] * table[q])
+    //!     .sum();
+    //! assert!((norm_sq - 1.0).abs() < 1e-14);
+    //! ```
+    //!
+    //! [Orthonormal polynomial sets]: https://tetracl.github.io/tetraloma/concepts/quadrature.html#orthonormal-polynomial-sets
+
+    use tetraloma_dims::CellType;
+
+    use crate::{num_lagrange_nodes, tdim};
+
+    // Design: section 26 ("Finite elements"), Listing E1.
+    /// The number of basis functions in the orthonormal set of `degree` on `cell`.
+    ///
+    /// This equals [`num_lagrange_nodes`](crate::num_lagrange_nodes) and is 1 at degree 0 and on
+    /// the point cell. See [Orthonormal polynomial sets].
+    ///
+    /// # Panics
+    ///
+    /// If the count overflows `usize`; the message names the cell and the degree.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetraloma_dims::CellType;
+    /// use tetraloma_refcell::polyset;
+    ///
+    /// assert_eq!(polyset::dim(CellType::Triangle, 0), 1);
+    /// assert_eq!(polyset::dim(CellType::Triangle, 3), 10);
+    /// assert_eq!(polyset::dim(CellType::Pyramid, 2), 14);
+    /// ```
+    ///
+    /// [Orthonormal polynomial sets]: https://tetracl.github.io/tetraloma/concepts/quadrature.html#orthonormal-polynomial-sets
+    pub fn dim(cell: CellType, degree: u32) -> usize {
+        num_lagrange_nodes(cell, degree)
+    }
+
+    // Design: section 26 ("Finite elements"), Listing E1; ADR-0072.
+    /// Tabulates the orthonormal set of `degree` on `cell` at `points`, returning a flat table in
+    /// `[derivative][basis][point]` order.
+    ///
+    /// `points` is flat and node-major, with `tdim(cell)` coordinates per point; for the point
+    /// cell, `points` must be empty and stands for its one point. `nderivs` is 0 (values only,
+    /// 1 block) or 1 (values in block 0, followed by ∂ψₖ/∂ξ_d in block 1 + d for each reference
+    /// coordinate d). Entry `(deriv, basis, point)` sits at
+    /// `(deriv * num_basis + basis) * num_points + point`. On a pyramid, the rational functions
+    /// have no directional-independent derivative limit at the apex `(0, 0, 1)`; their values and
+    /// derivatives there return the limit along the pyramid's axis (0).
+    ///
+    /// See [Orthonormal polynomial sets] for the basis of each cell type.
+    ///
+    /// # Panics
+    ///
+    /// - If `nderivs > 1`.
+    /// - If `points.len()` is not a multiple of [`tdim(cell)`](crate::tdim) (or is non-empty for
+    ///   [`CellType::Point`]).
+    /// - If the table size overflows `usize`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetraloma_dims::CellType;
+    /// use tetraloma_refcell::polyset;
+    ///
+    /// // On [0, 1], ψ₀(ξ) = 1 and ψ₁(ξ) = √3 (2ξ − 1), with derivatives 0 and 2√3.
+    /// let pts = [0.0, 0.5, 1.0];
+    /// let table = polyset::tabulate(CellType::Interval, 1, &pts, 1);
+    /// let nb = polyset::dim(CellType::Interval, 1);
+    /// let npts = pts.len();
+    /// assert_eq!(table.len(), 2 * nb * npts);
+    ///
+    /// // Block 0, basis 1 at ξ = 0.5 is 0; block 1, basis 1 at ξ = 0.5 is 2√3.
+    /// assert!(table[npts + 1].abs() < 1e-15);
+    /// assert!((table[(nb + 1) * npts + 1] - 2.0 * 3.0_f64.sqrt()).abs() < 1e-14);
+    /// ```
+    ///
+    /// [Orthonormal polynomial sets]: https://tetracl.github.io/tetraloma/concepts/quadrature.html#orthonormal-polynomial-sets
+    pub fn tabulate(cell: CellType, degree: u32, points: &[f64], nderivs: u32) -> Vec<f64> {
+        assert!(
+            nderivs <= 1,
+            "polyset::tabulate: derivative order {nderivs} is not supported (0 or 1)"
+        );
+        let td = tdim(cell);
+        let shape_ok = if td == 0 {
+            points.is_empty()
+        } else {
+            points.len().is_multiple_of(td)
+        };
+        assert!(
+            shape_ok,
+            "polyset::tabulate: point array of length {} is not a whole number of points of dimension {td}",
+            points.len()
+        );
+        let nb = dim(cell, degree);
+        let p = usize::try_from(degree)
+            .unwrap_or_else(|_| panic!("polyset::tabulate: degree {degree} overflows usize"));
+        let npts = points.len().checked_div(td).unwrap_or(1);
+        let nd = if nderivs == 0 { 1 } else { 1 + td };
+        let len = nd
+            .checked_mul(nb)
+            .and_then(|v| v.checked_mul(npts))
+            .expect("polyset::tabulate: table size overflows usize");
+        let mut data = vec![0.0; len];
+        for q in 0..npts {
+            let x = &points[q * td..(q + 1) * td];
+            let values = super::orthonormal_at(cell, p, x);
+            debug_assert_eq!(values.len(), nb);
+            for (k, v) in values.iter().enumerate() {
+                for d in 0..nd {
+                    data[(d * nb + k) * npts + q] = v[d];
+                }
+            }
+        }
+        data
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -375,6 +515,51 @@ mod tests {
                         (norm2 - proj2).abs() < 1e-12 * norm2,
                         "{cell:?} p = {p}, {e:?}"
                     );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn polyset_tabulate_matches_private_tabulate_on_every_cell() {
+        let all_cells = [
+            Point,
+            Interval,
+            Triangle,
+            Quadrilateral,
+            Tetrahedron,
+            Hexahedron,
+            Prism,
+            Pyramid,
+        ];
+        for cell in all_cells {
+            let td = tdim(cell);
+            let points: Vec<f64> = if td == 0 {
+                vec![]
+            } else {
+                gauss_rule(cell, 3).points
+            };
+            let npts = points.len().checked_div(td).unwrap_or(1);
+            for p in 0..=5_u32 {
+                let nb = polyset::dim(cell, p);
+                assert_eq!(nb, num_lagrange_nodes(cell, p), "{cell:?} p = {p}");
+                for nderivs in [0_u32, 1] {
+                    let nd = if nderivs == 0 { 1 } else { 1 + td };
+                    let priv_t = tabulate(cell, p as usize, &points, nderivs as usize);
+                    let pub_t = polyset::tabulate(cell, p, &points, nderivs);
+                    assert_eq!(pub_t.len(), nd * nb * npts, "{cell:?} p = {p}");
+                    assert_eq!(priv_t.len(), nd * npts * nb, "{cell:?} p = {p}");
+                    for d in 0..nd {
+                        for k in 0..nb {
+                            for q in 0..npts {
+                                assert_eq!(
+                                    pub_t[(d * nb + k) * npts + q],
+                                    priv_t[(d * npts + q) * nb + k],
+                                    "{cell:?} p = {p} nderivs = {nderivs} ({d}, {k}, {q})"
+                                );
+                            }
+                        }
+                    }
                 }
             }
         }

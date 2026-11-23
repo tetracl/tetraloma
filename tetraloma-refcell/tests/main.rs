@@ -4,5 +4,6 @@ mod fixtures;
 mod node_counts;
 mod node_families;
 mod node_maps;
+mod polyset;
 mod quadrature;
 mod tabulation;
