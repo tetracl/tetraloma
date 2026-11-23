@@ -95,6 +95,10 @@ For option 2 with P1a, P2a and P3a. Each edit carries the marker (ADR-0075).
 
 > 1-4 as recommended., 2026-11-23, said to the agent in a session.
 
-The answer is to the open questions 1 to 4 of the plan of M18. The recommendations of questions 1 to 3 are option 2 of this ADR with P1a, P2a and P3a, so the changes listed for them apply as written. The answer was given to the plan's questions, before this text was written; the maintainer reads the wording of the design edits in this pull request, and the merge makes them binding. Question 4 (nine tasks) is not part of this ADR; the plan's Decisions table records it.
+The answer is to the open questions 1 to 4 of the plan of M18. The recommendations of questions 1 to 3 are option 2 of this ADR with P1a, P2a and P3a, so the changes listed for them apply as written. The answer was given to the plan's questions, before this text was written. Question 4 (nine tasks) is not part of this ADR; the plan's Decisions table records it.
+
+> Accept ADR75., 2026-11-23, said to the agent in a session.
+
+This second answer was given with this pull request open, with the status Accepted and the design edits applied in it. It accepts the ADR as written.
 
 `docs/plans/M18.md` is not on the main branch yet, so its changes (the answers in its Decisions table; tasks T1 to T5) are made in the plan's pull request #88, not in this one.
