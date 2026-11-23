@@ -136,13 +136,16 @@ Project skills (tetraloma's own; not part of the template):
       as in task mode; the plan pull request stays a draft until that round and its fixes are
       done, then you tell the maintainer it is ready.
     - **Review focus.** Besides the briefs, reviewers check: dependencies follow design
-      section 18, "Dependency rules" (runtime types only in tetraloma-device, no MPI without the
-      `mpi` feature, ndelement only in `conformance/`, tetraloma-element without CubeCL, rule 8);
+      section 18, "Dependency rules" (runtime types only in tetraloma-device, runtime features
+      only in tetraloma-testing-base, tetraloma-testing, examples, benchmarks and binaries, no MPI
+      without the `mpi` feature, ndelement only in `conformance/`, tetraloma-element without
+      CubeCL, rule 8, and rule 9: foundation crates free of mesh crates, and tetraloma-comm and
+      tetraloma-partition free of CubeCL);
       launch shapes and cube counts from `LaunchPlan` (section 22) and the device limits of
       section 7; reference-cell tables and node orders as in section 20 (Appendix A), with the map direction
       `internal[map[k]] = file[k]`; tests in f32 and f64 with the tolerances of section 16; no
       host↔device copy on a library path except those section 22 allows; every public item
-      added or changed in the eleven published library crates documented as section 22 requires,
+      added or changed in the twelve published library crates documented as section 22 requires,
       and the book updated in the same task. Sections without an `### Interface` part (all before
       M11) state their public interfaces in the listings of sections 4, 5, 7–9, 11 and 12; the
       briefs' "Interface part" means those listings.

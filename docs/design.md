@@ -848,14 +848,14 @@ impl<T: CubeElement> DeviceBuffer<T> {
 /// An empty buffer still gets one block, so no handle has zero size (wgpu rejects zero-size
 /// bindings); len() stays 0.
 fn pad_len(len: usize) -> Result<usize> {
-    len.max(1).checked_next_multiple_of(VECTOR_PAD).ok_or(GridError::TooLarge)
+    len.max(1).checked_next_multiple_of(VECTOR_PAD).ok_or(DeviceError::TooLarge)
 }
 
 /// Bytes for `len` elements, or an error if the device cannot hold them in one allocation.
 fn check_allocation<T: CubeElement>(client: &Client, len: usize) -> Result<usize> {
-    let bytes = len.checked_mul(core::mem::size_of::<T>()).ok_or(GridError::TooLarge)?;
+    let bytes = len.checked_mul(core::mem::size_of::<T>()).ok_or(DeviceError::TooLarge)?;
     let max = client.properties().memory.max_page_size;
-    if bytes as u64 > max { return Err(GridError::AllocationTooLarge { bytes, max }); }
+    if bytes as u64 > max { return Err(DeviceError::AllocationTooLarge { bytes, max }); }
     Ok(bytes)
 }
 
@@ -868,11 +868,11 @@ pub struct DeviceCsr { pub offsets: DeviceBuffer<u32>, pub indices: DeviceBuffer
 /// Called whenever a mesh is created on a client, so precision errors surface early.
 pub fn check_precision<F: Real>(client: &Client) -> Result<()> {
     if client.properties().supports_type(F::cube_type()) { return Ok(()); }
-    Err(GridError::UnsupportedPrecision { scalar: F::type_name(), device: client.name() })
+    Err(DeviceError::UnsupportedPrecision { scalar: F::type_name(), device: client.name() })
 }
 ```
 
-`GridError` and the alias `Result<T, E = GridError>` live in tetraloma-device, the lowest crate that returns them; tetraloma-parallel and tetraloma re-export both (ADR-0009). `GridError` is `#[non_exhaustive]` and implements `Display`, `std::error::Error` and `From<ServerError>`. Its M2 variants are `TooLarge`, `AllocationTooLarge { bytes: usize, max: u64 }`, `UnsupportedPrecision { scalar: &'static str, device: &'static str }`, `LengthMismatch { expected: usize, found: usize }` and `Server(ServerError)`; later milestones add their variants when they first use them. M3 adds `UnsupportedNodeFamily { cell, family }`, `UnsupportedDegree { cell, degree: u32 }`, `WrongCellDim { found, expected_tdim: usize }`, `DimensionMismatch { expected: (usize, usize), found: (usize, usize) }`, `EntitiesNotCreated(usize)`, `ConnectivityNotCreated(ConnKey)`, `UnsupportedConnectivity(ConnKey)`, `DuplicateOriginId(i64)`, `IndexOutOfRange { index: usize, len: usize }`, `NodeRoleMismatch(usize)`, `DuplicateCellBlock(&'static str)`, `CellNotInRule(&'static str)` and `NotYetImplemented(&'static str)`. M4 adds `UnmatchedTagElement { dim: usize, tag: i64 }`, `Io(String)`, `Parse { format: &'static str, offset: u64, message: String }`, `UnsupportedElementType { format: &'static str, type_id: i32 }` and `UnknownTag { name: String, dim: usize }` (ADR-0022). M6 adds `MessageTooLarge { count: usize }` and `RemoteFailure { rank: usize }`; collective operations agree on errors, and ranks without a local error return `RemoteFailure` with the lowest failing rank (ADR-0026). M7 adds `PartitionerFailed { name: &'static str, code: i32 }` and `NeedsMpiCommunicator(&'static str)` (ADR-0029). M9 adds `NonManifold`, `InteriorFacet`, `NeedsReferencePoint` and `NonOrientable`, unit variants agreed across ranks (ADR-0039). Cell types and node families are named by `&'static str`, because tetraloma-device depends on neither tetraloma-dims nor tetraloma-refcell. `ConnKey` (Listing T1) lives in tetraloma-device for this reason. `pad_len`, `debug_assert_bindings` and `device_properties(&Client) -> Arc<DeviceProperties>` are public: kernel launchers in every crate read device limits through `device_properties`, which honours `testing::with_properties` (ADR-0012). `Mesh` is not `Clone` either; `Mesh::try_clone` copies every array with `deep_clone`.
+tetraloma-device defines `DeviceError` (`#[non_exhaustive]`, `Debug`, `Clone`, `Display`, `std::error::Error`, `From<ServerError>`) and its alias `Result<T, E = DeviceError>`, with the five variants its functions return: `TooLarge`, `AllocationTooLarge { bytes: usize, max: u64 }`, `UnsupportedPrecision { scalar: &'static str, device: &'static str }`, `LengthMismatch { expected: usize, found: usize }` and `Server(ServerError)` (ADR-0074). `GridError`, the alias `Result<T, E = GridError>` and `ConnKey` live in tetraloma-topology, the lowest mesh crate above the foundation crates; tetraloma re-exports all three, and the re-export of `GridError` (and its `Result` alias) from tetraloma-parallel ends (ADR-0009, ADR-0074). `GridError` is `#[non_exhaustive]`, implements `Display`, `std::error::Error`, `From<ServerError>`, `From<CommError>`, `From<DeviceError>` and `From<ParallelError>` — each mapping every error to the exact `GridError` variant produced before — and keeps every variant (ADR-0074). Its M2 variants are `TooLarge`, `AllocationTooLarge { bytes: usize, max: u64 }`, `UnsupportedPrecision { scalar: &'static str, device: &'static str }`, `LengthMismatch { expected: usize, found: usize }` and `Server(ServerError)`; later milestones add their variants when they first use them. M3 adds `UnsupportedNodeFamily { cell, family }`, `UnsupportedDegree { cell, degree: u32 }`, `WrongCellDim { found, expected_tdim: usize }`, `DimensionMismatch { expected: (usize, usize), found: (usize, usize) }`, `EntitiesNotCreated(usize)`, `ConnectivityNotCreated(ConnKey)`, `UnsupportedConnectivity(ConnKey)`, `DuplicateOriginId(i64)`, `IndexOutOfRange { index: usize, len: usize }`, `NodeRoleMismatch(usize)`, `DuplicateCellBlock(&'static str)`, `CellNotInRule(&'static str)` and `NotYetImplemented(&'static str)`. M4 adds `UnmatchedTagElement { dim: usize, tag: i64 }`, `Io(String)`, `Parse { format: &'static str, offset: u64, message: String }`, `UnsupportedElementType { format: &'static str, type_id: i32 }` and `UnknownTag { name: String, dim: usize }` (ADR-0022). M6 adds `MessageTooLarge { count: usize }` and `RemoteFailure { rank: usize }`; collective operations agree on errors, and ranks without a local error return `RemoteFailure` with the lowest failing rank (ADR-0026). M7 adds `PartitionerFailed { name: &'static str, code: i32 }` and `NeedsMpiCommunicator(&'static str)` (ADR-0029). M9 adds `NonManifold`, `InteriorFacet`, `NeedsReferencePoint` and `NonOrientable`, unit variants agreed across ranks (ADR-0039). Cell types and node families stay named by `&'static str` for compatibility. `pad_len`, `debug_assert_bindings` and `device_properties(&Client) -> Arc<DeviceProperties>` are public: kernel launchers in every crate read device limits through `device_properties`, which honours `testing::with_properties` (ADR-0012). `Mesh` is not `Clone` either; `Mesh::try_clone` copies every array with `deep_clone`.
 
 ### Supported backends
 
@@ -954,8 +954,10 @@ They follow eight rules:
 /// The scalars of the typed primitives (sealed): f32, f64, i32, u32.
 pub trait DeviceScalar: CubeElement + Numeric + sealed::Sealed {}
 
-/// Sum, min or max. Re-exported by tetraloma-parallel, so `tetraloma_parallel::ReduceOp` stays valid.
-#[derive(Clone, Copy, Debug)] pub enum ReduceOp { Sum, Min, Max }
+/// Sum, min or max. Defined in tetraloma-comm (Listing S2c) and re-exported by tetraloma-device
+/// and tetraloma-parallel, so `tetraloma_device::ReduceOp` and `tetraloma_parallel::ReduceOp`
+/// stay valid (ADR-0074).
+pub use tetraloma_comm::ReduceOp;
 
 /// Writes `v` over the padded length.
 pub fn fill<T: DeviceScalar>(x: &mut DeviceBuffer<T>, v: T) -> Result<()>;
@@ -1268,7 +1270,7 @@ pub struct EntityBlock {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct ConnKey { pub from: u8, pub to: u8 }        // defined in tetraloma-device, re-exported (ADR-0012)
+pub struct ConnKey { pub from: u8, pub to: u8 }        // defined in tetraloma-topology, re-exported by tetraloma (ADR-0012, ADR-0074)
 
 pub enum Connectivity {
     /// One strided array per cell block (cell -> edges, cell -> faces, ...), flat indices.
@@ -1330,7 +1332,7 @@ Factors are computed on the device, following MFEM's GeometricFactors. Caching b
     - D1 in D2: n = s (J0_y, −J0_x) / |J0|, which points outward for counter-clockwise closed curves.
 - **Facet normals** of codimension-0 cells, at facet quadrature points: n = K^T n_ref / |K^T n_ref|, using the reference facet normals from tetraloma-refcell. The points are facet-major, so a cell has Σ_f n_f points (`FacetPointSet`, Listing B4b; ADR-0012).
 
-Each factor family runs one of the strategies direct (M9's fully unrolled kernels), loops (runtime loops over nodes), sum-factorised (quadrilaterals, hexahedra and prisms on tensor rules), shared (tabulations or coefficients in shared memory) or cooperative (a group of units per cell, planned by `LaunchPlan::per_group`). tetraloma-geometry's degree policy (`degree-policy.toml`, crate-private) chooses one per family, cell type, degree range, device class (Cpu or Gpu; ADR-0058) and scalar size from the measurements in `docs/perf/high-order.md`; its last range is open-ended and resolves to a strategy known to compile at p = 9–10. `TETRALOMA_GEOM_STRATEGY` (`policy | direct | loops | sumfact | shared | cooperative`, or `<family>=<strategy>,…`) and the hidden `tetraloma_geometry::testing::with_strategy` override it for tests and benchmarks; a strategy that does not apply falls back to loops (ADR-0042). `Strategy` and the reader of `degree-policy.toml` move to tetraloma-device as `#[doc(hidden)] pub` items (dependency rule 7), and the device basis evaluator's `#[cube]` functions become `#[doc(hidden)] pub` items of tetraloma-geometry, so that tetraloma-function uses the same strategies, policy rules and evaluator (ADR-0071).
+Each factor family runs one of the strategies direct (M9's fully unrolled kernels), loops (runtime loops over nodes), sum-factorised (quadrilaterals, hexahedra and prisms on tensor rules), shared (tabulations or coefficients in shared memory) or cooperative (a group of units per cell, planned by `LaunchPlan::per_group`). tetraloma-geometry's degree policy (`degree-policy.toml`, crate-private) chooses one per family, cell type, degree range, device class (Cpu or Gpu; ADR-0058) and scalar size from the measurements in `docs/perf/high-order.md`; its last range is open-ended and resolves to a strategy known to compile at p = 9–10. `TETRALOMA_GEOM_STRATEGY` (`policy | direct | loops | sumfact | shared | cooperative`, or `<family>=<strategy>,…`) and the hidden `tetraloma_geometry::testing::with_strategy` override it for tests and benchmarks; a strategy that does not apply falls back to loops (ADR-0042). `Strategy` and the reader of `degree-policy.toml` stay in tetraloma-geometry as `#[doc(hidden)] pub` items (dependency rule 7), beside the device basis evaluator's `#[cube]` functions, so that tetraloma-function (which depends on tetraloma-geometry) uses the same strategies, policy rules and evaluator (ADR-0071, ADR-0074).
 
 ### Manifold orientation
 
@@ -1365,9 +1367,21 @@ Cells are partitioned without overlap, and each rank also holds a configurable g
 
 ### Communicators, IndexMap and Scatterer
 
-**Listing S2c — communicators, ownership and halo exchange (tetraloma-parallel)**
+**Listing S2c — communicators (tetraloma-comm) and ownership / halo exchange (tetraloma-parallel) (ADR-0074)**
 
 ```rust
+// --- tetraloma-comm (host-only, no CubeCL dependency; ADR-0074) ---
+
+/// Errors of tetraloma-comm: TooLarge, LengthMismatch { expected, found },
+/// IndexOutOfRange { index, len }, MessageTooLarge { count }, RemoteFailure { rank }.
+#[non_exhaustive]
+#[derive(Debug, Clone)]
+pub enum CommError { /* the 5 variants above */ }
+pub type Result<T, E = CommError> = core::result::Result<T, E>;
+
+/// Sum, min or max. Re-exported by tetraloma-device and tetraloma-parallel (ADR-0074).
+#[derive(Clone, Copy, Debug)] pub enum ReduceOp { Sum, Min, Max }
+
 /// Object-safe communicator interface used by IndexMap, Scatterer and partitioners.
 pub trait CommDyn: 'static {
     fn rank(&self) -> usize;
@@ -1413,7 +1427,6 @@ pub trait CommExt {
 impl<C: CommDyn + ?Sized> CommExt for C { /* through the byte-level methods of CommDyn */ }
 
 #[derive(Clone, Copy, Debug)] pub enum DType { I32, I64, U32, U64, F32, F64 }
-pub use tetraloma_device::ReduceOp;                              // Sum, Min, Max (Listing S1b)
 pub trait CommScalar: bytemuck::Pod { const DTYPE: DType; }   // i32, i64, u32, u64, f32, f64
 
 #[derive(Clone, Copy, Debug, Default)] pub struct Serial;      // no-op collectives
@@ -1446,6 +1459,23 @@ pub fn owner_hash(key: &[i64]) -> u64;
 /// MPI_COMM_TYPE_SHARED where comm.raw() is Some, otherwise comm.rank()). Collective. Re-exported
 /// in tetraloma::prelude (ADR-0060).
 pub fn local_gpu_index(comm: &dyn CommDyn) -> usize;
+
+// --- tetraloma-parallel (re-exports all public items of tetraloma-comm except Result; ADR-0074) ---
+
+/// Errors of tetraloma-parallel: the 8 variants of CommError ∪ DeviceError
+/// (TooLarge, AllocationTooLarge, UnsupportedPrecision, LengthMismatch, Server(ServerError),
+/// IndexOutOfRange, MessageTooLarge, RemoteFailure), with From<CommError>, From<DeviceError>
+/// and From<ServerError> (ADR-0074).
+#[non_exhaustive]
+#[derive(Debug, Clone)]
+pub enum ParallelError { /* ... */ }
+pub type Result<T, E = ParallelError> = core::result::Result<T, E>;
+pub use tetraloma_comm::{
+    Comm, CommDyn, CommError, CommExt, CommScalar, DType, Neighbourhood, ReduceOp, Serial,
+    local_gpu_index, owner_hash,
+};
+#[cfg(feature = "mpi")]
+pub use tetraloma_comm::Mpi;
 
 pub struct IndexMap {
     owned_range: (i64, i64),          // global indices [begin, end) owned by this rank
@@ -1547,8 +1577,8 @@ pub fn device_ptr(client: &Client, h: &Handle) -> Result<PinnedDevicePtr<impl Se
 ### MPI bindings
 
 - `mpi` (rsmpi) 0.8.2 provides initialisation, communicators and the basic collectives.
-- rsmpi has no distributed-graph communicators or neighbourhood collectives. tetraloma-parallel therefore wraps `MPI_Dist_graph_create_adjacent` and `MPI_Neighbor_alltoallv` from `mpi::ffi` in safe functions, each with a SAFETY comment.
-- Counts above `i32::MAX` return `GridError::MessageTooLarge`.
+- rsmpi has no distributed-graph communicators or neighbourhood collectives. tetraloma-comm therefore wraps `MPI_Dist_graph_create_adjacent`, `MPI_Neighbor_alltoallv` and `MPI_Comm_split_type` from `mpi::ffi` in safe functions, each with a SAFETY comment (ADR-0074).
+- Counts above `i32::MAX` return `CommError::MessageTooLarge` (converting to `GridError::MessageTooLarge`) (ADR-0074).
 - `Mpi` wraps the communicator in an `Rc`. Under Open MPI, `MPI_Comm` is a pointer, so the communicator is not `Send` anyway; with `Rc` the behaviour is the same under every MPI implementation. CI tests both MPICH and Open MPI.
 
 ### Parallel creation pipeline
@@ -1581,6 +1611,15 @@ pub struct DistGraph {
     pub adjncy: Vec<i64>,             // global cell ids
     pub vwgt: Option<Vec<i64>>,       // cost model per (cell type, degree)
 }
+
+/// Errors of tetraloma-partition: PartitionerFailed { name, code }, NeedsMpiCommunicator(&'static str),
+/// plus the five CommError variants (TooLarge, LengthMismatch, IndexOutOfRange, MessageTooLarge,
+/// RemoteFailure), with From<CommError>. All seven remain GridError variants; tetraloma converts
+/// PartitionError to GridError via a helper function where Partitioner::partition is called (ADR-0074).
+#[non_exhaustive]
+#[derive(Debug, Clone)]
+pub enum PartitionError { /* ... */ }
+pub type Result<T, E = PartitionError> = core::result::Result<T, E>;
 
 pub trait Partitioner {
     fn name(&self) -> &str;
@@ -1680,7 +1719,7 @@ tetraloma has its own Gmsh MSH 4.1 reader and writer, a VTU/PVTU writer, and a V
 Users learn tetraloma from a book and from API documentation written for them, published together on one site. This design and the other developer documents are not part of it (ADR-0067).
 
 - **Location.** The book's sources are in `docs/user/` (mdBook root: `book.toml`, `src/SUMMARY.md`, `src/**/*.md`, `src/figures/*.svg`). The developer documents stay where they are (`docs/design.md`, `docs/adr/`, `docs/plans/`, `docs/perf/`, …); `docs/README.md` says which is which.
-- **Site.** One site at `https://tetracl.github.io/tetraloma/`: the book at `/`, and at `/api/` the rustdoc of the eleven published library crates (tetraloma, tetraloma-dims, tetraloma-refcell, tetraloma-device, tetraloma-parallel, tetraloma-topology, tetraloma-geometry, tetraloma-partition, tetraloma-io, tetraloma-element, tetraloma-function) (ADR-0071).
+- **Site.** One site at `https://tetracl.github.io/tetraloma/`: the book at `/`, and at `/api/` the rustdoc of the twelve published library crates (tetraloma, tetraloma-dims, tetraloma-refcell, tetraloma-comm, tetraloma-device, tetraloma-parallel, tetraloma-topology, tetraloma-geometry, tetraloma-partition, tetraloma-io, tetraloma-element, tetraloma-function) (ADR-0071, ADR-0074).
     - The API is built with `cargo doc --no-deps` and one `-p` per crate, with the features `tetraloma/mpi,tetraloma/hdf5,tetraloma/scotch,tetraloma/ptscotch,tetraloma/metis`, into an empty output directory. No unpublished crate and no test-support feature (`testing`, `bench`) is built into the site.
     - `ParMetis` is not on the site (`metis` and `parmetis` are exclusive, ADR-0033); the book's features chapter describes it, and the checks audit it in a second run with `parmetis`.
     - A CI job builds the site on every push and deploys it to GitHub Pages from `main`. Until the first crates.io release the site documents `main`; per-release copies under `/vX.Y/` start with that release (a later decision).
@@ -1701,10 +1740,10 @@ Users learn tetraloma from a book and from API documentation written for them, p
     - Every `rust` block either runs as a doctest on the CPU runtime (a `#[cfg(doctest)]` module of tetraloma-examples includes each chapter with `include_str!`), or is marked `ignore` and consists only of an mdBook `{{#include}}` of a program in tetraloma-examples, which `scripts/run-examples.sh` runs on the CPU runtime, on Metal and on CUDA (MPI programs under `mpirun` on 1–4 ranks).
     - Snippets obtain devices the way a user does, through `cubecl::Device` (for example `Device::cpu()?.client()`), never through tetraloma-testing.
     - Links from the book into `/api/` target item pages, not method anchors.
-- **API documentation** of the eleven published library crates (ADR-0071). In rendered docs (`///`, `//!`):
+- **API documentation** of the twelve published library crates (ADR-0071, ADR-0074). In rendered docs (`///`, `//!`):
     1. no citation of developer documents: no `docs/` path, ADR number, plan question or milestone id. The provenance goes in a plain `//` comment directly above the doc comment (`// Design: "Geometry", "Geometric factors"; ADR-0044.`);
     2. these items link to at least one section of the book with an absolute URL under the site's base URL (a reference-style link is fine): each crate's root, every public module, struct, enum, union, trait, type alias, constant, static, function and macro, every inherent method and associated function, and every method of a trait defined in these crates. Fields, variants and associated types and constants are documented but need no link;
-    3. every function and method of item 2 has an `# Example` doctest that runs: not `ignore` and not `no_run`, and listed by `cargo test --doc -- --list`. An item is exempt only by an entry with a reason in `docs/user/doc-audit-allow.toml` (for example an accessor that its type's example calls). Examples of MPI-only items run as one-process programs in the CI job `docs`. API doctests may obtain their client and test meshes from tetraloma-testing on hidden (`# `) lines, so they run on every backend of the standing matrix; a visible comment then names what the hidden line makes and, where a reader needs it, links to the tutorial that shows how to make it. tetraloma-parallel and tetraloma-partition therefore have the dev-dependency tetraloma-testing;
+    3. every function and method of item 2 has an `# Example` doctest that runs: not `ignore` and not `no_run`, and listed by `cargo test --doc -- --list`. An item is exempt only by an entry with a reason in `docs/user/doc-audit-allow.toml` (for example an accessor that its type's example calls). Examples of MPI-only items run as one-process programs in the CI job `docs`. API doctests may obtain their client and test meshes from tetraloma-testing (or, for the foundation crates below the mesh, `tetraloma-comm-testing` and `tetraloma-testing-base`) on hidden (`# `) lines, so they run on every backend of the standing matrix; a visible comment then names what the hidden line makes and, where a reader needs it, links to the tutorial that shows how to make it. tetraloma-comm and tetraloma-partition therefore have the dev-dependency `tetraloma-comm-testing` (host-only), and tetraloma-device and tetraloma-parallel have the dev-dependency `tetraloma-testing-base` (ADR-0074);
     4. maths is written in Unicode, with the book's symbols, and links to the book for derivations.
 
   `#[doc(hidden)]` items and the test- and benchmark-support features keep their own rules (dependency rule 7). The unpublished crates and the two `-sys` crates have a crate page that says what they are and links to the book; their items are not audited. This strengthens M10's "every public item is documented".
@@ -1717,7 +1756,7 @@ Users learn tetraloma from a book and from API documentation written for them, p
     - a fenced block without a language tag, an indented code block, or an `ignore` block that is not an include of a program that `scripts/run-examples.sh` runs;
     - while D1 is open, a difference from D1's base commit in the sources (`src/**/*.rs`) of the nine library crates other than in comments. A stdlib tokenizer strips `//`, `///`, `//!` and block comments, respecting strings, raw strings, characters and lifetimes, and compares the remaining tokens file by file.
 
-  The audit reads the generated HTML, so it sees exactly the items users see, and fails if it finds no items (a changed rustdoc markup). The `docs` job also runs the book's doctests and `cargo test --doc` of the eleven crates with the site's features (ADR-0071), and the audit once more for tetraloma-partition with `parmetis`.
+  The audit reads the generated HTML, so it sees exactly the items users see, and fails if it finds no items (a changed rustdoc markup). The `docs` job also runs the book's doctests and `cargo test --doc` of the twelve crates with the site's features (ADR-0071, ADR-0074), and the audit once more for tetraloma-partition with `parmetis`.
 - **Keeping it current.** From D1 on, a milestone that adds or changes public items documents them by the rules above and updates the book in the same task; `scripts/check-user-docs.sh` runs in the `full` check tier of every such task and in the gate's `milestone` tier (`AGENTS.md`, Checks; ADR-0070).
 
 ## 15. Tags, regions and submeshes
@@ -1782,6 +1821,7 @@ Every acceptance test in the roadmap is automated and runs on the targets below.
 - **Conformance:** tetraloma-conformance against ndelement, and the Python oracles Basix, Symfem and DOLFINx (A.10); comparisons with other frameworks use invariants (DOF counts, spans, point values, integrals, L2 errors, convergence rates), never DOF numbering (ADR-0071).
 - **Property tests** (proptest) cover node-ordering permutations, primitives and IndexMap scatter consistency. They use sizes up to 10^5 with 256 cases, plus fixed sizes of 10^6 and 10^7 for primitives.
 - **Compile-fail tests:** trybuild, as in Listing B10.
+- **Test support below the mesh** comes from `tetraloma-comm-testing` (host-only, no CubeCL: `ThreadComm`, communicator checks and the rank-count guard) and `tetraloma-testing-base` (device: `test_client()`, `test_client_at`, `cpu_client`, `supports`, `bitwise_device`, tolerances, `IndexMap` checks, re-exporting `tetraloma-comm-testing`); the foundation crates are tested without the facade, and `tetraloma-testing` re-exports them alongside the mesh helpers (ADR-0074).
 - **Test meshes** come from tetraloma-testing, with origin ids and any degree p:
     - structured boxes for every cell type: prisms by splitting hexahedra, pyramids by splitting each hexahedron into six around its centre, and a mixed tetrahedron/pyramid/hexahedron box;
     - high-order curved sphere surfaces (icosahedral refinement with nodes projected onto the sphere);
@@ -1846,18 +1886,21 @@ The crate graph keeps serial builds free of MPI and lets kernels live in the cra
 | --- | --- | --- |
 | tetraloma-dims | Dimension markers, `EmbeddedIn`/`Codim`, `CellType`, `Cell1`–`Cell3`, `TopoDim` | – |
 | tetraloma-refcell | Reference cells, sub-entity tables, Lagrange layouts for any p (including the prism and pyramid rules), point families, quadrature, tabulation with its own dense LU, orientation bits, A.6 storage slots, reference facet normals and facet point maps, format permutation generators; the public orthonormal sets (`polyset`) and `DenseLu`, `QuadratureType` and `quadrature_rule` with the stored tables of `tables/`, `sub_entity_points_to_cell`, `rule_permutation` and `permute_vertices` (sections 26–27; ADR-0071). Tests read committed JSON fixtures. | tetraloma-dims; dev: serde_json |
-| tetraloma-device | `DeviceBuffer` family, `GridError` and `ConnKey`, capability and limit checks, launch plans and the vector policy, primitives, pack/unpack kernels, re-exports of `Client` and `CubeElement` (ADR-0026), (GPU-aware pointer access deferred, ADR-0059), test hooks (feature `testing`); the `KernelKind` variants and `GridError` variants of sections 8 and 28, and the hidden `Strategy` and degree-policy reader shared by tetraloma-geometry and tetraloma-function (section 10; ADR-0071). The only crate that uses CubeCL runtime types. | cubecl; toml; libc (macOS, ADR-0017); dev: proptest |
-| tetraloma-parallel | `CommDyn`, `Comm`, `CommExt`, `Serial`, `Mpi` (feature `mpi`), `IndexMap`, `Scatterer`, neighbourhood exchange, wrappers over `mpi::ffi` | tetraloma-device; bytemuck; mpi (optional); dev: tetraloma-testing (ADR-0067) |
-| tetraloma-topology | Cell and entity blocks, sort-based entity creation, ownership, connectivity, permutation info, benchmark hooks (feature `bench`) | dims, refcell, device, parallel, cubecl; dev: tetraloma-testing |
-| tetraloma-geometry | Coordinate elements, geometry blocks, `DeviceGrid`, point sets and quadrature rules, factor kernels, orientation, E-vectors, pull-back, GLL → equispaced conversion (`equispaced_nodes`); `QuadRule::new`, `FacetQuadRule::new`, `PointSet::from_points` and `tabulate_element`, `CellPoints` (section 27; ADR-0071) | dims, refcell, element (ADR-0071), device, parallel, topology, cubecl; dev: tetraloma-testing |
-| tetraloma-partition | `DistGraph`, `Partitioner`, block partitioner; METIS, Scotch, PT-Scotch and ParMETIS behind features | parallel; metis, scotch, scotch-sys, ptscotch-sys, parmetis-sys (all optional); build: scotch-sys-bindgen (bindgen 0.65.1, feature `scotch`; ADR-0039); dev: tetraloma-testing (ADR-0067) |
-| tetraloma-io | Gmsh reader and writer (file model and host mesh description), VTU/PVTU (file model, writer, `parse_vtu`), VTKHDF | dims, refcell, device, topology, geometry, parallel, partition; flate2; hdf5-metno and ndarray (optional, with `hdf5`; `mpio` with feature `mpi`; ADR-0039); dev: mshio, serde_json, tetraloma-testing |
+| tetraloma-comm | Host-only communication layer: `CommDyn`, `Comm`, `CommExt`, `DType`, `CommScalar`, `ReduceOp`, `Serial`, `Mpi` (feature `mpi`), `Neighbourhood`, `owner_hash`, `local_gpu_index`, `CommError`, wrappers over `mpi::ffi`; no CubeCL dependency (ADR-0074) | bytemuck; mpi (optional); dev: proptest, tetraloma-comm-testing |
+| tetraloma-device | `DeviceBuffer` family, `DeviceError` (ADR-0074), `Real` and `FieldScalar` (ADR-0074), capability and limit checks, launch plans and the vector policy, primitives, pack/unpack kernels, re-exports of `Client`, `CubeElement` (ADR-0026) and `ReduceOp` (ADR-0074), (GPU-aware pointer access deferred, ADR-0059), test hooks (feature `testing`); the `KernelKind` variants of section 8 (ADR-0071). The only crate that uses CubeCL runtime types. | tetraloma-comm (without `mpi`, ADR-0074); cubecl; bytemuck, num-complex (feature `bytemuck`, ADR-0074); toml; libc (macOS, ADR-0017); dev: proptest, tetraloma-testing-base (ADR-0074) |
+| tetraloma-parallel | `IndexMap`, `Scatterer`, `ReverseOp`, `ScatterNumeric`, `Transport`, `ParallelError`, re-exports of tetraloma-comm (ADR-0074) | tetraloma-comm (forwards `mpi`, ADR-0074); tetraloma-device; bytemuck; dev: proptest, tetraloma-testing-base (ADR-0074) |
+| tetraloma-topology | `GridError`, `Result`, `ConnKey` (ADR-0074), cell and entity blocks, sort-based entity creation, ownership, connectivity, permutation info, benchmark hooks (feature `bench`) | dims, refcell, device, parallel, cubecl; dev: tetraloma-testing |
+| tetraloma-geometry | Coordinate elements, geometry blocks, `DeviceGrid`, point sets and quadrature rules, factor kernels, orientation, E-vectors, pull-back, GLL → equispaced conversion (`equispaced_nodes`); `QuadRule::new`, `FacetQuadRule::new`, `PointSet::from_points` and `tabulate_element`, `CellPoints` (section 27; ADR-0071); hidden `Strategy`, degree-policy reader and device basis evaluator shared with tetraloma-function (section 10; ADR-0071, ADR-0074) | dims, refcell, element (ADR-0071), device, parallel, topology, cubecl; dev: tetraloma-testing |
+| tetraloma-partition | Host-only (no CubeCL, ADR-0074): `DistGraph`, `Partitioner`, `PartitionError`, block partitioner; METIS, Scotch, PT-Scotch and ParMETIS behind features | tetraloma-comm (forwards `mpi` under `ptscotch`/`parmetis`, ADR-0074); metis, scotch, scotch-sys, ptscotch-sys, parmetis-sys (all optional); build: scotch-sys-bindgen (bindgen 0.65.1, feature `scotch`; ADR-0039); dev: proptest, tetraloma-comm-testing (ADR-0074) |
+| tetraloma-io | Gmsh reader and writer (file model and host mesh description), VTU/PVTU (file model, writer, `parse_vtu`), VTKHDF | dims, refcell, device, topology, geometry, parallel (unused `partition` dependency may be dropped, ADR-0074); flate2; hdf5-metno and ndarray (optional, with `hdf5`; `mpio` with feature `mpi`; ADR-0039); dev: mshio, serde_json, tetraloma-testing |
 | tetraloma-element | Finite elements in f64 (section 26): families, variants, Ciarlet construction, tabulation, entity DOFs, interpolation data, map types, base transformations, tensor factors. Host only; usable in `comptime!`. Tests read committed JSON fixtures (ADR-0071). | tetraloma-dims, tetraloma-refcell; dev: serde_json |
-| tetraloma-function | Function spaces, dofmaps, grid functions, evaluation, interpolation (sections 28–31); its degree policy; test hooks (feature `testing`) (ADR-0071) | dims, refcell, element, device, parallel, topology, geometry, cubecl; bytemuck; num-complex (feature `bytemuck`); dev: tetraloma-testing |
-| tetraloma | Facade: `Mesh`, builder (distributed with `build_on`, `GhostMode`, `CellOrdering`; ADR-0026), `AnyMesh`, `AnyMeshRef`, `with_mesh!`, `DeviceGrid` (re-exported), tags, submeshes, `gmsh::read` and `GmshWriter`, `VtkWriter`, prelude; `Mesh::create_entities_for` (section 28) and `VtkWriter::function` (section 32) (ADR-0071) | all of the above, including tetraloma-element and tetraloma-function (ADR-0071); log; mpi (optional, for `CommDyn::raw` of the test communicator; ADR-0028) |
+| tetraloma-function | Function spaces, dofmaps, grid functions (re-exporting `FieldScalar` from tetraloma-device, ADR-0074), evaluation, interpolation (sections 28–31); its degree policy (using tetraloma-geometry's hidden `Strategy` and policy reader, ADR-0074); test hooks (feature `testing`) (ADR-0071) | dims, refcell, element, device, parallel, topology, geometry, cubecl; bytemuck; num-complex (feature `bytemuck`); dev: tetraloma-testing |
+| tetraloma | Facade: `Mesh`, builder (distributed with `build_on`, `GhostMode`, `CellOrdering`; ADR-0026), `AnyMesh`, `AnyMeshRef`, `with_mesh!`, `DeviceGrid` (re-exported), `GridError`/`Result`/`ConnKey` (re-exported from tetraloma-topology, ADR-0074), `PartitionError` conversion (ADR-0074), tags, submeshes, `gmsh::read` and `GmshWriter`, `VtkWriter`, prelude; `Mesh::create_entities_for` (section 28) and `VtkWriter::function` (section 32) (ADR-0071) | all of the above, including tetraloma-comm, tetraloma-element and tetraloma-function (ADR-0071, ADR-0074); log; mpi (optional, for `CommDyn::raw` of the test communicator; ADR-0028) |
 | ptscotch-sys | bindgen FFI to PT-Scotch, with `SCOTCH_Num` width detection | mpi, bindgen, build-probe-mpi (all behind the crate's feature `mpi`) |
 | parmetis-sys | bindgen FFI to ParMETIS, with `idx_t` and `real_t` width detection | mpi, bindgen, build-probe-mpi (all behind the crate's feature `mpi`) |
-| tetraloma-testing (unpublished) | `test_client()` chosen by the `TETRALOMA_TEST_DEVICE` environment variable, test-mesh generators, tolerance helpers, `test_client_at(index)` (ADR-0060), `ThreadComm` (an in-process multi-rank communicator; ADR-0026), the Python oracle helper and `gen-gmsh-box` (ADR-0035); forwards runtime features | tetraloma; tetraloma-device (feature `testing`); tetraloma-dims; tetraloma-refcell; cubecl with runtime features; serde_json; mpi (optional, for `CommDyn::raw` of `ThreadComm`; ADR-0028) |
+| tetraloma-comm-testing (unpublished) | Host-only test support below the mesh (no CubeCL): `ThreadComm`, pure-communicator checks and the rank-count guard (`check_world_size`) (ADR-0074) | tetraloma-comm; mpi (optional, for `CommDyn::raw` of `ThreadComm`) |
+| tetraloma-testing-base (unpublished) | Device and parallel test support below the mesh: `test_client()`, `test_client_at(index)`, `cpu_client()`, `supports`, `bitwise_device`, `TEST_DEVICE_VAR`, `TOL_F32`, `TOL_F64`, `IndexMap` checks, re-exports of `tetraloma-comm-testing`; forwards runtime features (ADR-0074) | tetraloma-comm-testing; tetraloma-device (feature `testing`); tetraloma-parallel; cubecl with runtime features; mpi (optional) |
+| tetraloma-testing (unpublished) | Re-exports `tetraloma-testing-base` (and `ThreadComm`, `check_world_size`), plus test-mesh generators, mesh tolerance references, the Python oracle helper and `gen-gmsh-box` (ADR-0035, ADR-0074); forwards runtime features | tetraloma; tetraloma-testing-base (ADR-0074); tetraloma-device (feature `testing`); tetraloma-dims; tetraloma-refcell; cubecl with runtime features; serde_json; mpi (optional, forwards `tetraloma-comm-testing/mpi`; ADR-0028, ADR-0074) |
 | tetraloma-mpi-tests (unpublished) | MPI integration tests as `[[test]]` targets with `harness = false`, run by `scripts/mpi-test.sh` | tetraloma, tetraloma-testing; nix (unix; getrusage; ADR-0035) |
 | tetraloma-examples (unpublished) | The examples of the API walkthrough and the programs of the user book, each over a tested `run(&Client)`; forwards runtime features (ADR-0060); the doctest harness of the book (a `#[cfg(doctest)]` module that includes every chapter) and the figure generator (the binary `figures`, from tetraloma-refcell's tables) (ADR-0067) | tetraloma, tetraloma-refcell, tetraloma-element and tetraloma-function (for the book's examples of sections 26 to 32; ADR-0072), tetraloma-testing; cubecl with runtime features; mpi (optional) |
 | tetraloma-bench (unpublished) | Kernel benchmarks across vector sizes, tile widths and CPU block sizes; end-to-end throughput; JSON output for `docs/perf/`; the function families and the CEED BP1 and BP3 comparison benchmarks (sections 8, 29–30; ADR-0071) | tetraloma, tetraloma-device (feature `testing`), tetraloma-geometry (features `bench`, `testing`), tetraloma-dims, tetraloma-refcell, tetraloma-topology (feature `bench`), tetraloma-testing; cubecl with runtime features; serde_json, toml, bytemuck; mpi (optional, feature `mpi`, for `halo_exchange`; ADR-0060); dev: proptest (ADR-0039) |
@@ -1869,17 +1912,18 @@ The crate graph keeps serial builds free of MPI and lets kernels live in the cra
 1. Every crate that defines or launches kernels may depend on `cubecl` without runtime features. This covers tetraloma-device, tetraloma-topology, tetraloma-geometry, tetraloma-function (ADR-0071) and tetraloma.
 2. The launch API may be used anywhere: `Client`, `CubeCount`, `CubeDim`, `BufferArg`, `launch_unchecked`, `calculate_cube_count_elemwise` and `Client::properties`.
 3. Runtime types appear only in tetraloma-device: runtime structs such as `CudaRuntime`, `get_resource`, and `cubecl-runtime`.
-4. Runtime features (`cpu`, `cuda`, `hip`, `vulkan`, `metal`, `metal-native`, `wgpu`) are enabled only in tetraloma-testing, examples, benchmarks and binaries. `gpu-aware-cuda` is reserved and enables nothing (ADR-0059).
+4. Runtime features (`cpu`, `cuda`, `hip`, `vulkan`, `metal`, `metal-native`, `wgpu`) are enabled only in tetraloma-testing-base, tetraloma-testing, examples, benchmarks and binaries (ADR-0074). `gpu-aware-cuda` is reserved and enables nothing (ADR-0059).
 5. No crate depends on MPI unless its `mpi` feature is on. `cargo test --workspace` without features needs neither MPI nor a GPU.
 6. ndelement appears only in conformance/. The workspace excludes conformance/ and tools/env-check/ (`exclude = ["conformance", "tools/env-check"]`).
 7. A workspace crate may expose a `#[doc(hidden)] pub` item to other workspace crates when no stable API serves the purpose (hidden hooks and test accessors). Such an item is documented as not part of the stable API, has a rustdoc example or a named test, is listed in its milestone plan, and is semver-exempt (ADR-0015, ADR-0028, ADR-0038).
 8. tetraloma-element depends only on tetraloma-dims and tetraloma-refcell, has no CubeCL dependency and allocates nothing on a device (ADR-0071).
+9. tetraloma-comm, tetraloma-device, tetraloma-parallel and tetraloma-partition depend on no mesh crate (tetraloma-dims, tetraloma-refcell, tetraloma-topology, tetraloma-geometry, tetraloma-io, tetraloma-element, tetraloma-function, tetraloma), and tetraloma-comm and tetraloma-partition depend on no `cubecl` crate (ADR-0074).
 
 ### Cargo features
 
 - **Library features** (on tetraloma, forwarded to the crates concerned): `mpi`, `ptscotch`, `parmetis`, `metis`, `scotch`, `hdf5`, `gpu-aware-cuda` (reserved; enables nothing, ADR-0059). `ptscotch` and `parmetis` imply `mpi`. `metis` and `parmetis` are mutually exclusive: the vendored METIS and ParMETIS's METIS clash at run time (ADR-0033). The sys crates have a feature `mpi`, off by default, that tetraloma-partition enables (ADR-0029). `hdf5` builds the VTKHDF writer with any HDF5 1.10.10–2.2.0; with `mpi` it enables hdf5-metno's `mpio` and needs a parallel HDF5 (`HDF5_DIR`) (ADR-0035).
-- **Runtime features** (on tetraloma-testing, tetraloma-examples and tetraloma-bench): `cpu` (default), `cuda`, `hip`, `vulkan`, `metal`, `metal-native`, `wgpu`. Each maps to the cubecl feature of the same name; cubecl's `vulkan` is wgpu with SPIR-V and `metal` is wgpu with MSL. tetraloma-examples also has `hdf5`, which forwards `tetraloma/hdf5`, for the VTKHDF part of the book's parallel I/O program (ADR-0067).
-- **Test-support feature** (on tetraloma-device; not a library feature): `testing` enables `tetraloma_device::testing` (Listing S2). tetraloma-testing turns it on, so every workspace test has it. tetraloma-geometry has a `testing` feature too, for the hidden `tetraloma_geometry::testing` (strategy overrides; ADR-0042), also turned on by tetraloma-testing. tetraloma-function's `testing` feature enables the hidden `tetraloma_function::testing` (strategy overrides), turned on by tetraloma-testing (ADR-0071).
+- **Runtime features** (on tetraloma-testing-base, tetraloma-testing, tetraloma-examples and tetraloma-bench; ADR-0074): `cpu` (default), `cuda`, `hip`, `vulkan`, `metal`, `metal-native`, `wgpu`. Each maps to the cubecl feature of the same name; cubecl's `vulkan` is wgpu with SPIR-V and `metal` is wgpu with MSL. tetraloma-examples also has `hdf5`, which forwards `tetraloma/hdf5`, for the VTKHDF part of the book's parallel I/O program (ADR-0067).
+- **Test-support feature** (on tetraloma-device; not a library feature): `testing` enables `tetraloma_device::testing` (Listing S2). tetraloma-testing-base and tetraloma-testing turn it on, so every workspace test has it (ADR-0074). tetraloma-geometry has a `testing` feature too, for the hidden `tetraloma_geometry::testing` (strategy overrides; ADR-0042), also turned on by tetraloma-testing. tetraloma-function's `testing` feature enables the hidden `tetraloma_function::testing` (strategy overrides), turned on by tetraloma-testing (ADR-0071).
 - **Benchmark-support feature** (on tetraloma-topology; not a library feature): `bench` enables the hidden `tetraloma_topology::bench` module (ADR-0015). tetraloma-bench turns it on. tetraloma-geometry's `bench` feature enables the hidden `tetraloma_geometry::bench` (the basis-evaluator timing hook; the pull-back is timed through its public call at 1 and 9 iterations; ADR-0042), also turned on by tetraloma-bench.
 
 ### CI matrix
@@ -1887,11 +1931,11 @@ The crate graph keeps serial builds free of MPI and lets kernels live in the cra
 | Job | Runner | Runs | Trigger |
 | --- | --- | --- | --- |
 | local | the local Mac (developer machine) | CPU runtime in f32 and f64 (`scripts/test-cpu.sh`, capping CubeCL-crate libtest concurrency) and Metal in f32 (both scoped mechanically via `cargo metadata` on host-only `full`-tier changes when hosted CI runs on the head commit; full at every milestone gate; ADR-0073); MPI on 1–4 ranks; kernel tests also at `TETRALOMA_VECTOR_SIZE=scalar` and `widest` | every change, by Claude (verify skill, test-runner) |
-| cpu | hosted Linux | `cargo test --workspace` on the CPU runtime in f32 and f64; clippy; rustdoc | every push |
+| cpu | hosted Linux | `cargo test --workspace` on the CPU runtime in f32 and f64; clippy; rustdoc; `scripts/check-workspace-deps.sh` (including rule 9, `--no-cubecl tetraloma-comm` and `--no-cubecl tetraloma-partition`) and the foundation public-name check (ADR-0074) | every push |
 | mpi-mpich, mpi-openmpi | hosted Linux; the MPICH jobs on Ubuntu 26.04 with its MPICH 4.3.2 (Ubuntu 24.04's MPICH starts singletons, Launchpad bug 2072338; ADR-0068) | tetraloma-mpi-tests on 1–4 ranks with the Python oracles, and the VTKHDF targets with Ubuntu's parallel HDF5 (`--oversubscribe` for Open MPI); the MPI programs of tetraloma-examples on 1–4 ranks (`scripts/run-examples.sh --mpi`; ADR-0067); every run checks that the world size equals the rank count requested | every push |
 | vulkan | hosted Linux with a software Vulkan driver (Mesa lavapipe) | `TETRALOMA_TEST_DEVICE=vulkan`, f32, plus f64 if the adapter supports it | every push |
 | ptscotch | hosted Linux image with PT-Scotch | partitioner tests | changes to tetraloma-partition; nightly |
-| docs | hosted Linux, the image of the `ptscotch` job with MPI, parallel HDF5 and Scotch | `scripts/check-user-docs.sh` (the checks of "User documentation"); the book's doctests; `cargo test --doc` of the eleven library crates with the site's features (ADR-0071); the audit of tetraloma-partition with `parmetis` (ADR-0067) | every push |
+| docs | hosted Linux, the image of the `ptscotch` job with MPI, parallel HDF5 and Scotch | `scripts/check-user-docs.sh` (the checks of "User documentation"); the book's doctests; `cargo test --doc` of the twelve library crates with the site's features (ADR-0071, ADR-0074); the audit of tetraloma-partition with `parmetis` (ADR-0067) | every push |
 | pages | hosted Linux (GitHub Actions) | builds the site and deploys it to GitHub Pages (ADR-0067) | pushes to `main` |
 | conformance | hosted Linux with OpenBLAS, or the local Mac with Accelerate | `cargo test --manifest-path conformance/Cargo.toml` | nightly; every ndelement pin bump |
 | cuda-v100 | Myriad E/F node through `scripts/hpc` | `TETRALOMA_TEST_DEVICE=cuda`, f32 and f64 | multi-GPU; fallback |
@@ -2291,8 +2335,8 @@ These rules apply to all code in the workspace (ADR-0069). They were the code ru
   - Crates that define or launch kernels may depend on cubecl without runtime features.
   - Runtime types (runtime structs, get_resource, cubecl-runtime) only in tetraloma-device.
   - Never add a Runtime type parameter to a public type; use cubecl::prelude::Client.
-  - Runtime features only in tetraloma-testing, examples, benches and binaries
-    (`gpu-aware-cuda` is reserved; ADR-0059).
+  - Runtime features only in tetraloma-testing-base, tetraloma-testing, examples, benches and binaries
+    (`gpu-aware-cuda` is reserved; ADR-0059, ADR-0074).
 - Kernels:
   - launch shape (cube count, cube dim, vector size, items per unit) only from LaunchPlan;
     usize arithmetic with overflow checks;
@@ -2349,13 +2393,13 @@ These rules apply to all code in the workspace (ADR-0069). They were the code ru
   tensor factors when a kernel first uses them, the host-staged exchange of a function
   space's per-block DOF offsets, and the download of interpolation points and upload of
   values in `interpolate_host` (ADR-0039, ADR-0040, ADR-0042, ADR-0049, ADR-0071).
-- FFI declarations only in *-sys crates. FFI calls only in tetraloma-parallel (MPI),
+- FFI declarations only in *-sys crates. FFI calls only in tetraloma-comm (MPI; ADR-0074),
   tetraloma-device (GPU-aware; the macOS performance-core count, ADR-0017) and tetraloma-partition
   (Scotch, PT-Scotch, ParMETIS; ADR-0029), behind safe wrappers; a -sys crate's own tests
   and examples may call its declarations (ADR-0039). Every unsafe block needs a SAFETY comment.
 - User documentation (ADR-0067): the book lives in docs/user/ (docs/README.md says which
-  documents are for users and which for developers). Public items of the eleven published
-  library crates are documented for users (ADR-0071):
+  documents are for users and which for developers). Public items of the twelve published
+  library crates are documented for users (ADR-0071, ADR-0074):
   - no developer citations (docs/ paths, ADR numbers, plan questions, milestone ids) in
     `///` or `//!`; the provenance goes in a `//` comment directly above the doc comment;
   - a link to a book section (absolute URL under the site) on each crate root, public
@@ -2526,7 +2570,7 @@ impl DenseLu {
 // prisms (section 6).
 ```
 
-tetraloma-function converts `ElementError` into `GridError::UnsupportedElement { family, cell, degree, variant }`. The fields are `&'static str` names and the degree, because tetraloma-device depends on neither crate.
+tetraloma-function converts `ElementError` into `GridError::UnsupportedElement { family, cell, degree, variant }`. The fields are `&'static str` names and the degree, because tetraloma-topology does not depend on tetraloma-element (ADR-0074).
 
 ### Behaviour and invariants
 
@@ -2699,7 +2743,7 @@ Function spaces on any `DeviceGrid`: an element per cell type, a global DOF numb
 
 ### Interface
 
-**Listing F1 — function spaces (tetraloma-function; additions to tetraloma and tetraloma-device)**
+**Listing F1 — function spaces (tetraloma-function; additions to tetraloma and tetraloma-topology) (ADR-0074)**
 
 ```rust
 // tetraloma-function
@@ -2749,7 +2793,7 @@ impl<F: Real, TD: TopoDim + EmbeddedIn<GD>, GD: Dim, C: Comm> Mesh<F, TD, GD, C>
     pub fn create_entities_for(&mut self, family: &ElementFamily, continuity: Continuity) -> Result<()>;
 }
 
-// tetraloma-device: GridError gains
+// tetraloma-topology: GridError gains (ADR-0074)
 //   UnsupportedElement { family: &'static str, cell: &'static str, degree: u32, variant: &'static str }
 //   SpaceMismatch(&'static str)
 ```
@@ -2788,10 +2832,11 @@ Device storage of functions in a space, and their evaluation at quadrature point
 
 ### Interface
 
-**Listing F2 — grid functions (tetraloma-function)**
+**Listing F2 — grid functions (tetraloma-function; `FieldScalar` defined in tetraloma-device and re-exported, ADR-0074)**
 
 ```rust
 /// Coefficient scalars: f32, f64, num_complex::Complex<f32>, num_complex::Complex<f64>.
+/// Defined in tetraloma-device beside `Real` and re-exported by tetraloma-function (ADR-0074).
 pub trait FieldScalar: Copy + Default + bytemuck::Pod + Send + Sync + 'static {
     type Real: Real;
     const PARTS: usize;   // 1 real, 2 complex
