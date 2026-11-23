@@ -130,20 +130,24 @@ fn duplicate_ids_roles_and_blocks() {
         )
         .build());
     assert!(matches!(e, GridError::NodeRoleMismatch(_)), "{e}");
+    let pyramid_coords = [
+        0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0,
+    ];
     assert!(matches!(
-        err(b()
-            .nodes(&SQUARE, None)
+        err(MeshBuilder::<f32, D3, D3>::new(&c)
+            .nodes(&pyramid_coords, None)
             .cell_block(
                 CoordinateElement {
+                    cell: Cell3::Pyramid,
+                    degree: 1,
                     family: NodeFamily::Gll,
-                    ..TRI
                 },
-                &[0, 1, 2],
+                &[0, 1, 2, 3, 4],
                 None
             )
             .build()),
         GridError::UnsupportedNodeFamily {
-            cell: "Triangle",
+            cell: "Pyramid",
             family: "Gll"
         }
     ));

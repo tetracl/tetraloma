@@ -130,26 +130,26 @@ fn a_missing_cell_type_is_cell_not_in_rule() {
 }
 
 #[test]
-fn a_gll_triangle_is_an_unsupported_node_family() {
+fn a_gll_pyramid_is_an_unsupported_node_family() {
     let client = test_client();
-    let rule = QuadRule::<f32, D2>::gauss(&client, &[Cell2::Triangle], 2).unwrap();
-    let ps = rule.get(Cell2::Triangle).unwrap();
-    let e = CoordinateElement::<D2> {
-        cell: Cell2::Triangle,
+    let rule = QuadRule::<f32, D3>::gauss(&client, &[Cell3::Pyramid], 2).unwrap();
+    let ps = rule.get(Cell3::Pyramid).unwrap();
+    let e = CoordinateElement::<D3> {
+        cell: Cell3::Pyramid,
         degree: 2,
         family: NodeFamily::Gll,
     };
     assert!(matches!(
         ps.tabulate(&e),
         Err(GridError::UnsupportedNodeFamily {
-            cell: "Triangle",
+            cell: "Pyramid",
             family: "Gll"
         })
     ));
     assert!(matches!(
         ps.tabulate_derivatives(&e),
         Err(GridError::UnsupportedNodeFamily {
-            cell: "Triangle",
+            cell: "Pyramid",
             family: "Gll"
         })
     ));
@@ -186,7 +186,12 @@ fn elements<TD: TopoDim>(cells: &[TD::Cell]) -> Vec<CoordinateElement<TD>> {
             let c: CellType = cell.into();
             if matches!(
                 c,
-                CellType::Interval | CellType::Quadrilateral | CellType::Hexahedron
+                CellType::Interval
+                    | CellType::Triangle
+                    | CellType::Quadrilateral
+                    | CellType::Tetrahedron
+                    | CellType::Hexahedron
+                    | CellType::Prism
             ) {
                 out.push(CoordinateElement {
                     cell,

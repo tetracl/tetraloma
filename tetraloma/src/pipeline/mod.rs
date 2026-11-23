@@ -121,6 +121,7 @@ impl BlockSpec {
         let family = match self.family {
             NodeFamily::Equispaced => 0,
             NodeFamily::Gll => 1,
+            other => panic!("node family {other:?} has no wire code"),
         };
         [
             cell.expect("every cell type has a code") as i64,

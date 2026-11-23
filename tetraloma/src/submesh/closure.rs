@@ -20,6 +20,7 @@ fn family_name(family: NodeFamily) -> &'static str {
     match family {
         NodeFamily::Equispaced => "equispaced",
         NodeFamily::Gll => "GLL",
+        other => panic!("unknown node family {other:?}"),
     }
 }
 
@@ -218,8 +219,8 @@ mod tests {
             let tdim = tetraloma_refcell::tdim(parent);
             for degree in 1..=max {
                 let families: &[NodeFamily] = match parent {
-                    Quadrilateral | Hexahedron => &[NodeFamily::Equispaced, NodeFamily::Gll],
-                    _ => &[NodeFamily::Equispaced],
+                    Pyramid => &[NodeFamily::Equispaced],
+                    _ => &[NodeFamily::Equispaced, NodeFamily::Gll],
                 };
                 for &family in families {
                     for (f, verts) in tetraloma_refcell::sub_entities(parent, tdim - 1)
@@ -258,8 +259,8 @@ mod tests {
             let max = if parent == Pyramid { 3 } else { 4 };
             for degree in 1..=max {
                 let families: &[NodeFamily] = match parent {
-                    Hexahedron => &[NodeFamily::Equispaced, NodeFamily::Gll],
-                    _ => &[NodeFamily::Equispaced],
+                    Pyramid => &[NodeFamily::Equispaced],
+                    _ => &[NodeFamily::Equispaced, NodeFamily::Gll],
                 };
                 for &family in families {
                     let table = edge_table(parent, degree, family).expect("edge table");

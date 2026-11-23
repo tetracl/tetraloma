@@ -783,8 +783,9 @@ pub fn assert_invariant<F: Real>(got: &[f64], want: &[f64], scale: f64, what: &s
     }
 }
 
-/// The node families of a mesh whose blocks all have the cell types `cells`: equispaced, and
-/// GLL where every cell offers it (intervals, quadrilaterals, hexahedra).
+/// The node families tested by the existing high-order sweeps for a mesh whose blocks all have
+/// the cell types `cells`: equispaced on every cell, plus GLL on the tensor cells (intervals,
+/// quadrilaterals and hexahedra) so hosted CI shards stay within budget.
 pub fn node_families(cells: &[CellType]) -> Vec<NodeFamily> {
     let gll = cells.iter().all(|c| {
         matches!(

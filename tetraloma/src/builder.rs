@@ -46,6 +46,7 @@ pub(crate) fn element_error(e: RefCellError) -> GridError {
             family: match family {
                 NodeFamily::Equispaced => "Equispaced",
                 NodeFamily::Gll => "Gll",
+                other => panic!("unknown node family {other:?}"),
             },
         },
         RefCellError::UnsupportedDegree { cell, degree } => GridError::UnsupportedDegree {

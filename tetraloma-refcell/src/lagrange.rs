@@ -18,6 +18,7 @@ use crate::{RefCellError, sub_entities, sub_entity_types, tdim, vertices};
 ///
 /// [Node families]: https://tetracl.github.io/tetraloma/elements/lagrange.html#node-families
 /// [GLL and equispaced nodes]: https://tetracl.github.io/tetraloma/concepts/geometry.html#gll-and-equispaced-nodes
+#[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum NodeFamily {
     /// Equispaced points, on every cell.

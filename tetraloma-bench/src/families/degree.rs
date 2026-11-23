@@ -197,7 +197,9 @@ pub fn max_degree(cell: CellType) -> u32 {
     if cell == CellType::Pyramid { 3 } else { 8 }
 }
 
-/// Whether `cell` offers `family`: GLL nodes on intervals, quadrilaterals and hexahedra.
+/// Whether the degree sweep measures `family` on `cell`: equispaced on every cell, and GLL on
+/// intervals, quadrilaterals and hexahedra (the committed benchmark records and the degree policy
+/// are keyed on these).
 pub fn offers(cell: CellType, family: NodeFamily) -> bool {
     family == NodeFamily::Equispaced
         || matches!(
@@ -211,6 +213,7 @@ pub fn node_family_name(family: NodeFamily) -> &'static str {
     match family {
         NodeFamily::Equispaced => "equispaced",
         NodeFamily::Gll => "gll",
+        other => panic!("unknown node family {other:?}"),
     }
 }
 

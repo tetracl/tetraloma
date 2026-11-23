@@ -1,8 +1,8 @@
-//! M5 T5: `equispaced_nodes`. GLL interval, quadrilateral and hexahedron meshes at p = 2–4,
-//! affine and curved, give the host interpolant (the GLL element tabulated at the equispaced
-//! points, applied to each cell's nodes) in f32 and f64; equispaced blocks come back bitwise
-//! unchanged; the result is bitwise reproducible, and the same at tile widths 1 and 16 (bitwise
-//! on the CPU runtime, within the tolerance on GPUs).
+//! M5 T5: `equispaced_nodes`. GLL interval, triangle, quadrilateral, tetrahedron, hexahedron
+//! and prism meshes at p = 2–4, affine and curved, give the host interpolant (the GLL element
+//! tabulated at the equispaced points, applied to each cell's nodes) in f32 and f64; equispaced
+//! blocks come back bitwise unchanged; the result is bitwise reproducible, and the same at tile
+//! widths 1 and 16 (bitwise on the CPU runtime, within the tolerance on GPUs).
 
 use cubecl::prelude::Client;
 use tetraloma::prelude::*;
@@ -227,6 +227,38 @@ fn gll_meshes<F: Real>(client: &Client) {
             client,
             &curved(&cube, 3),
             &format!("curved hexahedra, p = {p}"),
+        );
+
+        let tri =
+            tetraloma_testing::square_box(Cell2::Triangle, 2, p).with_node_family(NodeFamily::Gll);
+        check_gll::<F, D2, D2>(client, &tri, &format!("affine triangles, p = {p}"));
+        check_gll::<F, D2, D2>(
+            client,
+            &curved(&tri, 2),
+            &format!("curved triangles, p = {p}"),
+        );
+        check_gll::<F, D2, D3>(
+            client,
+            &curved(&tri, 3),
+            &format!("curved triangles in 3D, p = {p}"),
+        );
+
+        let tet =
+            tetraloma_testing::cube_box(Cell3::Tetrahedron, 1, p).with_node_family(NodeFamily::Gll);
+        check_gll::<F, D3, D3>(client, &tet, &format!("affine tetrahedra, p = {p}"));
+        check_gll::<F, D3, D3>(
+            client,
+            &curved(&tet, 3),
+            &format!("curved tetrahedra, p = {p}"),
+        );
+
+        let prism =
+            tetraloma_testing::cube_box(Cell3::Prism, 1, p).with_node_family(NodeFamily::Gll);
+        check_gll::<F, D3, D3>(client, &prism, &format!("affine prisms, p = {p}"));
+        check_gll::<F, D3, D3>(
+            client,
+            &curved(&prism, 3),
+            &format!("curved prisms, p = {p}"),
         );
     }
 }

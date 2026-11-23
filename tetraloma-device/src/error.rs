@@ -103,8 +103,8 @@ pub enum GridError {
     },
     /// The compute server reported an error.
     Server(ServerError),
-    /// The node family is not offered on this cell type (GLL exists on intervals,
-    /// quadrilaterals and hexahedra only).
+    /// The node family is not offered on this cell type (GLL is offered on every cell except
+    /// pyramids).
     UnsupportedNodeFamily {
         /// The name of the cell type.
         cell: &'static str,
