@@ -404,7 +404,7 @@ Runs: none
 
 ## M14: Function spaces and dofmaps
 
-Depends on: M12
+Depends on: M12, M18
 Design: 28, 29
 Acceptance:
 - Global DOF counts equal closed-form counts for every family of section 26, continuous and discontinuous, with block shapes [] and [3], on boxes of every cell type and the mixed box at three refinements, p = 1–4.
@@ -487,3 +487,23 @@ Acceptance:
 
 Out of scope: sum factorisation on simplices, prisms and pyramids; tensor-core instructions; matrix-free operators beyond `integrate_basis`.
 Runs: the benchmark platforms of section 8 for p = 1, 4, 8 and 16; MFEM or libCEED on Locust; deal.II on one Kathleen socket.
+
+## M18: Mesh-independent device and communication crates
+
+Depends on: none
+Design: 7, 9, 11, 12, 14, 16, 18, 22, 29
+Acceptance:
+- `scripts/check-workspace-deps.sh` fails if the normal dependencies of tetraloma-comm, tetraloma-device, tetraloma-parallel or tetraloma-partition include a mesh crate of dependency rule 9.
+- `scripts/check-workspace-deps.sh --no-cubecl tetraloma-comm` and `scripts/check-workspace-deps.sh --no-cubecl tetraloma-partition` pass.
+- No public type, trait, function or constant of tetraloma-comm, tetraloma-device, tetraloma-parallel or tetraloma-partition has `Grid`, `Mesh`, `Cell`, `Conn` or `Dof` in its name, checked on the generated API pages.
+- Every error that tetraloma-comm, tetraloma-device and tetraloma-parallel can return converts through `From` — and every error that tetraloma-partition can return converts through `tetraloma`'s conversion helper — into the `GridError` variant it produced before the milestone, checked variant by variant.
+- `tetraloma-device/vector-policy.toml` is byte-identical to its content before the milestone.
+- A workspace test crate whose normal dependencies hold no workspace crate other than tetraloma-comm, tetraloma-device, tetraloma-parallel, tetraloma-comm-testing and tetraloma-testing-base runs fill, copy, reduce, scan, radix sort, gather and segmented reduce on 10^6 elements on the CPU runtime, exactly for i32 and u32 and to 10^−5 (f32) and 10^−12 (f64) relative for floats.
+- In that crate, `Scatterer::forward` and `Scatterer::reverse` with Add, Min, Max and Insert equal a host reference on 1–4 ranks of `ThreadComm`, for f32, f64, i32 and u32 and block sizes 1–3, exactly for integers and forward exchanges and to the float tolerances above for reverse.
+- The same scatter tests pass on 1–4 ranks under MPICH and Open MPI.
+- tetraloma-device exports `FieldScalar` for f32, f64, `Complex<f32>` and `Complex<f64>`, with `PARTS` equal to 1 and 2.
+- `scripts/check-user-docs.sh` passes with tetraloma-comm among the published library crates.
+- The standing matrix passes unchanged.
+
+Out of scope: an open set of kernel families (`KernelKind` keeps its mesh and function entries, and `VectorPolicy::quad_tile` stays unchanged); scatter begin and end; point-to-point messages; communicator splitting; GPU-aware transport; any change to kernels, policies or numerical behaviour.
+Runs: none

@@ -1,6 +1,6 @@
 # ADR-0074: Mesh-independent device and communication crates
 
-Status: Proposed
+Status: Accepted
 Date: 2026-11-23
 Decision issue: #86
 Raised by: the maintainer, in a design discussion about using the device and parallel crates from crates that hold no mesh (no task)
@@ -31,7 +31,7 @@ Two consumers that need these crates without a mesh are planned for this workspa
 
 Not changed by this ADR: `KernelKind` (Listing S2, section 8; 13 variants in code today, plus 6 function variants in Listing S2 for M14/M15, including `DofTransform`, which is an enum variant rather than a type, trait, function or constant) is a closed enum in tetraloma-device with mesh and function families, and `VectorPolicy::quad_tile` (with `testing::with_quad_tile` and `TETRALOMA_QUAD_TILE`) is backed by protected path 1 (`tetraloma-device/vector-policy.toml`). Opening `KernelKind` and the vector policy before a crate without a mesh adds a kernel family is a later ADR (point P4).
 
-### Direction from the maintainer in the design discussion (to confirm)
+### Direction from the maintainer in the design discussion (confirmed)
 
 - The mesh library, the linear algebra, the partitioner and the communication support stay in one repository and one workspace.
 - tetraloma-parallel becomes the support layer for communication across all of them.
@@ -155,4 +155,6 @@ Runs: none
 
 ## Decision
 
-> <the maintainer's words, verbatim>, <date>
+> Accept ADR 74 with options as recommended in the ADR. I confirm the direction from the maintainer bullets.
+
+2026-11-23, said to the agent in a session. Accepted **Option 3** with **P1a, P2a, P3a, P4a, P5a, P6a and P7a**, and confirmed the two maintainer-direction bullets.
