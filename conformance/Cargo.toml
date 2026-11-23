@@ -13,6 +13,7 @@ path = "src/bin/export_fixtures.rs"
 [dependencies]
 tetraloma-dims = { path = "../tetraloma-dims" }
 tetraloma-refcell = { path = "../tetraloma-refcell" }
+rlst = "0.6"
 serde_json = "1"
 
 [dependencies.ndelement]

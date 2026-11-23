@@ -1325,6 +1325,7 @@ dependencies = [
  "lapack-src",
  "ndelement",
  "openblas-src",
+ "rlst",
  "serde_json",
  "tetraloma-dims",
  "tetraloma-refcell",
