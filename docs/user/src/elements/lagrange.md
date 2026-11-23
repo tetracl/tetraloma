@@ -271,6 +271,13 @@ let want = [0.0, 1.0, 0.5 - s, 0.5, 0.5 + s];
 for (x, w) in points.iter().zip(want) {
     assert!((x - w).abs() < 1e-14);
 }
+// On a cubic triangle, edge nodes sit at the 1D GLL fractions and the interior node is the
+// centroid (1/3, 1/3).
+let tri = lagrange_points(CellType::Triangle, 3, NodeFamily::Gll)?;
+let a = 0.5 * (1.0 - 0.2f64.sqrt());
+assert!((tri[6] - a).abs() < 1e-14 && tri[7] == 0.0);
+assert!((tri[18] - 1.0 / 3.0).abs() < 1e-14 && (tri[19] - 1.0 / 3.0).abs() < 1e-14);
+
 assert!(matches!(
     lagrange_points(CellType::Pyramid, 4, NodeFamily::Gll),
     Err(RefCellError::UnsupportedNodeFamily { cell: CellType::Pyramid, family: NodeFamily::Gll })

@@ -1,5 +1,5 @@
 //! Test meshes with another node family (M9h, T0a): the same geometry, interpolated at the
-//! nodes of another 1D point family.
+//! nodes of another point family.
 
 use tetraloma::NodeFamily;
 use tetraloma_refcell::{LagrangeElement, lagrange_points};

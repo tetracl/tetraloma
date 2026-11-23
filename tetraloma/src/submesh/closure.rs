@@ -3,8 +3,9 @@
 //!
 //! The child's Lagrange points of the same degree and family, mapped into the parent cell by
 //! `facet_points_to_cell` (A.5's affine rule over the sub-entity's vertex list), are matched
-//! against the parent's Lagrange points. Both sides use the same one-dimensional point sets,
-//! so the match is exact up to rounding.
+//! against the parent's Lagrange points. Each sub-entity's point set restricts from the parent's
+//! (tensor products on tensor cells and prisms, Isaac's restriction property on simplices), so
+//! the match is exact up to rounding.
 
 use tetraloma_device::{GridError, Result};
 use tetraloma_dims::CellType;
@@ -20,7 +21,7 @@ fn family_name(family: NodeFamily) -> &'static str {
     match family {
         NodeFamily::Equispaced => "equispaced",
         NodeFamily::Gll => "GLL",
-        other => panic!("unknown node family {other:?}"),
+        _ => "unknown",
     }
 }
 

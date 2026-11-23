@@ -540,15 +540,14 @@ mod tests {
             .collect();
         let factors = TensorFactors::facets(cell, rule_degree);
         if cell == CellType::Prism {
-            check_prism_table(degree, &factors, &points);
+            check_prism_table(degree, family, &factors, &points);
         } else {
             check_table(cell, degree, family, &factors, &points);
         }
     }
 
     /// As [`check_table`] on the prism: the triangle table times the z table, permuted.
-    fn check_prism_table(degree: u32, factors: &TensorFactors, points: &[f64]) {
-        let family = NodeFamily::Equispaced;
+    fn check_prism_table(degree: u32, family: NodeFamily, factors: &TensorFactors, points: &[f64]) {
         let num_points = points.len() / 3;
         assert_eq!(factors.points(3, num_points).unwrap(), points);
         let t = factors.table(CellType::Prism, degree, family).unwrap();
@@ -590,12 +589,13 @@ mod tests {
     }
 
     /// The prism's Gauss rule of `rule_degree`.
-    fn check_prism_products(degree: u32, rule_degree: u32) {
+    fn check_prism_products(degree: u32, family: NodeFamily, rule_degree: u32) {
         let rule = tetraloma_refcell::gauss_rule(CellType::Prism, rule_degree);
         let triangle = tetraloma_refcell::gauss_rule(CellType::Triangle, rule_degree).points;
         let line = tetraloma_refcell::gauss_rule(CellType::Interval, rule_degree).points;
         check_prism_table(
             degree,
+            family,
             &TensorFactors::prism(&triangle, &line),
             &rule.points,
         );
@@ -628,12 +628,14 @@ mod tests {
 
     #[test]
     fn prism_tables_reproduce_the_element() {
-        for degree in 1..=4 {
-            check_prism_products(degree, 2 * degree);
-            check_facet_products(CellType::Prism, degree, NodeFamily::Equispaced, 2 * degree);
+        for family in [NodeFamily::Equispaced, NodeFamily::Gll] {
+            for degree in 1..=4 {
+                check_prism_products(degree, family, 2 * degree);
+                check_facet_products(CellType::Prism, degree, family, 2 * degree);
+            }
+            check_prism_products(8, family, 1);
+            check_facet_products(CellType::Prism, 6, family, 1);
         }
-        check_prism_products(8, 1);
-        check_facet_products(CellType::Prism, 6, NodeFamily::Equispaced, 1);
     }
 
     #[test]

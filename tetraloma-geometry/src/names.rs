@@ -24,7 +24,7 @@ fn family_name(family: NodeFamily) -> &'static str {
     match family {
         NodeFamily::Equispaced => "Equispaced",
         NodeFamily::Gll => "Gll",
-        other => panic!("unknown node family {other:?}"),
+        _ => "unknown",
     }
 }
 

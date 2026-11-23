@@ -150,6 +150,12 @@ fn block_size(entity: CellType, degree: u32) -> usize {
 /// // Vertices, then the edges (0,1), (0,2), (1,2) from their first vertex to their second.
 /// let points = lagrange_points(CellType::Triangle, 2, NodeFamily::Equispaced).unwrap();
 /// assert_eq!(points, [0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.5, 0.0, 0.0, 0.5, 0.5, 0.5]);
+///
+/// // GLL nodes on a cubic triangle: 1D GLL points on each edge and the centroid inside.
+/// let gll = lagrange_points(CellType::Triangle, 3, NodeFamily::Gll).unwrap();
+/// let a = 0.5 * (1.0 - 0.2f64.sqrt());
+/// assert!((gll[6] - a).abs() < 1e-14 && gll[7] == 0.0);
+/// assert!((gll[18] - 1.0 / 3.0).abs() < 1e-14 && (gll[19] - 1.0 / 3.0).abs() < 1e-14);
 /// ```
 ///
 /// # Errors
