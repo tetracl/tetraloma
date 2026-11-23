@@ -637,6 +637,7 @@ FOREIGN_SKIPPED: list[str] = []
 FOREIGN_INLINED = {
     "tetraloma_device/struct.Client.html",  # cubecl::prelude::Client
     "tetraloma_device/trait.CubeElement.html",  # cubecl::prelude::CubeElement
+    "tetraloma_device/enum.ServerError.html",  # cubecl::server::ServerError
 }
 
 

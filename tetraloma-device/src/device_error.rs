@@ -63,7 +63,7 @@ mod tests {
     #[test]
     fn device_error_variant_list_is_exhaustive() {
         assert_eq!(variant_index(&DeviceError::TooLarge), 0);
-        // Rule 7 named test for the hidden `ServerError` re-export used by `tetraloma-parallel`.
+        // Exercises the public `ServerError` re-export used by `tetraloma-parallel`.
         let err = DeviceError::Server(crate::ServerError::TornDown);
         assert_eq!(variant_index(&err), 4);
     }

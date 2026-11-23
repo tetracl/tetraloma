@@ -39,11 +39,11 @@ pub use buffer::{DeviceBuffer, DeviceCsr, DeviceStrided, VECTOR_PAD, pad_len};
 /// devices](https://tetracl.github.io/tetraloma/devices.html#choosing-a-device-at-run-time)
 /// shows how to get a client.
 pub use cubecl::prelude::{Client, CubeElement};
-// ADR-0026 / ADR-0074 (dependency rule 7): re-exported for tetraloma-parallel's `ParallelError`,
-// which has no direct `cubecl` dependency.
-/// CubeCL's server error, re-exported for workspace crates without a direct `cubecl` dependency.
-/// Not part of the stable API.
-#[doc(hidden)]
+// ADR-0076: re-exported for tetraloma-parallel's `ParallelError`, which has no cubecl dependency.
+/// CubeCL's compute-server error type, re-exported for callers that inspect server errors without
+/// depending on `cubecl` directly. See [Compute
+/// devices](https://tetracl.github.io/tetraloma/devices.html) for how device operations run and
+/// report errors.
 pub use cubecl::server::ServerError;
 #[doc(hidden)]
 pub use device_error::DeviceError;
