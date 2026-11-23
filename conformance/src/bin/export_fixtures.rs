@@ -276,8 +276,10 @@ fn ndelement_elements() -> (Value, Value) {
                     variant,
                 );
                 let dim = el.dim();
-                let mut data =
-                    DynArray::<f64, 4>::from_shape(el.tabulate_array_shape(1, NUM_POINTS));
+                assert_eq!(el.value_size(), 1);
+                let shape = el.tabulate_array_shape(1, NUM_POINTS);
+                assert_eq!(shape, [NUM_POINTS, 1, 1 + td, dim]);
+                let mut data = DynArray::<f64, 4>::from_shape(shape);
                 el.tabulate(&pts_arr, 1, &mut data);
 
                 let mut flat = Vec::with_capacity((1 + td) * NUM_POINTS * dim);
@@ -593,14 +595,19 @@ mod tests {
     #[test]
     fn compare_tabulations_respects_tolerance_and_structure() {
         let want =
-            json!({"Interval": {"points": [0.5], "Equispaced": {"1": [0.5, 0.5, -1.0, 1.0]}}});
-        let ok = json!({"Interval": {"points": [0.5 + 5e-16], "Equispaced": {"1": [0.5 + 5e-14, 0.5, -1.0 + 5e-14, 1.0]}}});
-        let bad = json!({"Interval": {"points": [0.5], "Equispaced": {"1": [0.5 + 2e-13, 0.5, -1.0, 1.0]}}});
+            json!({"Interval": {"points": [0.5], "Equispaced": {"1": [0.5, 0.5, -40.0, 40.0]}}});
+        let ok = json!({"Interval": {"points": [0.5 + 5e-16], "Equispaced": {"1": [0.5 + 5e-14, 0.5, -40.0 + 2e-12, 40.0]}}});
+        let bad_val = json!({"Interval": {"points": [0.5], "Equispaced": {"1": [0.5 + 2e-13, 0.5, -40.0, 40.0]}}});
+        let bad_deriv = json!({"Interval": {"points": [0.5], "Equispaced": {"1": [0.5, 0.5, -40.0 + 1e-11, 40.0]}}});
+        let bad_pt = json!({"Interval": {"points": [0.5 + 3e-15], "Equispaced": {"1": [0.5, 0.5, -40.0, 40.0]}}});
         let mut errs = Vec::new();
         compare_tabulations_json(&ok, &want, &mut errs);
         assert!(errs.is_empty(), "{errs:?}");
-        compare_tabulations_json(&bad, &want, &mut errs);
-        assert_eq!(errs.len(), 1, "{errs:?}");
+        for case in [&bad_val, &bad_deriv, &bad_pt] {
+            errs.clear();
+            compare_tabulations_json(case, &want, &mut errs);
+            assert_eq!(errs.len(), 1, "{case}: {errs:?}");
+        }
         errs.clear();
         compare_tabulations_json(&json!({"Interval": {"points": [0.5]}}), &want, &mut errs);
         assert!(!errs.is_empty());

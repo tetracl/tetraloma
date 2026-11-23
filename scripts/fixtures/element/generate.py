@@ -121,11 +121,10 @@ def check_array(label, have, want, tol, errors, nblocks=1):
     if not isinstance(have, list) or len(have) != len(want):
         errors.append(f"{label}: length mismatch")
         return
-    try:
-        a, b = np.asarray(have, dtype=np.float64), np.asarray(want, dtype=np.float64)
-    except (TypeError, ValueError):
+    if not all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in have):
         errors.append(f"{label}: non-numeric entry")
         return
+    a, b = np.asarray(have, dtype=np.float64), np.asarray(want, dtype=np.float64)
     if not np.all(np.isfinite(a)):
         errors.append(f"{label}: non-finite value")
         return
