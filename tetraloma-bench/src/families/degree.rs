@@ -1,6 +1,7 @@
 //! The degree sweep of M9h (docs/plans/M9h.md, T1; ADR-0042, items 1, 6, 7 and 12): every
-//! degree-dependent kernel family at p = 1–8 (pyramids 1–3) on every cell type, in both node
-//! families where offered, with the measurement protocol of "Benchmarks" (warm-up checked
+//! degree-dependent kernel family at p = 1–8 (pyramids 1–3) on every cell type, in the node
+//! families the sweep measures ([`offers`]: equispaced on every cell, plus GLL on intervals,
+//! quadrilaterals and hexahedra), with the measurement protocol of "Benchmarks" (warm-up checked
 //! against a host reference, calibration call, ten timed runs), at the vector size, tile and CPU
 //! block of the vector policy (rule 12).
 //!

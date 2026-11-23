@@ -20,7 +20,8 @@
 //!   `TETRALOMA_BENCH_RUN_ID`, else the runner's `JOB_ID`, else `local-<unix time>`.
 //! - `--families`, `--cells`, `--degrees`, `--node-families`, `--types`, `--sizes`: filters,
 //!   so a run can be split by family; by default every family, cell type, degree 1–8
-//!   (pyramids to 3), node family where offered, f32 and f64, and 10^5, 10^6 and 10^7 points.
+//!   (pyramids to 3), node family measured by the sweep (`offers`: equispaced on every cell,
+//!   plus GLL on intervals, quadrilaterals and hexahedra), f32 and f64, and 10^5, 10^6 and 10^7 points.
 //!   Names are the record names, in any case.
 //! - `--candidates`: the candidate protocol of M10 and of a CubeCL pin bump (ADR-0057 item 3,
 //!   ADR-0060 items 2 and 3): each (family, cell, degree, type) runs the strategies of

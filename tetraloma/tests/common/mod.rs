@@ -830,7 +830,7 @@ pub enum MeshSet {
     Invariance,
 }
 
-/// Calls `v` on every mesh of `set` at degree `p`, in each node family it offers ([`node_families`]),
+/// Calls `v` on every mesh of `set` at degree `p`, in each node family of [`node_families`],
 /// with every (TD, GD) pair, skipping meshes with pyramids above p = 3.
 pub fn visit_high_order_meshes<F: Real>(set: MeshSet, p: u32, v: &mut impl MeshVisitor) {
     use tetraloma_testing::{ball, cube_box, interval_box, mixed_surface, sphere, square_box};
