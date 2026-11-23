@@ -6,7 +6,7 @@
 
 | Path | Contents |
 | --- | --- |
-| [`user/`](user/) | The user book (mdBook): installation, mathematical concepts, element definitions, tutorials, devices, features. Published with the API documentation of the nine library crates at https://tetracl.github.io/tetraloma/. Build it with `mdbook build docs/user`; `scripts/check-user-docs.sh` builds and checks the whole site ([`dev-environment.md`](dev-environment.md), "User documentation (D1)"). |
+| [`user/`](user/) | The user book (mdBook): installation, mathematical concepts, element definitions, finite elements and grid functions, tutorials, devices, features. Published with the API documentation of the ten library crates at https://tetracl.github.io/tetraloma/. Build it with `mdbook build docs/user`; `scripts/check-user-docs.sh` builds and checks the whole site ([`dev-environment.md`](dev-environment.md), "User documentation (D1)"). |
 | [`user/doc-audit-allow.toml`](user/doc-audit-allow.toml) | The functions exempt from the running-example rule of the API docs, each with a reason. |
 
 ## For developers

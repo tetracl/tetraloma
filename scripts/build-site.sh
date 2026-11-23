@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds the user documentation site (ADR-0067, rules 2 and 3): the book (mdBook, docs/user) at
-# OUT/, and at OUT/api/ the rustdoc of the nine published library crates with the site's features.
+# OUT/, and at OUT/api/ the rustdoc of the ten published library crates with the site's features.
 # The CI job `docs` uploads OUT as the GitHub Pages artifact on main; scripts/check-user-docs.sh
 # builds through this script and checks the result.
 #
@@ -9,7 +9,7 @@
 #   --out DIR            the site directory, emptied first (default: site)
 #   --api-only           only the API, into DIR itself (no book; check-user-docs.sh --parmetis)
 #   --features FEATURES  the features of the API build (default: the site's, below)
-#   --crates C,...       only these library crates (default: all nine)
+#   --crates C,...       only these library crates (default: all ten)
 #   --logs DIR           the build logs (default: target/user-docs/logs): mdbook.log and one
 #                        rustdoc-CRATE.log per crate, which check (a) searches for warnings; the
 #                        documentation order goes to DIR/../api-order.txt

@@ -27,7 +27,7 @@ Usage:
         every `ignore` block is only an `{{#include}}` of a program that scripts/run-examples.sh
         runs, no other block includes a file, and the doctest harness of tetraloma-examples
         includes every chapter;
-    (h) while docs/plans/D1.md is not done, the sources of the nine library crates differ from D1's
+    (h) while docs/plans/D1.md is not done, the sources of the library crates differ from D1's
         base commit only in comments (scripts/comments_only.py).
 
 `--crate` limits (c)-(e) to one crate (its items, wherever rustdoc renders them); `--api` audits
@@ -73,6 +73,7 @@ LIBRARY_CRATES = [
     "tetraloma-geometry",
     "tetraloma-partition",
     "tetraloma-io",
+    "tetraloma-element",
 ]
 BOOK_DIR = ROOT / "docs/user"
 ALLOWLIST = BOOK_DIR / "doc-audit-allow.toml"
@@ -117,6 +118,8 @@ OUTLINE = [
     ("elements/file-formats.md", "File formats", ["Gmsh", "VTK"]),
     ("elements/basix-dolfinx.md", "Basix and DOLFINx",
      ["Cell and vertex numbering", "Node orderings", "Converting a mesh"]),
+    ("fem/elements.md", "Finite elements",
+     ["Elements and DOFs", "Families and degrees", "Variants"]),
     ("tutorials/build-mesh.md", "Building a mesh",
      ["From arrays", "Several cell types", "Higher-degree geometry", "Errors"]),
     ("tutorials/read-write.md", "Reading and writing files",
@@ -633,7 +636,7 @@ def load_allowlist(res: Results):
 # Item pages without a source link that the audit skips (parse_api_page), filled while it runs.
 FOREIGN_SKIPPED: list[str] = []
 # The pages it may skip: items of crates outside the site that a re-export inlines. Any other
-# skipped page fails check (d), so a doc-build regression cannot drop items of the nine crates.
+# skipped page fails check (d), so a doc-build regression cannot drop items of the audited crates.
 FOREIGN_INLINED = {
     "tetraloma_device/struct.Client.html",  # cubecl::prelude::Client
     "tetraloma_device/trait.CubeElement.html",  # cubecl::prelude::CubeElement
@@ -662,7 +665,7 @@ def check_api(api: Path, work: Path, checks: str, only: str | None, res: Results
             page_crate, page_items, blocks = parsed
             for it in page_items:
                 if it.crate not in crates_us:
-                    continue  # inlined from a crate outside the nine
+                    continue  # inlined from a crate outside LIBRARY_CRATES
                 k = it.key()
                 if k in items:
                     items[k][1].append(it.path)
@@ -747,7 +750,7 @@ def check_api(api: Path, work: Path, checks: str, only: str | None, res: Results
                 res.fail("e", "allowlist", f"{p}: names no audited function or method")
     n_fn = sum(1 for it, _ in audited if it.kind in ("fn", "method"))
     res.notes.append(f"API audit: {len(audited)} items ({n_fn} functions and methods) in "
-                     f"{only or 'the nine crates'}, from {n_pages} pages")
+                     f"{only or f'the {len(LIBRARY_CRATES)} crates'}, from {n_pages} pages")
 
 
 # ---------------------------------------------------------------------------------------------

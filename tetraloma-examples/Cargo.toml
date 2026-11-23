@@ -28,6 +28,8 @@ cubecl.workspace = true
 tetraloma = { path = "../tetraloma" }
 # The tables of the book's figures (figures.rs; ADR-0067, rule 3).
 tetraloma-refcell = { path = "../tetraloma-refcell" }
+# Finite-element examples in the user book (docs/design.md, section 18; ADR-0072).
+tetraloma-element = { path = "../tetraloma-element" }
 tetraloma-testing = { path = "../tetraloma-testing", default-features = false }
 mpi = { workspace = true, optional = true }
 

@@ -4470,6 +4470,7 @@ dependencies = [
  "cubecl",
  "mpi",
  "tetraloma",
+ "tetraloma-element",
  "tetraloma-refcell",
  "tetraloma-testing",
 ]

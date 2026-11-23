@@ -139,8 +139,11 @@ See [Installation](getting-started/installation.md#runtime-features-of-cubecl).
 
 Degree
 : Of a coordinate element, the polynomial degree $p$ of the map from the reference cell; of a
-quadrature rule, the degree $k$ up to which it integrates polynomials exactly.
-See [Coordinate elements](concepts/geometry.md#coordinate-elements) and
+finite element, its polyset superdegree $p$ ($p = 0$ is the lowest discontinuous element and
+$p = 1$ the lowest continuous element); of a quadrature rule, the degree $k$ up to which it
+integrates polynomials exactly.
+See [Coordinate elements](concepts/geometry.md#coordinate-elements),
+[Families and degrees](fem/elements.md#families-and-degrees) and
 [Quadrature rules](concepts/quadrature.md#quadrature-rules).
 
 DefElement, ndelement
@@ -169,6 +172,11 @@ See [Compute devices](devices.md).
 blocks, nodes, index maps and topology. Every mesh and submesh implements it.
 See [DeviceGrid](tutorials/kernels.md#devicegrid).
 
+DOF, degree of freedom
+: One linear functional $l_i$ of a finite element's dual basis, and the corresponding coefficient
+of a function in that basis. Each DOF is attached to a vertex, edge, face or cell interior.
+See [Elements and DOFs](fem/elements.md#elements-and-dofs).
+
 DOF transformation
 : A matrix that corrects the degrees of freedom on an edge or face of a cell according to the
 entity's orientation in that cell.
@@ -192,6 +200,12 @@ Edge
 : An entity of dimension 1. Its vertex list gives it a direction, from its first vertex to its
 second.
 See [Cells and entities](concepts/meshes.md#cells-and-entities).
+
+Element, finite element
+: A Ciarlet triple $(\hat K, \mathcal V, \mathcal L)$ of a reference cell, a finite-dimensional
+function space and a dual basis of degrees of freedom, represented by `Element` in
+`tetraloma-element`.
+See [Finite elements](fem/elements.md).
 
 Elementary tag
 : Gmsh's number of the geometric entity that an element belongs to. The reader keeps it, and
@@ -358,6 +372,11 @@ Manifold orientation
 : A consistent choice of normal over a surface or a curve in the plane, recorded in the cells'
 orientation flags by `orient`.
 See [Manifold orientation](concepts/orientation.md#manifold-orientation).
+
+Map type
+: How values and derivatives of a finite element transform between the reference cell and a
+physical cell (`MapType`): `Identity`, `CovariantPiola`, `ContravariantPiola` or `L2Piola`.
+See [Elements and DOFs](fem/elements.md#elements-and-dofs).
 
 Measure
 : The length, area or volume of a cell or a mesh: the integral of $\det J$, or of the
