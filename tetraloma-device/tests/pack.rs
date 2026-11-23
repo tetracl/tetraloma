@@ -7,6 +7,7 @@ use common::*;
 use cubecl::prelude::*;
 use proptest::prelude::*;
 use tetraloma_device::*;
+use tetraloma_testing::primitive_checks::*;
 use tetraloma_testing::test_client;
 
 /// `n` distinct indices below `m` (n <= m), in random order.

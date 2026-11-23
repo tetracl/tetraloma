@@ -10,6 +10,7 @@ use cubecl::prelude::*;
 use proptest::prelude::*;
 use tetraloma_device::copy;
 use tetraloma_device::*;
+use tetraloma_testing::primitive_checks::*;
 use tetraloma_testing::test_client;
 
 fn check_fill<T: TestScalar>(client: &Client, len: usize, seed: u64) {

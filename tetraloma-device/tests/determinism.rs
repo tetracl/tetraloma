@@ -6,6 +6,7 @@ use common::*;
 use cubecl::prelude::*;
 use tetraloma_device::copy;
 use tetraloma_device::*;
+use tetraloma_testing::primitive_checks::*;
 use tetraloma_testing::test_client;
 
 /// Not a multiple of any vector, cube or tile size, and large enough for several cubes.
