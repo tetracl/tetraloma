@@ -5,8 +5,9 @@
 //!
 //! - [`DeviceBuffer`] is a typed array in device memory, with the explicit copies to and from
 //!   the host; [`DeviceStrided`] and [`DeviceCsr`] hold the rows of a connectivity.
-//! - [`Real`] is the scalar type of a mesh, `f32` or `f64`, and [`check_precision`] tells
-//!   whether a device supports it.
+//! - [`Real`] is the scalar type of a mesh, `f32` or `f64`, [`FieldScalar`] names the real and
+//!   complex coefficient scalars (`f32`, `f64`, `Complex<f32>` and `Complex<f64>`), and
+//!   [`check_precision`] tells whether a device supports a real scalar.
 //! - [`LaunchPlan`] chooses the launch shape of tetraloma's kernels from the device's limits and
 //!   the built-in [`VectorPolicy`].
 //! - [`primitives`] holds the deterministic device algorithms tetraloma is built on: fill,
@@ -49,8 +50,6 @@ pub use device_error::DeviceError;
 pub use error::{ConnKey, GridError, Result};
 pub use plan::{LaunchPlan, debug_assert_bindings};
 pub use policy::{CpuUnits, DeviceClass, KernelKind, VectorPolicy, VectorSizeOverride};
-#[doc(hidden)]
-pub use precision::FieldScalar;
-pub use precision::{Real, check_precision};
+pub use precision::{FieldScalar, Real, check_precision};
 pub use primitives::*;
 pub use testing::device_properties;

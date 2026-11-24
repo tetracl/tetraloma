@@ -1,4 +1,4 @@
-//! `Real` (Listing B3) and `check_precision` (Listing S1).
+//! `Real` (Listing B3), `FieldScalar` (Listing F2) and `check_precision` (Listing S1).
 
 use cubecl::prelude::*;
 
@@ -73,35 +73,66 @@ impl Real for f64 {
     }
 }
 
-// M18.T0 stub (ADR-0074, Listing F2); implemented and unhidden in M18.T8.
-/// Coefficient scalars: real or complex floating-point values. Not part of the stable API while
-/// hidden.
-#[doc(hidden)]
+// Design: "Grid functions and their evaluation", Listing F2; ADR-0074.
+/// Real or complex coefficient scalar: `f32`, `f64`, `num_complex::Complex<f32>` or
+/// `num_complex::Complex<f64>`.
+///
+/// A mesh stores geometry in a real scalar `F: Real`, while a field's coefficients may be real or
+/// complex in the same underlying precision [`FieldScalar::Real`]. On the device, coefficients are
+/// stored as [`FieldScalar::PARTS`] consecutive real values per entry (`1` for real, `2` for
+/// complex, real part then imaginary part), so `&[T]` views directly as `&[T::Real]` via
+/// `bytemuck::Pod`.
+///
+/// This trait is not sealed: downstream crates may implement it for other `bytemuck::Pod`
+/// coefficient types. See [Coefficient
+/// scalars](https://tetracl.github.io/tetraloma/concepts/precision.html#coefficient-scalars).
+///
+/// # Example
+///
+/// ```
+/// use num_complex::Complex;
+/// use tetraloma_device::FieldScalar;
+///
+/// fn real_len<T: FieldScalar>(num_coeffs: usize) -> usize {
+///     num_coeffs * T::PARTS
+/// }
+///
+/// assert_eq!(real_len::<f32>(4), 4);
+/// assert_eq!(real_len::<f64>(4), 4);
+/// assert_eq!(real_len::<Complex<f32>>(4), 8);
+/// assert_eq!(real_len::<Complex<f64>>(4), 8);
+///
+/// // Complex values reinterpret directly as interleaved [re, im] real slices.
+/// let zs = [Complex::new(1.0f64, -2.0), Complex::new(3.5, 4.25)];
+/// let parts: &[f64] = bytemuck::cast_slice(&zs);
+/// assert_eq!(parts, &[1.0, -2.0, 3.5, 4.25]);
+/// ```
 pub trait FieldScalar: Copy + Default + bytemuck::Pod + Send + Sync + 'static {
-    /// Underlying real scalar type (`f32` or `f64`).
+    /// The underlying real scalar type (`f32` or `f64`).
     type Real: Real;
-    /// Number of real components per coefficient (1 for real, 2 for complex).
+    /// The number of real components per coefficient: `1` for real scalars and `2` for complex
+    /// scalars.
     const PARTS: usize;
 }
 
 impl FieldScalar for f32 {
     type Real = f32;
-    const PARTS: usize = 0;
+    const PARTS: usize = 1;
 }
 
 impl FieldScalar for f64 {
     type Real = f64;
-    const PARTS: usize = 0;
+    const PARTS: usize = 1;
 }
 
 impl FieldScalar for num_complex::Complex<f32> {
     type Real = f32;
-    const PARTS: usize = 0;
+    const PARTS: usize = 2;
 }
 
 impl FieldScalar for num_complex::Complex<f64> {
     type Real = f64;
-    const PARTS: usize = 0;
+    const PARTS: usize = 2;
 }
 
 // Listing S1.

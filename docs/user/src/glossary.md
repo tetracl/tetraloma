@@ -83,6 +83,13 @@ and volume meshes, codimension 1 surfaces in 3D and curves in the plane, codimen
 3D. The enum `Codim` of the tag methods counts down from the topological dimension instead.
 See [Codimension](concepts/typed-dimensions.md#codimension).
 
+Coefficient scalar, `FieldScalar`
+: The real or complex scalar type of a field's coefficients (`f32`, `f64`,
+`num_complex::Complex<f32>` or `num_complex::Complex<f64>`). `FieldScalar::Real` names its
+underlying real precision and `FieldScalar::PARTS` is `1` for real scalars and `2` for complex
+ones.
+See [Coefficient scalars](concepts/precision.md#coefficient-scalars).
+
 Collapsed Gauss–Jacobi rule
 : The Gauss rule of triangles, tetrahedra and pyramids: a tensor rule on the unit square or cube,
 mapped onto the cell.

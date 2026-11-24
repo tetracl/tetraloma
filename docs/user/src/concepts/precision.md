@@ -1,8 +1,9 @@
 # Precision
 
 tetraloma computes in the scalar type of the mesh, `f32` or `f64`, and both are first-class:
-every kernel is tested in both. This chapter explains what changes between the two, how
-accurate the results are, and which results you can expect to be identical from run to run.
+every kernel is tested in both. This chapter explains what changes between the two, how real and
+complex coefficient scalars are represented, how accurate the results are, and which results you
+can expect to be identical from run to run.
 
 ## f32 and f64
 
@@ -65,6 +66,33 @@ check::<f32>(&client, 1e-5)?;
 check::<f64>(&client, 1e-12)?;
 # Ok(()) }
 ```
+
+## Coefficient scalars
+
+While a mesh's geometry always uses a real scalar `F: Real`, the coefficients of a finite-element
+field may be real or complex in the same underlying precision. The trait
+[`FieldScalar`](../api/tetraloma_device/trait.FieldScalar.html) in
+[`tetraloma-device`](../api/tetraloma_device/index.html) names those coefficient types and ties
+each to its real precision `FieldScalar::Real` and its number of real components
+`FieldScalar::PARTS`:
+
+| Coefficient type | `FieldScalar::Real` | `FieldScalar::PARTS` |
+| --- | --- | --- |
+| `f32` | `f32` | `1` |
+| `f64` | `f64` | `1` |
+| `num_complex::Complex<f32>` | `f32` | `2` |
+| `num_complex::Complex<f64>` | `f64` | `2` |
+
+On the device, complex values are stored in real buffers (`DeviceBuffer<T::Real>`) as consecutive
+real and imaginary pairs, rather than as native complex GPU types. A buffer of $n$ coefficients
+therefore holds $n \cdot \text{PARTS}$ real elements, and a host slice `&[T]` reinterprets
+directly as `&[T::Real]` via `bytemuck::Pod` (with each complex value laid out as `[re, im]`).
+Device kernels write out complex arithmetic in real operations in a fixed order, so complex fields
+inherit the precision support and determinism rules of their underlying `Real`: `Complex<f32>` runs
+on every backend, including Metal, whereas `Complex<f64>` requires `f64` support.
+
+`FieldScalar` is not sealed, so downstream crates can implement it for their own `bytemuck::Pod`
+coefficient types when needed.
 
 ## Tolerances
 
