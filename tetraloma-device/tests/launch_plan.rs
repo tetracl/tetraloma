@@ -15,6 +15,7 @@ use tetraloma_device::{
     CpuUnits, DeviceBuffer, GridError, KernelKind, LaunchPlan, VECTOR_PAD, VectorPolicy,
     VectorSizeOverride,
 };
+use tetraloma_testing::primitive_checks::{SplitMix, TestScalar};
 use tetraloma_testing::test_client;
 
 const KINDS: [KernelKind; 13] = [
@@ -600,7 +601,7 @@ fn group_tree_kernel<F: Float, N: Size>(
 
 /// The pairwise tree over `leaves` on the host, adjacent pairs first, each sum rounded to `T`
 /// (through f64, which rounds f32 sums correctly).
-fn host_tree<T: common::TestScalar>(leaves: &[T]) -> T {
+fn host_tree<T: TestScalar>(leaves: &[T]) -> T {
     let mut a = leaves.to_vec();
     let mut s = 1;
     while s < a.len() {
@@ -614,7 +615,7 @@ fn host_tree<T: common::TestScalar>(leaves: &[T]) -> T {
 
 /// The tree kernel's sums of `groups` groups of `LEAVES` leaves (`leaf(g, l)`) under a
 /// `per_group` plan for `units` units at the vector size of `vector`, and the plan.
-fn run_group_tree<T: common::TestScalar + Float>(
+fn run_group_tree<T: TestScalar + Float>(
     client: &Client,
     groups: usize,
     units: usize,
@@ -681,11 +682,11 @@ fn run_group_tree<T: common::TestScalar + Float>(
 /// equal to the host's tree, on the CPU runtime; within tolerance elsewhere. Cubes hold
 /// several groups where the units allow (on CPUs too, ADR-0045), and CPU group slots visit
 /// blocks of groups (4 KiB blocks, so 3000 groups take several cubes).
-fn group_tree_case<T: common::TestScalar + Float>(client: &Client) {
+fn group_tree_case<T: TestScalar + Float>(client: &Client) {
     let groups = 3000;
     let leaves = LEAVES as usize;
     // Leaves of random sign and magnitudes up to 2^24, so the order of the sums matters.
-    let mut rng = common::SplitMix::new(0x5eed_0042);
+    let mut rng = SplitMix::new(0x5eed_0042);
     let values: Vec<T> = (0..groups * leaves)
         .map(|_| {
             let scale = (1u64 << rng.below(25)) as f64;

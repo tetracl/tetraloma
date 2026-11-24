@@ -1,0 +1,28 @@
+[package]
+name = "tetraloma-testing-base"
+description = "Device and parallel test support below the mesh: test client, tolerances and foundation checks"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[features]
+default = ["cpu"]
+# Runtime features forwarded to tetraloma-testing until M18.T7 reverses the dependency.
+cpu = ["tetraloma-testing/cpu"]
+cuda = ["tetraloma-testing/cuda"]
+hip = ["tetraloma-testing/hip"]
+vulkan = ["tetraloma-testing/vulkan"]
+metal = ["tetraloma-testing/metal"]
+metal-native = ["tetraloma-testing/metal-native"]
+wgpu = ["tetraloma-testing/wgpu"]
+mpi = ["tetraloma-testing/mpi"]
+
+[dependencies]
+# Shim until M18.T7 moves the base test support here and drops this dependency.
+tetraloma-testing = { path = "../tetraloma-testing", default-features = false }

@@ -4438,6 +4438,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "tetraloma-comm-testing"
+version = "0.1.0"
+dependencies = [
+ "tetraloma-testing",
+]
+
+[[package]]
 name = "tetraloma-device"
 version = "0.1.0"
 dependencies = [
@@ -4473,6 +4480,16 @@ dependencies = [
  "tetraloma-element",
  "tetraloma-refcell",
  "tetraloma-testing",
+]
+
+[[package]]
+name = "tetraloma-foundation-tests"
+version = "0.1.0"
+dependencies = [
+ "tetraloma-comm-testing",
+ "tetraloma-device",
+ "tetraloma-parallel",
+ "tetraloma-testing-base",
 ]
 
 [[package]]
@@ -4569,6 +4586,13 @@ dependencies = [
  "tetraloma-dims",
  "tetraloma-geometry",
  "tetraloma-refcell",
+]
+
+[[package]]
+name = "tetraloma-testing-base"
+version = "0.1.0"
+dependencies = [
+ "tetraloma-testing",
 ]
 
 [[package]]

@@ -26,7 +26,9 @@ mod meshes;
 pub mod oracle;
 pub mod parallel;
 pub mod partition;
+pub mod primitive_checks;
 pub mod reference;
+pub mod scatter_checks;
 mod world_size;
 
 pub use comm::ThreadComm;

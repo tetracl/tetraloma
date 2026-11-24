@@ -1,0 +1,23 @@
+[package]
+name = "tetraloma-foundation-tests"
+description = "Integration tests of tetraloma's foundation crates without a mesh crate"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+autotests = false
+
+[lints]
+workspace = true
+
+[dependencies]
+tetraloma-comm-testing = { path = "../tetraloma-comm-testing" }
+tetraloma-device = { path = "../tetraloma-device" }
+tetraloma-parallel = { path = "../tetraloma-parallel" }
+tetraloma-testing-base = { path = "../tetraloma-testing-base" }
+
+[[test]]
+name = "integration"
+path = "tests/main.rs"

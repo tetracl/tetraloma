@@ -9,6 +9,7 @@ use common::*;
 use cubecl::prelude::*;
 use tetraloma_device::copy;
 use tetraloma_device::*;
+use tetraloma_testing::primitive_checks::*;
 use tetraloma_testing::test_client;
 
 const SEED: u64 = 0x7665_6374_6f72_0002;
