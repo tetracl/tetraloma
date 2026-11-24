@@ -365,7 +365,9 @@ impl From<tetraloma_comm::CommError> for GridError {
                 GridError::MessageTooLarge { count }
             }
             tetraloma_comm::CommError::RemoteFailure { rank } => GridError::RemoteFailure { rank },
-            // Guarded by `tetraloma_comm::error::tests::comm_error_variant_list_is_exhaustive`.
+            // Required by `#[non_exhaustive]` across crates; adding a variant breaks
+            // `tetraloma_comm::error::tests::comm_error_variant_list_is_exhaustive` in
+            // `tetraloma-comm`'s test build (it does not break this library build).
             _ => unreachable!("non-exhaustive CommError variant"),
         }
     }

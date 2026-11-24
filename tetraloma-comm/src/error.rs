@@ -108,7 +108,8 @@ mod tests {
     use super::CommError;
 
     // M18 A4: exhaustive match without a wildcard arm. Adding a variant to `CommError`
-    // breaks this test and points to
+    // breaks this test and points to `From<CommError> for GridError` (in `tetraloma-device`
+    // until M18.T6, then `tetraloma-topology`) and to
     // `tetraloma::pipeline::dual_graph::tests::foundation_errors_convert_to_their_grid_error_variants`.
     fn variant_index(error: &CommError) -> usize {
         match error {
