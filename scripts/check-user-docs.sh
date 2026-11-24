@@ -110,7 +110,7 @@ if [[ -n $parmetis ]]; then
         TETRALOMA_USER_DOCS_LOCKED=1 scripts/build-site.sh --api-only --out "$pwork/api" \
             --features "$PARMETIS_FEATURES" --crates tetraloma-partition --logs "$pwork/logs" || true
         list_doctests tetraloma-partition \
-            "tetraloma-partition/parmetis,tetraloma-partition/scotch,tetraloma-partition/ptscotch,$DOCTEST_EXTRA" \
+            "tetraloma-partition/parmetis,tetraloma-partition/scotch,tetraloma-partition/ptscotch" \
             "$pwork/doctests"
     fi
     "$PYTHON" scripts/doc_audit.py check --site "$SITE" --work "$pwork" --api "$pwork/api" \

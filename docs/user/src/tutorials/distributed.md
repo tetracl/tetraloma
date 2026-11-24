@@ -118,11 +118,13 @@ returns the area 1 on every rank, whatever the ghost cells. Such methods are col
 
 ## Partitioners
 
-The partitioner decides which rank owns each cell. It sees the dual graph, distributed over the
-ranks as a [`DistGraph`](../api/tetraloma/struct.DistGraph.html) in the format of ParMETIS: each
-rank holds a contiguous range of graph vertices, `vtxdist` gives the ranges, and `xadj` and
-`adjncy` give each local vertex's neighbours as global vertex numbers. Vertex weights estimate
-the work of each cell from its type and degree. On one rank, `build_on` calls no partitioner.
+The partitioner decides which rank owns each cell. The partitioners live in the host-only
+[`tetraloma-partition`](../api/tetraloma_partition/index.html) crate and are re-exported by
+`tetraloma`. A partitioner sees the dual graph, distributed over the ranks as a
+[`DistGraph`](../api/tetraloma/struct.DistGraph.html) in the format of ParMETIS: each rank holds a
+contiguous range of graph vertices, `vtxdist` gives the ranges, and `xadj` and `adjncy` give each
+local vertex's neighbours as global vertex numbers. Vertex weights estimate the work of each cell
+from its type and degree. On one rank, `build_on` calls no partitioner.
 
 The built-in [`Block`](../api/tetraloma/struct.Block.html) partitioner is the default. It sends
 graph vertex $i$ of $N$ to rank $\lfloor i p / N \rfloor$ on $p$ ranks. The graph numbers the
@@ -149,9 +151,11 @@ The program builds the square with `Block` and with a partitioner of its own:
 ```
 
 A partitioner is any type that implements the
-[`Partitioner`](../api/tetraloma/trait.Partitioner.html) trait. `partition` is collective, and
-returns the destination rank of each of this rank's graph vertices. The program's `RoundRobin`
-sends vertex $i$ to rank $i \bmod p$:
+[`Partitioner`](../api/tetraloma/trait.Partitioner.html) trait. `partition` is collective,
+returns the destination rank of each of this rank's graph vertices, and reports errors as
+[`PartitionError`](../api/tetraloma/enum.PartitionError.html) (re-exported at the root of
+`tetraloma`, not in `prelude`, and converted into [`GridError`](../api/tetraloma/enum.GridError.html)
+by `build_on`). The program's `RoundRobin` sends vertex $i$ to rank $i \bmod p$:
 
 ```rust,ignore
 {{#include ../../../../tetraloma-examples/src/distributed_mesh.rs:round_robin}}
