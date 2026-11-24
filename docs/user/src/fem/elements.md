@@ -216,7 +216,8 @@ cell's $L^2$-orthonormal polynomial set $\{\psi_k\}$
 $\phi_i(\xi) = \sum_{k=0}^{n_{\mathrm{poly}}-1} C_{i, k}\, \psi_k(\xi)$. `Element::coefficients`
 returns this row-major `[dim][polyset_dim * reference_value_size]` table (`[dim][polyset_dim]`
 for scalar Lagrange, where `reference_value_size() == 1`), obtained once per key by inverting the
-Ciarlet dual matrix $D_{ij} = l_i(\psi_j)$ in `f64` with `DenseLu`.
+Ciarlet dual matrix $D_{ij} = l_i(\psi_j)$ in `f64` with `DenseLu` (or assembled lazily from 1D
+factors on quadrilaterals and hexahedra; see [Tensor factors](#tensor-factors)).
 
 `Element::tabulate(points, nderivs)` evaluates the basis at flat node-major reference points
 (`tdim` coordinates per point) and returns an
@@ -283,5 +284,64 @@ let dofs: Vec<f64> = (0..el.dim())
 let tab = el.tabulate(&[0.25, 0.4], 0)?;
 let approx: f64 = dofs.iter().zip(&tab.values).map(|(c, b)| c * b).sum();
 assert!((approx - (2.0 * 0.25 + 3.0 * 0.4 - 1.0)).abs() < 1e-13);
+# Ok::<(), tetraloma_element::ElementError>(())
+```
+
+## Tensor factors
+
+On quadrilaterals and hexahedra, every Lagrange element is a tensor product of one-dimensional
+elements along the reference coordinate axes. [`Element::tensor_factors`](../api/tetraloma_element/struct.Element.html)
+returns `Some(&TensorFactors)` for these two cells and `None` for all others.
+
+Because the element is constructed from its 1D factors, only small 1D dual matrices are ever
+inverted: `Element::tabulate` combines 1D tabulations directly, and the dense `dim × dim` tables
+returned by `Element::coefficients` and `Element::interpolation_matrix` are assembled from the
+factors on first use rather than during `Element::get`. High-degree hexahedra (up to $p = 20$,
+where `dim = 9261` and a dense table would occupy 686 MB) therefore build and tabulate quickly
+without allocating dense tables unless you explicitly request them.
+
+[`TensorFactors`](../api/tetraloma_element/struct.TensorFactors.html) exposes two public fields
+and a 1D tabulator:
+
+- `factors[component][direction]` gives the `(Factor1d, degree)` pair for each reference component
+  and coordinate direction, using [`Factor1d`](../api/tetraloma_element/enum.Factor1d.html):
+  `NodalH1(family)` for 1D Lagrange basis functions in interval DOF order (endpoints first, or the
+  constant $1$ at degree $0$), `LegendreL2` for 1D $L^2$-orthonormal Legendre polynomials on
+  $[0, 1]$, and `MomentH1` (declared for tensor-product $H(\mathrm{curl})$ and $H(\mathrm{div})$
+  elements).
+- `lexicographic[component][tensor_index]` maps each x-fastest multi-index
+  $a_0 + n_0 a_1$ (on quadrilaterals) or $a_0 + n_0 (a_1 + n_1 a_2)$ (on hexahedra) to the
+  element's local DOF index.
+- `tabulate_1d(component, direction, points, nderivs)` returns the 1D basis values (`nderivs == 0`)
+  or values and first derivatives (`nderivs == 1`) at scalar points in $[0, 1]$, laid out in
+  `[derivative][point][basis]` order (panicking for `nderivs > 1` or out-of-range indices).
+
+```rust
+use tetraloma::{CellType, NodeFamily};
+use tetraloma_element::{Element, ElementKey, Factor1d, Family, Variant};
+
+let el = Element::get(ElementKey {
+    family: Family::Lagrange,
+    cell: CellType::Quadrilateral,
+    degree: 3,
+    variant: Variant::Nodal(NodeFamily::Gll),
+})?;
+let tf = el.tensor_factors().expect("quadrilateral has tensor factors");
+assert_eq!(tf.factors[0], vec![(Factor1d::NodalH1(NodeFamily::Gll), 3); 2]);
+
+let (x, y) = (0.27, 0.71);
+let tx = tf.tabulate_1d(0, 0, &[x], 1);
+let ty = tf.tabulate_1d(0, 1, &[y], 1);
+let n = 4; // degree + 1
+let tab = el.tabulate(&[x, y], 1)?;
+
+for a1 in 0..n {
+    for a0 in 0..n {
+        let dof = tf.lexicographic[0][a0 + n * a1];
+        assert!((tx[a0] * ty[a1] - tab.values[dof]).abs() < 1e-14);
+        assert!((tx[n + a0] * ty[a1] - tab.values[el.dim() + dof]).abs() < 1e-14);
+        assert!((tx[a0] * ty[n + a1] - tab.values[2 * el.dim() + dof]).abs() < 1e-14);
+    }
+}
 # Ok::<(), tetraloma_element::ElementError>(())
 ```
