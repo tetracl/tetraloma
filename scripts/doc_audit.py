@@ -67,6 +67,7 @@ LIBRARY_CRATES = [
     "tetraloma",
     "tetraloma-dims",
     "tetraloma-refcell",
+    "tetraloma-comm",
     "tetraloma-device",
     "tetraloma-parallel",
     "tetraloma-topology",

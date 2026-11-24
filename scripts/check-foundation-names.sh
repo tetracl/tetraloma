@@ -13,9 +13,9 @@
 # - Enum variants and `#[doc(hidden)]` items are not checked.
 #
 # Usage: scripts/check-foundation-names.sh [--crates C,...] [--api DIR] [--self-test]
-#   --crates C,...  comma-separated crate names (default: the foundation crates that exist:
-#                   tetraloma-device,tetraloma-parallel,tetraloma-partition; M18.T2 adds
-#                   tetraloma-comm). E.g. `--crates tetraloma-topology` must fail.
+#   --crates C,...  comma-separated crate names (default:
+#                   tetraloma-comm,tetraloma-device,tetraloma-parallel,tetraloma-partition).
+#                   E.g. `--crates tetraloma-topology` must fail.
 #   --api DIR       check already-built rustdoc HTML pages under DIR without running `cargo doc`
 #                   (relative paths are resolved against the caller's working directory).
 #   --self-test     run built-in HTML scanner and name-matcher self-tests and exit.
@@ -28,8 +28,8 @@ caller_pwd=$PWD
 script_path="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 cd "$(dirname "$script_path")/.."
 
-# pending M18.T2: add tetraloma-comm; pending M18.T6: enable in CI `cpu` and `scripts/check-user-docs.sh`.
-DEFAULT_CRATES="tetraloma-device,tetraloma-parallel,tetraloma-partition"
+# pending M18.T6: enable in CI `cpu` and `scripts/check-user-docs.sh`.
+DEFAULT_CRATES="tetraloma-comm,tetraloma-device,tetraloma-parallel,tetraloma-partition"
 PYTHON=${TETRALOMA_PYTHON:-python3}
 die() { echo "check-foundation-names: $*" >&2; exit 2; }
 
