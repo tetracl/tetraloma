@@ -94,7 +94,9 @@ The kernels themselves are compiled at run time and are equally fast in both pro
 
 A device problem shows up when your program opens a device or creates its first mesh. The chapter
 [Compute devices](devices.md) describes every backend; the entries below cover the errors you are
-most likely to see.
+most likely to see. Calling `DeviceBuffer` methods or device primitives directly returns
+[`DeviceError`](api/tetraloma/enum.DeviceError.html) with the same variant names and fields, which
+`?` converts into `GridError` in functions returning `tetraloma::Result`.
 
 ### `NotLinked` or `NoSuchDevice`
 
@@ -143,10 +145,10 @@ Time a computation after a first run, not including it.
 
 ### Errors from the compute server
 
-`GridError::Server` passes on an error that the CubeCL runtime reported while it allocated
-memory, launched a kernel or copied data. Its message is CubeCL's and names the cause. Try the
-same program on the CPU runtime: if it runs there, the problem lies with the device or its
-driver, not with your input.
+`GridError::Server` (or `DeviceError::Server` from a device-layer call) passes on an error that the
+CubeCL runtime reported while it allocated memory, launched a kernel or copied data. Its message
+is CubeCL's and names the cause. Try the same program on the CPU runtime: if it runs there, the
+problem lies with the device or its driver, not with your input.
 
 ## MPI problems
 
