@@ -4,11 +4,11 @@ use std::ptr;
 use std::sync::PoisonError;
 
 use parmetis_sys::{self as p, IDX_BITS, idx_t as Idx, real_t as Real};
-use tetraloma_parallel::{CommDyn, GridError, Result};
+use tetraloma_comm::{CommDyn, agree};
 
-use crate::graph::{Checked, agree, local_weights, signed_max, validate};
+use crate::graph::{Checked, local_weights, signed_max, validate};
 use crate::rank0::{RANDOM_STATE, narrow};
-use crate::{DistGraph, Partitioner};
+use crate::{DistGraph, PartitionError, Partitioner, Result};
 
 const NAME: &str = "parmetis";
 
@@ -51,13 +51,13 @@ const NAME: &str = "parmetis";
 /// # Example
 ///
 /// The example runs as one process without MPI. One part needs no library call; two parts need
-/// an MPI communicator. Under `mpirun`, pass the MPI communicator `Mpi` of tetraloma-parallel
+/// an MPI communicator. Under `mpirun`, pass the MPI communicator `Mpi` of tetraloma-comm
 /// (for example `Mpi::world(&universe)`) instead of `Serial`, with `nparts` set to
 /// `comm.size()`.
 ///
 /// ```
-/// use tetraloma_parallel::{GridError, Serial};
-/// use tetraloma_partition::{DistGraph, ParMetis, Partitioner};
+/// use tetraloma_comm::Serial;
+/// use tetraloma_partition::{DistGraph, ParMetis, PartitionError, Partitioner};
 ///
 /// // A path of four vertices with weights 1, 1, 1, 3, all on this rank.
 /// let g = DistGraph {
@@ -70,9 +70,9 @@ const NAME: &str = "parmetis";
 /// assert_eq!(partitioner.partition(&Serial, &g, 1)?, [0, 0, 0, 0]);
 /// assert!(matches!(
 ///     partitioner.partition(&Serial, &g, 2),
-///     Err(GridError::NeedsMpiCommunicator("parmetis"))
+///     Err(PartitionError::NeedsMpiCommunicator("parmetis"))
 /// ));
-/// # Ok::<(), GridError>(())
+/// # Ok::<(), PartitionError>(())
 /// ```
 ///
 /// [Cargo features]: https://tetracl.github.io/tetraloma/features.html#partitioners
@@ -89,12 +89,12 @@ impl ParMetis {
     /// # Example
     ///
     /// The example runs as one process without MPI, so it can only ask for one part, which needs
-    /// no library call. Under `mpirun`, pass the MPI communicator `Mpi` of tetraloma-parallel
+    /// no library call. Under `mpirun`, pass the MPI communicator `Mpi` of tetraloma-comm
     /// instead of `Serial`.
     ///
     /// ```
-    /// use tetraloma_parallel::Serial;
-    /// use tetraloma_partition::{DistGraph, ParMetis, Partitioner};
+    /// use tetraloma_comm::Serial;
+    /// use tetraloma_partition::{DistGraph, ParMetis, PartitionError, Partitioner};
     ///
     /// // A ring of six vertices, all on this rank.
     /// let g = DistGraph {
@@ -106,7 +106,7 @@ impl ParMetis {
     /// let partitioner = ParMetis::default().seed(42);
     /// assert_eq!(partitioner.name(), "parmetis");
     /// assert_eq!(partitioner.partition(&Serial, &g, 1)?, [0; 6]);
-    /// # Ok::<(), tetraloma_parallel::GridError>(())
+    /// # Ok::<(), PartitionError>(())
     /// ```
     ///
     /// [Distributed meshes]: https://tetracl.github.io/tetraloma/tutorials/distributed.html#partitioners
@@ -125,7 +125,7 @@ impl ParMetis {
     ) -> Result<Vec<i32>> {
         let raw = agree(
             comm,
-            comm.raw().ok_or(GridError::NeedsMpiCommunicator(NAME)),
+            comm.raw().ok_or(PartitionError::NeedsMpiCommunicator(NAME)),
         )?;
         // vtxdist is the same on every rank (validated), so so is this.
         if g.vtxdist.windows(2).any(|w| w[0] == w[1]) {
@@ -139,7 +139,7 @@ impl ParMetis {
             let vwgt: Option<Vec<Idx>> = local_weights(g, checked.weighted)
                 .map(|w| narrow(&w))
                 .transpose()?;
-            let nparts = Idx::try_from(nparts).map_err(|_| GridError::TooLarge)?;
+            let nparts = Idx::try_from(nparts).map_err(|_| PartitionError::TooLarge)?;
             Ok((vtxdist, xadj, adjncy, vwgt, nparts))
         })();
         let (mut vtxdist, mut xadj, mut adjncy, mut vwgt, mut nparts) = agree(comm, arrays)?;
@@ -188,7 +188,7 @@ impl ParMetis {
             // `idx_t` is 32 or 64 bits, as ParMETIS was built.
             #[allow(clippy::useless_conversion)]
             part.into_iter()
-                .map(|p| i32::try_from(p).map_err(|_| GridError::TooLarge))
+                .map(|p| i32::try_from(p).map_err(|_| PartitionError::TooLarge))
                 .collect()
         } else {
             Err(failed(status))
@@ -198,8 +198,8 @@ impl ParMetis {
 }
 
 /// `PartitionerFailed { name: "parmetis", code }`.
-fn failed(code: i32) -> GridError {
-    GridError::PartitionerFailed { name: NAME, code }
+fn failed(code: i32) -> PartitionError {
+    PartitionError::PartitionerFailed { name: NAME, code }
 }
 
 impl Partitioner for ParMetis {

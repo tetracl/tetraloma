@@ -3,7 +3,9 @@
 
 use std::borrow::Cow;
 
-use tetraloma_parallel::{CommDyn, CommExt, GridError, Result};
+use tetraloma_comm::{CommDyn, CommExt, agree};
+
+use crate::{PartitionError, Result};
 
 // Design: "Partitioning", Listing S3.
 /// A graph in compressed sparse row (CSR) form, distributed over the ranks in the convention of
@@ -55,8 +57,8 @@ pub struct DistGraph {
 /// # Example
 ///
 /// ```
-/// use tetraloma_parallel::{CommDyn, Result, Serial};
-/// use tetraloma_partition::{DistGraph, Partitioner};
+/// use tetraloma_comm::{CommDyn, Serial};
+/// use tetraloma_partition::{DistGraph, PartitionError, Partitioner, Result};
 ///
 /// /// Vertex i goes to part i mod nparts.
 /// struct RoundRobin;
@@ -75,7 +77,7 @@ pub struct DistGraph {
 /// // Four isolated vertices on one rank.
 /// let g = DistGraph { vtxdist: vec![0, 4], xadj: vec![0; 5], adjncy: vec![], vwgt: None };
 /// assert_eq!(RoundRobin.partition(&Serial, &g, 3)?, [0, 1, 2, 0]);
-/// # Ok::<(), tetraloma_parallel::GridError>(())
+/// # Ok::<(), PartitionError>(())
 /// ```
 ///
 /// [Distributed meshes]: https://tetracl.github.io/tetraloma/tutorials/distributed.html#partitioners
@@ -108,8 +110,8 @@ pub trait Partitioner {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::Serial;
-    /// use tetraloma_partition::{Block, DistGraph, Partitioner};
+    /// use tetraloma_comm::Serial;
+    /// use tetraloma_partition::{Block, DistGraph, PartitionError, Partitioner};
     ///
     /// // Six cells in a row on one rank, cut into three parts.
     /// let g = DistGraph {
@@ -120,28 +122,11 @@ pub trait Partitioner {
     /// };
     /// let parts = Block.partition(&Serial, &g, 3)?;
     /// assert_eq!(parts, [0, 0, 1, 1, 2, 2]);
-    /// # Ok::<(), tetraloma_parallel::GridError>(())
+    /// # Ok::<(), PartitionError>(())
     /// ```
     ///
     /// [Distributed meshes]: https://tetracl.github.io/tetraloma/tutorials/distributed.html#partitioners
     fn partition(&self, comm: &dyn CommDyn, g: &DistGraph, nparts: usize) -> Result<Vec<i32>>;
-}
-
-/// The agreed result of a collective step (ADR-0026, item 15): every rank learns the lowest
-/// failing rank. A failing rank returns its own error, every other rank `RemoteFailure` with
-/// the lowest failing rank. Collective.
-pub(crate) fn agree<T>(comm: &dyn CommDyn, local: Result<T>) -> Result<T> {
-    let lowest = comm.min(if local.is_err() {
-        comm.rank() as u64
-    } else {
-        u64::MAX
-    });
-    match local {
-        Ok(_) if lowest != u64::MAX => Err(GridError::RemoteFailure {
-            rank: lowest as usize,
-        }),
-        other => other,
-    }
 }
 
 /// `Block`'s local checks (ADR-0026): `nparts` in `1..=i32::MAX`, the lengths and monotonicity
@@ -156,31 +141,31 @@ pub(crate) fn agree<T>(comm: &dyn CommDyn, local: Result<T>) -> Result<T> {
 /// `vwgt` does not have one entry per vertex; `TooLarge` if `nparts` exceeds `i32::MAX`.
 pub(crate) fn check_shape(comm: &dyn CommDyn, g: &DistGraph, nparts: usize) -> Result<(i64, i64)> {
     if nparts == 0 {
-        return Err(GridError::LengthMismatch {
+        return Err(PartitionError::LengthMismatch {
             expected: 1,
             found: 0,
         });
     }
     if i32::try_from(nparts).is_err() {
-        return Err(GridError::TooLarge);
+        return Err(PartitionError::TooLarge);
     }
     let p = comm.size();
     if g.vtxdist.len() != p + 1 {
-        return Err(GridError::LengthMismatch {
+        return Err(PartitionError::LengthMismatch {
             expected: p + 1,
             found: g.vtxdist.len(),
         });
     }
     if g.vtxdist[0] != 0 || g.vtxdist.windows(2).any(|w| w[1] < w[0]) {
-        return Err(GridError::LengthMismatch {
+        return Err(PartitionError::LengthMismatch {
             expected: 0,
             found: g.vtxdist[0].unsigned_abs() as usize,
         });
     }
     let (begin, end) = (g.vtxdist[comm.rank()], g.vtxdist[comm.rank() + 1]);
-    let n = usize::try_from(end - begin).map_err(|_| GridError::TooLarge)?;
+    let n = usize::try_from(end - begin).map_err(|_| PartitionError::TooLarge)?;
     if g.xadj.len() != n + 1 {
-        return Err(GridError::LengthMismatch {
+        return Err(PartitionError::LengthMismatch {
             expected: n + 1,
             found: g.xadj.len(),
         });
@@ -190,7 +175,7 @@ pub(crate) fn check_shape(comm: &dyn CommDyn, g: &DistGraph, nparts: usize) -> R
         || g.xadj.windows(2).any(|w| w[1] < w[0])
         || usize::try_from(last).ok() != Some(g.adjncy.len())
     {
-        return Err(GridError::LengthMismatch {
+        return Err(PartitionError::LengthMismatch {
             expected: g.adjncy.len(),
             found: last.unsigned_abs() as usize,
         });
@@ -198,7 +183,7 @@ pub(crate) fn check_shape(comm: &dyn CommDyn, g: &DistGraph, nparts: usize) -> R
     if let Some(w) = &g.vwgt
         && w.len() != n
     {
-        return Err(GridError::LengthMismatch {
+        return Err(PartitionError::LengthMismatch {
             expected: n,
             found: w.len(),
         });
@@ -285,7 +270,7 @@ pub(crate) fn validate(
     agree(comm, local.and(fits))?;
     let local = comm
         .all_to_all_v(&queries, &counts)
-        .map_err(GridError::from)
+        .map_err(PartitionError::from)
         .and_then(|(pairs, _)| confirm_reverse(g, begin, &pairs, name));
     agree(comm, local.map(|()| checked))
 }
@@ -293,7 +278,7 @@ pub(crate) fn validate(
 /// `MessageTooLarge` if `count` elements exceed an MPI count (`i32::MAX`).
 pub(crate) fn fits_message(count: i64) -> Result<()> {
     if i32::try_from(count).is_err() {
-        return Err(GridError::MessageTooLarge {
+        return Err(PartitionError::MessageTooLarge {
             count: usize::try_from(count).unwrap_or(usize::MAX),
         });
     }
@@ -349,7 +334,7 @@ fn check_totals(
     for (r, c) in counts.iter().enumerate() {
         let declared = g.vtxdist[r + 1] - g.vtxdist[r];
         if declared as u64 != c[0] {
-            return Err(GridError::LengthMismatch {
+            return Err(PartitionError::LengthMismatch {
                 expected: c[0] as usize,
                 found: declared as usize,
             });
@@ -357,13 +342,13 @@ fn check_totals(
     }
     let total = |k: usize| counts.iter().map(|c| u128::from(c[k])).sum::<u128>();
     let num_vertices = g.vtxdist[p];
-    let limit = u128::try_from(max).map_err(|_| GridError::TooLarge)?;
+    let limit = u128::try_from(max).map_err(|_| PartitionError::TooLarge)?;
     let num_edges = total(1);
     if num_vertices as u128 > limit || num_edges > limit || total(2) > limit {
-        return Err(GridError::TooLarge);
+        return Err(PartitionError::TooLarge);
     }
     if nparts as u128 > limit {
-        return Err(GridError::TooLarge);
+        return Err(PartitionError::TooLarge);
     }
     Ok(Checked {
         begin,
@@ -382,18 +367,18 @@ fn check_entries(g: &DistGraph, checked: &Checked, name: &'static str) -> Result
         let u = checked.begin + i as i64;
         for &v in &g.adjncy[row[0] as usize..row[1] as usize] {
             if !(0..n).contains(&v) {
-                return Err(GridError::IndexOutOfRange {
+                return Err(PartitionError::IndexOutOfRange {
                     index: usize::try_from(v).unwrap_or(usize::MAX),
                     len: n as usize,
                 });
             }
             if v == u {
-                return Err(GridError::PartitionerFailed { name, code: -2 });
+                return Err(PartitionError::PartitionerFailed { name, code: -2 });
             }
         }
     }
     if g.vwgt.as_ref().is_some_and(|w| w.iter().any(|&x| x < 0)) {
-        return Err(GridError::TooLarge);
+        return Err(PartitionError::TooLarge);
     }
     Ok(())
 }
@@ -441,7 +426,7 @@ fn confirm_reverse(g: &DistGraph, begin: i64, pairs: &[i64], name: &'static str)
         sorted[row[0] as usize..row[1] as usize].sort_unstable();
     }
     let n = g.xadj.len() - 1;
-    let asymmetric = GridError::PartitionerFailed { name, code: -3 };
+    let asymmetric = PartitionError::PartitionerFailed { name, code: -3 };
     for pair in pairs.as_chunks::<2>().0 {
         let [far, near] = *pair;
         let Some(i) = usize::try_from(far - begin).ok().filter(|&i| i < n) else {
@@ -459,7 +444,7 @@ fn confirm_reverse(g: &DistGraph, begin: i64, pairs: &[i64], name: &'static str)
 pub(crate) mod tests {
     use super::*;
     use proptest::prelude::*;
-    use tetraloma_parallel::Serial;
+    use tetraloma_comm::Serial;
 
     const NAME: &str = "test";
 
@@ -499,9 +484,9 @@ pub(crate) mod tests {
             .collect()
     }
 
-    fn code(e: GridError) -> Option<i32> {
+    fn code(e: PartitionError) -> Option<i32> {
         match e {
-            GridError::PartitionerFailed { name: NAME, code } => Some(code),
+            PartitionError::PartitionerFailed { name: NAME, code } => Some(code),
             _ => None,
         }
     }
@@ -540,18 +525,18 @@ pub(crate) mod tests {
         assert_eq!(check(&multi, 3, 5).unwrap().num_edges, 4);
         assert!(matches!(
             check(&multi, 3, 4).unwrap_err(),
-            GridError::TooLarge
+            PartitionError::TooLarge
         ));
     }
 
     #[test]
     fn shape_errors_are_blocks() {
         let g = symmetric(3, &[(0, 1)], None);
-        let mismatch = |e: GridError| matches!(e, GridError::LengthMismatch { .. });
+        let mismatch = |e: PartitionError| matches!(e, PartitionError::LengthMismatch { .. });
         assert!(mismatch(check(&g, 0, i64::MAX).unwrap_err()));
         assert!(matches!(
             check(&g, 1 << 31, i64::MAX).unwrap_err(),
-            GridError::TooLarge
+            PartitionError::TooLarge
         ));
         let short = DistGraph {
             vwgt: Some(vec![1]),
@@ -573,13 +558,13 @@ pub(crate) mod tests {
         rows[0][0] = 3;
         assert!(matches!(
             check(&with(rows), 2, i64::MAX).unwrap_err(),
-            GridError::IndexOutOfRange { index: 3, len: 3 }
+            PartitionError::IndexOutOfRange { index: 3, len: 3 }
         ));
         let mut rows = rows_of(&g);
         rows[2][0] = -1;
         assert!(matches!(
             check(&with(rows), 2, i64::MAX).unwrap_err(),
-            GridError::IndexOutOfRange {
+            PartitionError::IndexOutOfRange {
                 index: usize::MAX,
                 len: 3
             }
@@ -596,7 +581,7 @@ pub(crate) mod tests {
         };
         assert!(matches!(
             check(&negative, 2, i64::MAX).unwrap_err(),
-            GridError::TooLarge
+            PartitionError::TooLarge
         ));
     }
 
@@ -605,30 +590,33 @@ pub(crate) mod tests {
         // N = 4, 6 edge entries, weight sum 9.
         let g = symmetric(4, &[(0, 1), (1, 2), (2, 3)], Some(vec![3, 0, 5, 1]));
         assert!(check(&g, 2, 9).is_ok());
-        assert!(matches!(check(&g, 2, 8).unwrap_err(), GridError::TooLarge));
+        assert!(matches!(
+            check(&g, 2, 8).unwrap_err(),
+            PartitionError::TooLarge
+        ));
         let unit = DistGraph { vwgt: None, ..g };
         assert!(check(&unit, 2, 6).is_ok());
         assert!(matches!(
             check(&unit, 2, 5).unwrap_err(),
-            GridError::TooLarge
+            PartitionError::TooLarge
         ));
         // N alone: no edges.
         let isolated = symmetric(4, &[], None);
         assert!(check(&isolated, 2, 4).is_ok());
         assert!(matches!(
             check(&isolated, 2, 3).unwrap_err(),
-            GridError::TooLarge
+            PartitionError::TooLarge
         ));
         // nparts too.
         assert!(matches!(
             check(&isolated, 5, 4).unwrap_err(),
-            GridError::TooLarge
+            PartitionError::TooLarge
         ));
         // Weights whose sum overflows i64.
         let huge = symmetric(2, &[], Some(vec![i64::MAX, i64::MAX]));
         assert!(matches!(
             check(&huge, 1, i64::MAX).unwrap_err(),
-            GridError::TooLarge
+            PartitionError::TooLarge
         ));
     }
 
@@ -639,23 +627,23 @@ pub(crate) mod tests {
         assert!(exchange_fits(&Serial, &[max]).is_ok());
         assert!(matches!(
             exchange_fits(&Serial, &[max + 1]).unwrap_err(),
-            GridError::MessageTooLarge { count } if count == max + 1
+            PartitionError::MessageTooLarge { count } if count == max + 1
         ));
         // The received side alone: two ranks each send half of i32::MAX + 1.
         let half = u64::from(i32::MAX.unsigned_abs() / 2 + 1);
         assert!(totals_fit(&[1, 1], &[half, half - 1]).is_ok());
         assert!(matches!(
             totals_fit(&[1, 1], &[half, half]).unwrap_err(),
-            GridError::MessageTooLarge { count } if count == max + 1
+            PartitionError::MessageTooLarge { count } if count == max + 1
         ));
         assert!(matches!(
             totals_fit(&[half, half], &[1, 1]).unwrap_err(),
-            GridError::MessageTooLarge { count } if count == max + 1
+            PartitionError::MessageTooLarge { count } if count == max + 1
         ));
         assert!(fits_message(i64::from(i32::MAX)).is_ok());
         assert!(matches!(
             fits_message(i64::from(i32::MAX) + 1).unwrap_err(),
-            GridError::MessageTooLarge { count } if count == max + 1
+            PartitionError::MessageTooLarge { count } if count == max + 1
         ));
     }
 
@@ -787,7 +775,7 @@ pub(crate) mod tests {
             let w = g.vwgt.as_ref().map_or(n as i64, |w| w.iter().sum());
             let largest = (n as i64).max(c.num_edges).max(w).max(3);
             prop_assert!(check(&g, 3, largest).is_ok());
-            prop_assert!(matches!(check(&g, 3, largest - 1), Err(GridError::TooLarge)));
+            prop_assert!(matches!(check(&g, 3, largest - 1), Err(PartitionError::TooLarge)));
             // One perturbation of each kind.
             prop_assume!(n >= 2);
             let mut rng = Rng(!seed);
@@ -809,17 +797,17 @@ pub(crate) mod tests {
             let e = check(&from_rows(&rows, vwgt), 3, i64::MAX).unwrap_err();
             match kind {
                 0 => {
-                    let out = matches!(e, GridError::IndexOutOfRange { len, .. } if len == n);
+                    let out = matches!(e, PartitionError::IndexOutOfRange { len, .. } if len == n);
                     prop_assert!(out);
                 }
                 1 => {
                     let negative =
-                        matches!(e, GridError::IndexOutOfRange { index: usize::MAX, len } if len == n);
+                        matches!(e, PartitionError::IndexOutOfRange { index: usize::MAX, len } if len == n);
                     prop_assert!(negative);
                 }
                 2 => prop_assert_eq!(code(e), Some(-2)),
                 3 => prop_assert_eq!(code(e), Some(-3)),
-                _ => prop_assert!(matches!(e, GridError::TooLarge)),
+                _ => prop_assert!(matches!(e, PartitionError::TooLarge)),
             }
         }
 

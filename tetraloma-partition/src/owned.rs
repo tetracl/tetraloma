@@ -4,14 +4,14 @@
 use std::mem::MaybeUninit;
 use std::os::raw::c_int;
 
-use tetraloma_parallel::{GridError, Result};
+use crate::{PartitionError, Result};
 
 /// `PartitionerFailed { name, code }` with a Scotch status other than 0.
 pub(crate) fn status(name: &'static str, code: c_int) -> Result<()> {
     if code == 0 {
         Ok(())
     } else {
-        Err(GridError::PartitionerFailed { name, code })
+        Err(PartitionError::PartitionerFailed { name, code })
     }
 }
 

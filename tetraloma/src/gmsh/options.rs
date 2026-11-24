@@ -3,7 +3,6 @@
 use std::fmt;
 use std::rc::Rc;
 
-use tetraloma_device::Result;
 use tetraloma_parallel::{Comm, CommDyn};
 use tetraloma_partition::{DistGraph, Partitioner};
 
@@ -252,7 +251,12 @@ impl Partitioner for Shared {
         self.0.name()
     }
 
-    fn partition(&self, comm: &dyn CommDyn, g: &DistGraph, nparts: usize) -> Result<Vec<i32>> {
+    fn partition(
+        &self,
+        comm: &dyn CommDyn,
+        g: &DistGraph,
+        nparts: usize,
+    ) -> tetraloma_partition::Result<Vec<i32>> {
         self.0.partition(comm, g, nparts)
     }
 }

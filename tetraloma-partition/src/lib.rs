@@ -21,15 +21,17 @@
 //! graph, seed and number of ranks. The features `metis` and `parmetis` exclude each other: the
 //! two METIS libraries they link clash at run time.
 //!
-//! You usually reach these types through the crate `tetraloma`, which re-exports them, and pass a
-//! partitioner to its mesh builder or Gmsh reader. The tutorial [Distributed meshes] shows them at
-//! work, and [Cargo features] says which system libraries each feature needs.
+//! You usually reach these types through the crate `tetraloma`, which re-exports them (including
+//! [`PartitionError`]), and pass a partitioner to its mesh builder or Gmsh reader. The crate is
+//! host-only and returns [`PartitionError`] via [`Result`]. The tutorial [Distributed meshes]
+//! shows the partitioners at work, and [Cargo features] says which system libraries each feature
+//! needs.
 //!
 //! # Example
 //!
 //! ```
-//! use tetraloma_parallel::Serial;
-//! use tetraloma_partition::{Block, DistGraph, Partitioner};
+//! use tetraloma_comm::Serial;
+//! use tetraloma_partition::{Block, DistGraph, PartitionError, Partitioner};
 //!
 //! // A path of four cells, 0 - 1 - 2 - 3, all on this rank.
 //! let g = DistGraph {
@@ -39,7 +41,7 @@
 //!     vwgt: None,
 //! };
 //! assert_eq!(Block.partition(&Serial, &g, 2)?, [0, 0, 1, 1]);
-//! # Ok::<(), tetraloma_parallel::GridError>(())
+//! # Ok::<(), PartitionError>(())
 //! ```
 //!
 //! [Distributed meshes]: https://tetracl.github.io/tetraloma/tutorials/distributed.html#partitioners
@@ -69,8 +71,7 @@ mod rank0;
 mod scotch;
 
 pub use block::Block;
-#[doc(hidden)]
-pub use error::PartitionError;
+pub use error::{PartitionError, Result};
 pub use graph::{DistGraph, Partitioner};
 #[cfg(feature = "metis")]
 pub use metis::Metis;

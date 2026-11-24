@@ -13,7 +13,7 @@
 # Usage: scripts/check-workspace-deps.sh [--no-cubecl CRATE]... [--no-mesh CRATE]...
 #                                        [--foundation-only CRATE]... [CARGO-TREE-ARGS...]
 #   --no-cubecl CRATE        add CRATE to the cubecl-free list (repeatable; default:
-#                            tetraloma-element, tetraloma-comm); e.g.
+#                            tetraloma-element, tetraloma-comm, tetraloma-partition); e.g.
 #                            `--no-cubecl tetraloma-geometry` must fail.
 #   --no-mesh CRATE          add CRATE to the mesh-free list (repeatable; default:
 #                            tetraloma-comm, tetraloma-device, tetraloma-parallel,
@@ -29,7 +29,7 @@ script_path="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 cd "$(dirname "$script_path")/.."
 
 # Default lists; enabling tasks add their crates here.
-no_cubecl_crates=("tetraloma-element" "tetraloma-comm") # pending M18.T3 (tetraloma-partition)
+no_cubecl_crates=("tetraloma-element" "tetraloma-comm" "tetraloma-partition")
 no_mesh_crates=("tetraloma-comm" "tetraloma-device" "tetraloma-parallel" "tetraloma-partition") # widened to dev in M18.T7
 foundation_only_crates=() # pending M18.T7 (tetraloma-foundation-tests)
 tree_args=()

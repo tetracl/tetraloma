@@ -1,9 +1,9 @@
 //! The built-in block partitioner (ADR-0026, item 2).
 
-use tetraloma_parallel::{CommDyn, Result};
+use tetraloma_comm::{CommDyn, agree};
 
-use crate::graph::{agree, check_shape};
-use crate::{DistGraph, Partitioner};
+use crate::graph::check_shape;
+use crate::{DistGraph, Partitioner, Result};
 
 // Design: "Partitioning", Listing S3; ADR-0026.
 /// The built-in block partitioner: global graph vertex i goes to part ⌊i · nparts / N⌋, where
@@ -18,8 +18,8 @@ use crate::{DistGraph, Partitioner};
 /// # Example
 ///
 /// ```
-/// use tetraloma_parallel::Serial;
-/// use tetraloma_partition::{Block, DistGraph, Partitioner};
+/// use tetraloma_comm::Serial;
+/// use tetraloma_partition::{Block, DistGraph, PartitionError, Partitioner};
 ///
 /// // A path of five vertices.
 /// let g = DistGraph {
@@ -29,7 +29,7 @@ use crate::{DistGraph, Partitioner};
 ///     vwgt: None,
 /// };
 /// assert_eq!(Block.partition(&Serial, &g, 2)?, [0, 0, 0, 1, 1]);
-/// # Ok::<(), tetraloma_parallel::GridError>(())
+/// # Ok::<(), PartitionError>(())
 /// ```
 ///
 /// [Distributed meshes]: https://tetracl.github.io/tetraloma/tutorials/distributed.html#partitioners
@@ -65,7 +65,8 @@ impl Partitioner for Block {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tetraloma_parallel::{GridError, Serial};
+    use crate::PartitionError;
+    use tetraloma_comm::Serial;
 
     fn graph(n: i64) -> DistGraph {
         DistGraph {
@@ -102,9 +103,9 @@ mod tests {
     #[test]
     fn inconsistent_graphs_are_rejected() {
         let bad = |g: DistGraph, parts: usize| Block.partition(&Serial, &g, parts).unwrap_err();
-        let mismatch = |e: GridError| matches!(e, GridError::LengthMismatch { .. });
+        let mismatch = |e: PartitionError| matches!(e, PartitionError::LengthMismatch { .. });
         assert!(mismatch(bad(graph(3), 0)));
-        assert!(matches!(bad(graph(3), 1 << 31), GridError::TooLarge));
+        assert!(matches!(bad(graph(3), 1 << 31), PartitionError::TooLarge));
         assert!(mismatch(bad(
             DistGraph {
                 vtxdist: vec![0, 2, 3],

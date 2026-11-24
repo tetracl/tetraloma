@@ -10,12 +10,12 @@ use std::sync::PoisonError;
 
 use scotch::Num;
 use scotch_sys as s;
-use tetraloma_parallel::{CommDyn, GridError, Result};
+use tetraloma_comm::CommDyn;
 
 use crate::graph::validate;
 use crate::owned::{self, Owned};
 use crate::rank0::{Csr, RANDOM_STATE, gather_to_root, narrow, scatter_parts};
-use crate::{DistGraph, Partitioner};
+use crate::{DistGraph, PartitionError, Partitioner, Result};
 
 // Design: "Partitioning"; ADR-0029 (item 9: the validation).
 /// Scotch (`SCOTCH_graphMap` onto a complete graph of `nparts` vertices) on rank 0, with the
@@ -49,8 +49,8 @@ use crate::{DistGraph, Partitioner};
 /// # Example
 ///
 /// ```
-/// use tetraloma_parallel::Serial;
-/// use tetraloma_partition::{DistGraph, Partitioner, Scotch};
+/// use tetraloma_comm::Serial;
+/// use tetraloma_partition::{DistGraph, PartitionError, Partitioner, Scotch};
 ///
 /// // A path of four vertices with weights 1, 1, 1, 3.
 /// let g = DistGraph {
@@ -63,7 +63,7 @@ use crate::{DistGraph, Partitioner};
 /// assert_eq!(parts.len(), 4);
 /// assert!(parts.iter().all(|&p| p == 0 || p == 1));
 /// assert_ne!(parts[0], parts[3]);
-/// # Ok::<(), tetraloma_parallel::GridError>(())
+/// # Ok::<(), PartitionError>(())
 /// ```
 ///
 /// [Cargo features]: https://tetracl.github.io/tetraloma/features.html#partitioners
@@ -80,8 +80,8 @@ impl Scotch {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::Serial;
-    /// use tetraloma_partition::{DistGraph, Partitioner, Scotch};
+    /// use tetraloma_comm::Serial;
+    /// use tetraloma_partition::{DistGraph, PartitionError, Partitioner, Scotch};
     ///
     /// // A ring of six vertices.
     /// let g = DistGraph {
@@ -94,7 +94,7 @@ impl Scotch {
     /// let again = Scotch::default().seed(42).partition(&Serial, &g, 3)?;
     /// assert_eq!(first, again);
     /// assert!(first.iter().all(|&p| (0..3).contains(&p)));
-    /// # Ok::<(), tetraloma_parallel::GridError>(())
+    /// # Ok::<(), PartitionError>(())
     /// ```
     ///
     /// [Distributed meshes]: https://tetracl.github.io/tetraloma/tutorials/distributed.html#partitioners
@@ -113,9 +113,9 @@ impl Scotch {
         let verttab: Vec<Num> = narrow(&csr.xadj)?;
         let edgetab: Vec<Num> = narrow(&csr.adjncy)?;
         let velotab: Option<Vec<Num>> = csr.vwgt.as_deref().map(narrow).transpose()?;
-        let vertnbr = Num::try_from(n).map_err(|_| GridError::TooLarge)?;
-        let edgenbr = Num::try_from(edgetab.len()).map_err(|_| GridError::TooLarge)?;
-        let partnbr = Num::try_from(nparts).map_err(|_| GridError::TooLarge)?;
+        let vertnbr = Num::try_from(n).map_err(|_| PartitionError::TooLarge)?;
+        let edgenbr = Num::try_from(edgetab.len()).map_err(|_| PartitionError::TooLarge)?;
+        let partnbr = Num::try_from(nparts).map_err(|_| PartitionError::TooLarge)?;
 
         // SAFETY: `SCOTCH_graphInit` initialises the graph it is given; `SCOTCH_graphExit`
         // releases it.
@@ -214,7 +214,7 @@ impl Scotch {
         #[allow(clippy::useless_conversion)]
         parttab
             .into_iter()
-            .map(|p| i32::try_from(p).map_err(|_| GridError::TooLarge))
+            .map(|p| i32::try_from(p).map_err(|_| PartitionError::TooLarge))
             .collect()
     }
 }

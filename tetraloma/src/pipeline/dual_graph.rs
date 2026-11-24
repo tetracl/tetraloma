@@ -112,6 +112,7 @@ pub(crate) fn partition(
     let n = graph.xadj.len() - 1;
     let local = partitioner
         .partition(comm, graph, p)
+        .map_err(partition_error)
         .and_then(|dest| check_destinations(&dest, n, p).map(|()| dest));
     agree(comm, local)
 }
@@ -119,10 +120,25 @@ pub(crate) fn partition(
 /// Converts a [`PartitionError`] into its corresponding [`GridError`] variant.
 ///
 /// Crate-private because `tetraloma-topology` does not depend on `tetraloma-partition`.
-// M18.T0 stub (ADR-0074, ADR-0075); implemented and called by `partition` in M18.T3.
-#[allow(dead_code)]
-pub(crate) fn partition_error(_: PartitionError) -> GridError {
-    unimplemented!("pending M18.T3")
+// Design: "Partitioning", Listing S3; ADR-0074, ADR-0075.
+pub(crate) fn partition_error(error: PartitionError) -> GridError {
+    match error {
+        PartitionError::PartitionerFailed { name, code } => {
+            GridError::PartitionerFailed { name, code }
+        }
+        PartitionError::NeedsMpiCommunicator(name) => GridError::NeedsMpiCommunicator(name),
+        PartitionError::TooLarge => GridError::TooLarge,
+        PartitionError::LengthMismatch { expected, found } => {
+            GridError::LengthMismatch { expected, found }
+        }
+        PartitionError::IndexOutOfRange { index, len } => GridError::IndexOutOfRange { index, len },
+        PartitionError::MessageTooLarge { count } => GridError::MessageTooLarge { count },
+        PartitionError::RemoteFailure { rank } => GridError::RemoteFailure { rank },
+        // Required by `#[non_exhaustive]` across crates; adding a variant breaks
+        // `tetraloma_partition::error::tests::partition_error_variant_list_is_exhaustive` in
+        // `tetraloma-partition`'s test build (it does not break this library build).
+        _ => unreachable!("non-exhaustive PartitionError variant"),
+    }
 }
 
 /// `LengthMismatch` unless `dest` has `n` entries, `IndexOutOfRange` for an entry outside
@@ -199,7 +215,12 @@ mod tests {
             fn name(&self) -> &str {
                 "bad"
             }
-            fn partition(&self, comm: &dyn CommDyn, g: &DistGraph, _: usize) -> Result<Vec<i32>> {
+            fn partition(
+                &self,
+                comm: &dyn CommDyn,
+                g: &DistGraph,
+                _: usize,
+            ) -> tetraloma_partition::Result<Vec<i32>> {
                 let n = g.xadj.len() - 1;
                 Ok(match (comm.rank(), self.0) {
                     (1, -1) => vec![0; n + 1],
@@ -242,6 +263,89 @@ mod tests {
             partition(&comm, &Block, &g).unwrap()
         });
         assert_eq!(ok, [vec![0, 0], vec![1, 1]]);
+    }
+
+    #[test]
+    fn partition_error_maps_every_variant_and_pipeline_agrees() {
+        assert!(matches!(
+            partition_error(PartitionError::PartitionerFailed {
+                name: "metis",
+                code: -41,
+            }),
+            GridError::PartitionerFailed {
+                name: "metis",
+                code: -41,
+            }
+        ));
+        assert!(matches!(
+            partition_error(PartitionError::NeedsMpiCommunicator("ptscotch")),
+            GridError::NeedsMpiCommunicator("ptscotch")
+        ));
+        assert!(matches!(
+            partition_error(PartitionError::TooLarge),
+            GridError::TooLarge
+        ));
+        assert!(matches!(
+            partition_error(PartitionError::LengthMismatch {
+                expected: 42,
+                found: 43,
+            }),
+            GridError::LengthMismatch {
+                expected: 42,
+                found: 43,
+            }
+        ));
+        assert!(matches!(
+            partition_error(PartitionError::IndexOutOfRange { index: 44, len: 45 }),
+            GridError::IndexOutOfRange { index: 44, len: 45 }
+        ));
+        assert!(matches!(
+            partition_error(PartitionError::MessageTooLarge { count: 46 }),
+            GridError::MessageTooLarge { count: 46 }
+        ));
+        assert!(matches!(
+            partition_error(PartitionError::RemoteFailure { rank: 47 }),
+            GridError::RemoteFailure { rank: 47 }
+        ));
+
+        struct Failing;
+        impl Partitioner for Failing {
+            fn name(&self) -> &str {
+                "failing"
+            }
+            fn partition(
+                &self,
+                comm: &dyn CommDyn,
+                g: &DistGraph,
+                _: usize,
+            ) -> tetraloma_partition::Result<Vec<i32>> {
+                if comm.rank() == 1 {
+                    Err(PartitionError::PartitionerFailed {
+                        name: "failing",
+                        code: -9,
+                    })
+                } else {
+                    Ok(vec![0; g.xadj.len() - 1])
+                }
+            }
+        }
+        let out = ThreadComm::run(2, |comm| {
+            let g = DistGraph {
+                vtxdist: vec![0, 1, 2],
+                xadj: vec![0, 0],
+                adjncy: vec![],
+                vwgt: None,
+            };
+            partition(&comm, &Failing, &g)
+        });
+        assert!(matches!(out[0], Err(GridError::RemoteFailure { rank: 1 })));
+        assert!(matches!(
+            out[1],
+            Err(GridError::PartitionerFailed {
+                name: "failing",
+                code: -9,
+            })
+        ));
     }
 
     /// M18 A4: every variant of `CommError`, `DeviceError`, `ParallelError` (through `From`) and

@@ -5,9 +5,10 @@
 
 use std::sync::Mutex;
 
-use tetraloma_parallel::{CommDyn, CommExt, GridError, Result};
+use tetraloma_comm::{CommDyn, CommExt, agree};
 
-use crate::graph::{Checked, DistGraph, agree, fits_message, local_weights};
+use crate::graph::{Checked, DistGraph, fits_message, local_weights};
+use crate::{PartitionError, Result};
 
 /// Held around every library call that uses process-global random state (GKlib's, Scotch's),
 /// so that seeding and partitioning are not interleaved when test threads or `ThreadComm` ranks
@@ -90,12 +91,12 @@ pub(crate) fn scatter_parts(
     let root = if comm.rank() == 0 {
         match parts {
             Some(Ok(parts)) if parts.len() as i64 == total => Ok(parts),
-            Some(Ok(parts)) => Err(GridError::LengthMismatch {
+            Some(Ok(parts)) => Err(PartitionError::LengthMismatch {
                 expected: total as usize,
                 found: parts.len(),
             }),
             Some(Err(e)) => Err(e),
-            None => Err(GridError::LengthMismatch {
+            None => Err(PartitionError::LengthMismatch {
                 expected: total as usize,
                 found: 0,
             }),
@@ -111,7 +112,9 @@ pub(crate) fn scatter_parts(
         ),
         _ => (&[][..], vec![0; p]),
     };
-    let received = comm.all_to_all_v(send, &counts).map_err(GridError::from);
+    let received = comm
+        .all_to_all_v(send, &counts)
+        .map_err(PartitionError::from);
     agree(comm, root.and(received).map(|(mine, _)| mine))
 }
 
@@ -120,7 +123,7 @@ pub(crate) fn scatter_parts(
 pub(crate) fn narrow<T: TryFrom<i64>>(values: &[i64]) -> Result<Vec<T>> {
     values
         .iter()
-        .map(|&v| T::try_from(v).map_err(|_| GridError::TooLarge))
+        .map(|&v| T::try_from(v).map_err(|_| PartitionError::TooLarge))
         .collect()
 }
 
@@ -130,7 +133,7 @@ mod tests {
     use crate::graph::tests::{random_graph, size};
     use crate::graph::validate;
     use proptest::prelude::*;
-    use tetraloma_parallel::Serial;
+    use tetraloma_comm::Serial;
 
     fn round_trip(g: &DistGraph) -> Vec<i32> {
         let checked = validate(&Serial, g, 2, "test", i64::from(i32::MAX)).unwrap();
@@ -167,22 +170,22 @@ mod tests {
         let vtxdist = [0, 3];
         assert!(matches!(
             scatter_parts(&Serial, &vtxdist, Some(Ok(vec![0, 1]))).unwrap_err(),
-            GridError::LengthMismatch {
+            PartitionError::LengthMismatch {
                 expected: 3,
                 found: 2
             }
         ));
         assert!(matches!(
             scatter_parts(&Serial, &vtxdist, None).unwrap_err(),
-            GridError::LengthMismatch { .. }
+            PartitionError::LengthMismatch { .. }
         ));
-        let failed = Err(GridError::PartitionerFailed {
+        let failed = Err(PartitionError::PartitionerFailed {
             name: "test",
             code: 7,
         });
         assert!(matches!(
             scatter_parts(&Serial, &vtxdist, Some(failed)).unwrap_err(),
-            GridError::PartitionerFailed { code: 7, .. }
+            PartitionError::PartitionerFailed { code: 7, .. }
         ));
     }
 
@@ -195,7 +198,7 @@ mod tests {
         };
         assert!(matches!(
             gather_to_root(&Serial, &g, &checked).unwrap_err(),
-            GridError::MessageTooLarge { count } if count == 1 << 31
+            PartitionError::MessageTooLarge { count } if count == 1 << 31
         ));
     }
 
@@ -207,11 +210,11 @@ mod tests {
         );
         assert!(matches!(
             narrow::<i32>(&[1, i64::from(i32::MAX) + 1]).unwrap_err(),
-            GridError::TooLarge
+            PartitionError::TooLarge
         ));
         assert!(matches!(
             narrow::<i32>(&[i64::from(i32::MIN) - 1]).unwrap_err(),
-            GridError::TooLarge
+            PartitionError::TooLarge
         ));
         assert_eq!(
             narrow::<i64>(&[i64::MIN, i64::MAX]).unwrap(),
@@ -241,7 +244,7 @@ mod tests {
                 }
                 Err(e) => {
                     prop_assert!(!fits);
-                    prop_assert!(matches!(e, GridError::TooLarge));
+                    prop_assert!(matches!(e, PartitionError::TooLarge));
                 }
             }
         }

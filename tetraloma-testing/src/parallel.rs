@@ -28,8 +28,8 @@ use cubecl::prelude::Client;
 use tetraloma::{
     Cell2, Cell3, CellOrdering, Codim1, Comm, CommDyn, CommExt, CommScalar, ConnKey, Connectivity,
     D1, D2, D3, DeviceBuffer, DeviceGrid, Dim, DistGraph, EmbeddedIn, EntityMap, GhostMode,
-    GridError, IndexMap, Mesh, MeshTags, OrientationRule, Partitioner, QuadRule, Real, Result,
-    ReverseOp, Serial, TopoDim,
+    GridError, IndexMap, Mesh, MeshTags, OrientationRule, PartitionError, Partitioner, QuadRule,
+    Real, Result, ReverseOp, Serial, TopoDim,
 };
 use tetraloma_dims::CellType;
 
@@ -464,7 +464,12 @@ impl Partitioner for RoundRobin {
     fn name(&self) -> &str {
         "round-robin"
     }
-    fn partition(&self, comm: &dyn CommDyn, g: &DistGraph, nparts: usize) -> Result<Vec<i32>> {
+    fn partition(
+        &self,
+        comm: &dyn CommDyn,
+        g: &DistGraph,
+        nparts: usize,
+    ) -> std::result::Result<Vec<i32>, PartitionError> {
         let first = g.vtxdist[comm.rank()];
         let n = g.xadj.len().saturating_sub(1);
         Ok((0..n)
