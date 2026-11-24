@@ -73,23 +73,37 @@ fn lagrange_interpolation(
     }
 }
 
-/// Constructs Ciarlet basis coefficients in `tetraloma-refcell`'s orthonormal set from
-/// interpolation points (`[m][tdim]`) and matrix (`[dim][m * value_size]`).
+/// Constructs scalar (`reference_value_size == 1`) Ciarlet basis coefficients in
+/// `tetraloma-refcell`'s orthonormal set from interpolation points (`[m][tdim]`) and matrix
+/// (`[dim][m]`). M12 extends this with subspace span coefficients and the vector layout.
 ///
-/// Forms `D[i, k * v + c] = l_i(e_c ψ_k)`, solves `D Y = I` with `DenseLu`, and transposes `Y`
-/// into `[dim][polyset_dim * value_size]` order so `φ_j = Σ_k C[j, k * v + c] e_c ψ_k`.
+/// Forms `D[i, k] = l_i(ψ_k)`, solves `D Y = I` with `DenseLu`, and transposes `Y` into
+/// `[dim][polyset_dim]` order so `φ_j = Σ_k C[j, k] ψ_k`.
 pub(crate) fn solve_ciarlet_coefficients(
     cell: CellType,
     degree: u32,
     dim: usize,
-    value_size: usize,
     interpolation_points: &[f64],
     interpolation_matrix: &[f64],
 ) -> Result<Vec<f64>, ElementError> {
-    let m = interpolation_points.len() / tdim(cell);
+    let td = tdim(cell);
+    assert!(
+        td > 0 && interpolation_points.len().is_multiple_of(td),
+        "solve_ciarlet_coefficients: invalid point array length {} for tdim {td}",
+        interpolation_points.len()
+    );
+    let m = interpolation_points.len() / td;
     let n_poly = polyset::dim(cell, degree);
-    debug_assert_eq!(dim, n_poly * value_size);
-    debug_assert_eq!(interpolation_matrix.len(), dim * m * value_size);
+    assert_eq!(
+        dim, n_poly,
+        "solve_ciarlet_coefficients: full scalar polyset expects dim == {n_poly}, got {dim}"
+    );
+    assert_eq!(
+        interpolation_matrix.len(),
+        dim * m,
+        "solve_ciarlet_coefficients: expected {dim} x {m} matrix, got {}",
+        interpolation_matrix.len()
+    );
 
     let poly = polyset::tabulate(cell, degree, interpolation_points, 0);
     let mut poly_t = vec![0.0; m * n_poly];
@@ -98,28 +112,17 @@ pub(crate) fn solve_ciarlet_coefficients(
     let mut dual = vec![0.0; dim * dim];
     for (d_row, m_row) in dual
         .chunks_exact_mut(dim)
-        .zip(interpolation_matrix.chunks_exact(m * value_size))
+        .zip(interpolation_matrix.chunks_exact(m))
     {
-        for (p_row, m_q) in poly_t
-            .chunks_exact(n_poly)
-            .zip(m_row.chunks_exact(value_size))
-        {
-            for (c, &a) in m_q.iter().enumerate() {
-                if a == 0.0 {
-                    continue;
-                }
-                if value_size == 1 {
-                    for (dv, &pv) in d_row.iter_mut().zip(p_row) {
-                        *dv += a * pv;
-                    }
-                } else {
-                    for (k, &pv) in p_row.iter().enumerate() {
-                        d_row[k * value_size + c] += a * pv;
-                    }
+        for (p_row, &a) in poly_t.chunks_exact(n_poly).zip(m_row) {
+            if a != 0.0 {
+                for (dv, &pv) in d_row.iter_mut().zip(p_row) {
+                    *dv += a * pv;
                 }
             }
         }
     }
+    drop((poly, poly_t));
 
     let lu = DenseLu::factor(dual, dim)?;
     let mut inv = vec![0.0; dim * dim];
@@ -145,7 +148,6 @@ pub(crate) fn build_lagrange_dense(
         key.cell,
         key.degree,
         dim,
-        1,
         &interpolation_points,
         &interpolation_matrix,
     )?;
@@ -156,13 +158,12 @@ pub(crate) fn build_lagrange_dense(
     })
 }
 
-/// Tabulates an element from its `polyset` expansion `coefficients` (`[dim][n_poly * value_size]`)
-/// into `[derivative][point][basis][component]` order.
+/// Tabulates a scalar (`reference_value_size == 1`) element from its `polyset` expansion
+/// `coefficients` (`[dim][n_poly]`) into `[derivative][point][basis][component]` order.
 pub(crate) fn tabulate_from_coefficients(
     cell: CellType,
     degree: u32,
     dim: usize,
-    value_size: usize,
     coefficients: &[f64],
     points: &[f64],
     nderivs: u32,
@@ -191,21 +192,23 @@ pub(crate) fn tabulate_from_coefficients(
             nderivs,
             num_points: 0,
             dim,
-            value_size,
+            value_size: 1,
             values: Vec::new(),
         });
     }
 
     let n_poly = polyset::dim(cell, degree);
+    assert_eq!(
+        coefficients.len(),
+        dim * n_poly,
+        "tabulate_from_coefficients: expected {dim} x {n_poly} coefficients, got {}",
+        coefficients.len()
+    );
     let poly = polyset::tabulate(cell, degree, points, nderivs);
-    let mut values = vec![0.0; num_derivs * num_points * dim * value_size];
+    let mut values = vec![0.0; num_derivs * num_points * dim];
     let mut poly_t = vec![0.0; num_points * n_poly];
-    let row_stride = n_poly * value_size;
 
-    for (d, out_block) in values
-        .chunks_exact_mut(num_points * dim * value_size)
-        .enumerate()
-    {
+    for (d, out_block) in values.chunks_exact_mut(num_points * dim).enumerate() {
         transpose_block(
             &poly[d * n_poly * num_points..(d + 1) * n_poly * num_points],
             n_poly,
@@ -214,25 +217,10 @@ pub(crate) fn tabulate_from_coefficients(
         );
         for (p_row, out_q) in poly_t
             .chunks_exact(n_poly)
-            .zip(out_block.chunks_exact_mut(dim * value_size))
+            .zip(out_block.chunks_exact_mut(dim))
         {
-            if value_size == 1 {
-                for (dst, c_row) in out_q.iter_mut().zip(coefficients.chunks_exact(n_poly)) {
-                    *dst = c_row.iter().zip(p_row).map(|(&c, &p)| c * p).sum();
-                }
-            } else {
-                for (out_ic, c_i) in out_q
-                    .chunks_exact_mut(value_size)
-                    .zip(coefficients.chunks_exact(row_stride))
-                {
-                    for (&pv, c_k) in p_row.iter().zip(c_i.chunks_exact(value_size)) {
-                        if pv != 0.0 {
-                            for (o, &cv) in out_ic.iter_mut().zip(c_k) {
-                                *o += cv * pv;
-                            }
-                        }
-                    }
-                }
+            for (dst, c_row) in out_q.iter_mut().zip(coefficients.chunks_exact(n_poly)) {
+                *dst = c_row.iter().zip(p_row).map(|(&c, &p)| c * p).sum();
             }
         }
     }
@@ -241,7 +229,7 @@ pub(crate) fn tabulate_from_coefficients(
         nderivs,
         num_points,
         dim,
-        value_size,
+        value_size: 1,
         values,
     })
 }
@@ -264,15 +252,16 @@ mod tests {
         CellType::Pyramid,
     ];
 
-    fn cell_volume(cell: CellType) -> f64 {
-        match cell {
-            CellType::Interval | CellType::Quadrilateral | CellType::Hexahedron => 1.0,
-            CellType::Triangle | CellType::Prism => 0.5,
-            CellType::Tetrahedron => 1.0 / 6.0,
-            CellType::Pyramid => 1.0 / 3.0,
-            CellType::Point => unreachable!(),
-        }
-    }
+    /// Independent literal vertex midpoints and volumes for each reference cell (Appendix A.1).
+    const CELL_MIDPOINTS_AND_VOLUMES: [(CellType, &[f64], f64); 7] = [
+        (CellType::Interval, &[0.5], 1.0),
+        (CellType::Triangle, &[1.0 / 3.0, 1.0 / 3.0], 0.5),
+        (CellType::Quadrilateral, &[0.5, 0.5], 1.0),
+        (CellType::Tetrahedron, &[0.25, 0.25, 0.25], 1.0 / 6.0),
+        (CellType::Hexahedron, &[0.5, 0.5, 0.5], 1.0),
+        (CellType::Prism, &[1.0 / 3.0, 1.0 / 3.0, 0.5], 0.5),
+        (CellType::Pyramid, &[0.4, 0.4, 0.2], 1.0 / 3.0),
+    ];
 
     fn lagrange(cell: CellType, degree: u32, variant: Variant) -> ElementKey {
         ElementKey {
@@ -285,8 +274,8 @@ mod tests {
 
     #[test]
     fn degree_zero_nodal_and_legendre_bases() {
-        for cell in ALL_CELLS {
-            let (td, vol, mid) = (tdim(cell), cell_volume(cell), cell_midpoint(cell));
+        for (cell, want_mid, vol) in CELL_MIDPOINTS_AND_VOLUMES {
+            let td = tdim(cell);
             let pts = gauss_rule(cell, 3).points;
             let npts = pts.len() / td;
             let nodal: &[Variant] = if cell == CellType::Pyramid {
@@ -299,7 +288,11 @@ mod tests {
             };
             for &variant in nodal {
                 let el = Element::get(lagrange(cell, 0, variant)).unwrap();
-                assert_eq!(el.interpolation_points(), mid.as_slice());
+                let got_mid = el.interpolation_points();
+                assert_eq!(got_mid.len(), want_mid.len());
+                for (&g, &w) in got_mid.iter().zip(want_mid) {
+                    assert!((g - w).abs() < 1e-15, "{cell:?} {variant:?}: {g} vs {w}");
+                }
                 assert_eq!(el.interpolation_matrix(), &[1.0]);
                 assert!((el.coefficients()[0] - vol.sqrt()).abs() < 1e-14);
                 let tab = el.tabulate(&pts, 1).unwrap();
@@ -369,12 +362,12 @@ mod tests {
     #[test]
     fn legendre_derivatives_match_central_differences_and_polyset() {
         let h = 1e-6;
-        for cell in ALL_CELLS {
-            let (td, pt) = (tdim(cell), cell_midpoint(cell));
+        for (cell, pt, _) in CELL_MIDPOINTS_AND_VOLUMES {
+            let td = tdim(cell);
             for p in 1..=5 {
                 let el = Element::get(lagrange(cell, p, Variant::Legendre)).unwrap();
-                let (n, tab) = (el.dim(), el.tabulate(&pt, 1).unwrap());
-                let poly = polyset::tabulate(cell, p, &pt, 1);
+                let (n, tab) = (el.dim(), el.tabulate(pt, 1).unwrap());
+                let poly = polyset::tabulate(cell, p, pt, 1);
                 for d in 0..=td {
                     let s = poly[d * n..(d + 1) * n]
                         .iter()
@@ -384,7 +377,7 @@ mod tests {
                     }
                 }
                 for d in 0..td {
-                    let (mut xp, mut xm) = (pt.clone(), pt.clone());
+                    let (mut xp, mut xm) = (pt.to_vec(), pt.to_vec());
                     xp[d] += h;
                     xm[d] -= h;
                     let (tp, tm) = (el.tabulate(&xp, 0).unwrap(), el.tabulate(&xm, 0).unwrap());
@@ -434,34 +427,10 @@ mod tests {
             CellType::Interval,
             1,
             2,
-            1,
             &[0.5, 0.5],
             &[1.0, 0.0, 0.0, 1.0],
         )
         .unwrap_err();
         assert_eq!(err, ElementError::RefCell(RefCellError::Singular));
-
-        // Vector-valued Ciarlet path (value_size = 2): P_1^2 on the interval, point evaluations
-        // of each component at the two endpoints.
-        let mut eye = vec![0.0; 16];
-        for i in 0..4 {
-            eye[i * 4 + i] = 1.0;
-        }
-        let coeffs =
-            solve_ciarlet_coefficients(CellType::Interval, 1, 4, 2, &[0.0, 1.0], &eye).unwrap();
-        let tab =
-            tabulate_from_coefficients(CellType::Interval, 1, 4, 2, &coeffs, &[0.25], 1).unwrap();
-        assert_eq!(
-            (tab.nderivs, tab.num_points, tab.dim, tab.value_size),
-            (1, 1, 4, 2)
-        );
-        let want_vals = [0.75, 0.0, 0.0, 0.75, 0.25, 0.0, 0.0, 0.25];
-        let want_derivs = [-1.0, 0.0, 0.0, -1.0, 1.0, 0.0, 0.0, 1.0];
-        for (&g, w) in tab.values[..8].iter().zip(want_vals) {
-            assert!((g - w).abs() < 1e-14);
-        }
-        for (&g, w) in tab.values[8..16].iter().zip(want_derivs) {
-            assert!((g - w).abs() < 1e-14);
-        }
     }
 }

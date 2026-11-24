@@ -210,13 +210,13 @@ assert_eq!(leg.entity_dofs(3, 0).len(), 10);
 
 ## Tabulation
 
-Each element expresses its basis functions $\phi_0, \dots, \phi_{n-1}$ in the cell's
-$L^2$-orthonormal polynomial set $\{\psi_k\}$
+Each Lagrange element expresses its scalar basis functions $\phi_0, \dots, \phi_{n-1}$ in the
+cell's $L^2$-orthonormal polynomial set $\{\psi_k\}$
 ([Orthonormal polynomial sets](../concepts/quadrature.md#orthonormal-polynomial-sets)):
-$\phi_{i, c}(\xi) = \sum_{k=0}^{n_{\mathrm{poly}}-1} C_{i,\, k v + c}\, \psi_k(\xi)$, where
-$v = \text{reference\_value\_size}()$ ($v = 1$ for Lagrange). `Element::coefficients` returns
-this row-major `[dim][polyset_dim * reference_value_size]` table, obtained once per key by
-inverting the Ciarlet dual matrix $D_{ij} = l_i(\psi_j)$ in `f64` with `DenseLu`.
+$\phi_i(\xi) = \sum_{k=0}^{n_{\mathrm{poly}}-1} C_{i, k}\, \psi_k(\xi)$. `Element::coefficients`
+returns this row-major `[dim][polyset_dim * reference_value_size]` table (`[dim][polyset_dim]`
+for scalar Lagrange, where `reference_value_size() == 1`), obtained once per key by inverting the
+Ciarlet dual matrix $D_{ij} = l_i(\psi_j)$ in `f64` with `DenseLu`.
 
 `Element::tabulate(points, nderivs)` evaluates the basis at flat node-major reference points
 (`tdim` coordinates per point) and returns an
@@ -254,8 +254,8 @@ for q in 0..tab.num_points {
 
 Every element exposes its dual functionals $\mathcal L = \{l_0, \dots, l_{n-1}\}$ through
 `Element::interpolation_points` (flat `[m][tdim]`) and `Element::interpolation_matrix`
-(row-major `[dim][m * reference_value_size]`), so that the DOF values of a reference function
-$\hat u$ are $l_i(\hat u) = \sum_{q,c} M_{i,\, qv+c}\,\hat u_c(\xi_q)$.
+(row-major `[dim][m * reference_value_size]`). For a scalar Lagrange function $\hat u$, the DOF
+values are $l_i(\hat u) = \sum_{q=0}^{m-1} M_{i, q}\,\hat u(\xi_q)$.
 
 For nodal Lagrange variants at $p \ge 1$, the points are the Lagrange nodes and $M = I$; at
 $p = 0$, the single point is the mean of the cell's vertices and $M = [1]$. For

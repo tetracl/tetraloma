@@ -629,7 +629,6 @@ impl Element {
             self.key.cell,
             self.key.degree,
             self.dim,
-            self.reference_value_size,
             &self.coefficients,
             points,
             nderivs,
@@ -828,6 +827,20 @@ mod tests {
             .map(|h| h.join().unwrap())
             .collect();
         assert!(global[1..].iter().all(|el| Arc::ptr_eq(&global[0], el)));
+
+        // A failed build is also cached so the closure runs strictly once.
+        let err_cache = RwLock::new(HashMap::new());
+        let err_builds = AtomicUsize::new(0);
+        let want_err = ElementError::RefCell(RefCellError::Singular);
+        for _ in 0..2 {
+            let got = cache_get_or_build(&err_cache, key, |_| {
+                err_builds.fetch_add(1, Ordering::SeqCst);
+                Err(want_err.clone())
+            })
+            .unwrap_err();
+            assert_eq!(got, want_err);
+        }
+        assert_eq!(err_builds.load(Ordering::SeqCst), 1);
     }
 
     #[test]
