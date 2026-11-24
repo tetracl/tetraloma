@@ -1,8 +1,9 @@
 # Precision
 
 tetraloma computes in the scalar type of the mesh, `f32` or `f64`, and both are first-class:
-every kernel is tested in both. This chapter explains what changes between the two, how
-accurate the results are, and which results you can expect to be identical from run to run.
+every kernel is tested in both. This chapter explains what changes between the two, how real and
+complex coefficient scalars are represented, how accurate the results are, and which results you
+can expect to be identical from run to run.
 
 ## f32 and f64
 
@@ -65,6 +66,28 @@ check::<f32>(&client, 1e-5)?;
 check::<f64>(&client, 1e-12)?;
 # Ok(()) }
 ```
+
+## Coefficient scalars
+
+While a mesh's geometry always uses a real scalar `F: Real`, the coefficients of a finite-element
+function may be real or complex in the same underlying precision. The trait
+[`FieldScalar`](../api/tetraloma_device/trait.FieldScalar.html) in
+[`tetraloma-device`](../api/tetraloma_device/index.html) names the four coefficient scalar types
+and ties each to its real precision `FieldScalar::Real` and its number of real components
+`FieldScalar::PARTS`:
+
+| Coefficient type | `FieldScalar::Real` | `FieldScalar::PARTS` |
+| --- | --- | --- |
+| `f32` | `f32` | `1` |
+| `f64` | `f64` | `1` |
+| `num_complex::Complex<f32>` | `f32` | `2` |
+| `num_complex::Complex<f64>` | `f64` | `2` |
+
+For these types, $n$ coefficients correspond to $n \cdot \text{PARTS}$ real values: each real
+scalar has one part, and each complex scalar is laid out as a consecutive `[re, im]` pair so a
+host slice `&[T]` reinterprets directly as `&[T::Real]` via `bytemuck::Pod`. Coefficient arrays
+follow this interleaved real layout so real and complex values share the same real
+`DeviceBuffer<T::Real>` storage rather than relying on native complex device types.
 
 ## Tolerances
 
