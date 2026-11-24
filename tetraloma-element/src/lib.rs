@@ -1,8 +1,7 @@
 // Design: section 26 ("Finite elements"), Listing E1; ADR-0071, ADR-0072.
-// Remaining `#[doc(hidden)]` stubs (`TransformationKind`, `Generator`, `ElementTabulation`,
-// `BaseTransformation`, `Factor1d`, `TensorFactors` and the unimplemented `Element` methods)
-// are not part of the stable API yet; they lose `#[doc(hidden)]` in M11.T5–T7 (dependency
-// rule 7).
+// Remaining `#[doc(hidden)]` stubs (`TransformationKind`, `Generator`, `BaseTransformation`,
+// `Factor1d`, `TensorFactors` and the unimplemented `Element` methods) are not part of the
+// stable API yet; they lose `#[doc(hidden)]` in M11.T6–T7 (dependency rule 7).
 //! Finite elements in Ciarlet's sense on the reference cells of tetraloma.
 //!
 //! This crate computes finite-element definitions on the host in `f64`, with no device
@@ -41,6 +40,7 @@ use std::sync::{Arc, OnceLock, RwLock};
 use tetraloma_dims::CellType;
 use tetraloma_refcell::NodeFamily;
 
+mod ciarlet;
 mod error;
 mod layout;
 mod tensor;
@@ -152,7 +152,7 @@ pub struct ElementKey {
 /// One per-key slot in the process-wide cache: inserted under the map lock and initialised
 /// outside it via `OnceLock`, guaranteeing each key is built strictly once without holding
 /// the map lock across construction (so recursive lookups of other keys cannot deadlock).
-type CacheSlot = Arc<OnceLock<Arc<Element>>>;
+type CacheSlot = Arc<OnceLock<Result<Arc<Element>, ElementError>>>;
 
 static ELEMENT_CACHE: OnceLock<RwLock<HashMap<ElementKey, CacheSlot>>> = OnceLock::new();
 
@@ -164,17 +164,17 @@ fn cache_get_or_build<F>(
     cache: &RwLock<HashMap<ElementKey, CacheSlot>>,
     key: ElementKey,
     build: F,
-) -> Arc<Element>
+) -> Result<Arc<Element>, ElementError>
 where
-    F: FnOnce(ElementKey) -> Element,
+    F: FnOnce(ElementKey) -> Result<Element, ElementError>,
 {
-    if let Some(el) = cache
+    if let Some(res) = cache
         .read()
         .unwrap_or_else(|e| e.into_inner())
         .get(&key)
         .and_then(|slot| slot.get().cloned())
     {
-        return el;
+        return res;
     }
     let slot = {
         let mut guard = cache.write().unwrap_or_else(|e| e.into_inner());
@@ -184,7 +184,7 @@ where
                 .or_insert_with(|| Arc::new(OnceLock::new())),
         )
     };
-    Arc::clone(slot.get_or_init(|| Arc::new(build(key))))
+    slot.get_or_init(|| build(key).map(Arc::new)).clone()
 }
 
 fn get_dofs<'a>(
@@ -247,6 +247,9 @@ pub struct Element {
     embedded_superdegree: u32,
     entity_dofs: Vec<Vec<Vec<usize>>>,
     entity_closure_dofs: Vec<Vec<Vec<usize>>>,
+    coefficients: Vec<f64>,
+    interpolation_points: Vec<f64>,
+    interpolation_matrix: Vec<f64>,
 }
 
 impl fmt::Debug for Element {
@@ -267,7 +270,9 @@ impl Element {
     ///
     /// # Errors
     ///
-    /// Returns [`ElementError::Unsupported`] if `key` is outside the supported table.
+    /// Returns [`ElementError::Unsupported`] if `key` is outside the supported table, or
+    /// [`ElementError::RefCell`] if element construction fails (for example a singular dual
+    /// matrix).
     ///
     /// # Example
     ///
@@ -293,14 +298,15 @@ impl Element {
     /// [Families and degrees]: https://tetracl.github.io/tetraloma/fem/elements.html#families-and-degrees
     pub fn get(key: ElementKey) -> Result<Arc<Element>, ElementError> {
         layout::validate_key(key)?;
-        Ok(cache_get_or_build(element_cache(), key, Self::build))
+        cache_get_or_build(element_cache(), key, Self::build)
     }
 
-    fn build(key: ElementKey) -> Self {
+    fn build(key: ElementKey) -> Result<Self, ElementError> {
         match key.family {
             Family::Lagrange => {
                 let dofs = layout::build_lagrange_layout(key);
-                Self {
+                let data = ciarlet::build_lagrange_dense(key, dofs.dim)?;
+                Ok(Self {
                     key,
                     map_type: MapType::Identity,
                     reference_value_size: 1,
@@ -309,7 +315,10 @@ impl Element {
                     embedded_superdegree: key.degree,
                     entity_dofs: dofs.entity_dofs,
                     entity_closure_dofs: dofs.entity_closure_dofs,
-                }
+                    coefficients: data.coefficients,
+                    interpolation_points: data.interpolation_points,
+                    interpolation_matrix: data.interpolation_matrix,
+                })
             }
             Family::N1curl | Family::RaviartThomas => {
                 unreachable!("unsupported family {:?} passed validate_key", key.family)
@@ -550,33 +559,140 @@ impl Element {
         self.embedded_superdegree
     }
 
-    // M11.T0 stubs below, implemented in M11.T5–T7; not part of the stable API yet (dependency
-    // rule 7).
-
-    #[doc(hidden)]
+    // Design: section 26 ("Finite elements"), Listing E1.
+    /// Basis expansion coefficients in `tetraloma-refcell`'s orthonormal polynomial set,
+    /// row-major `[dim][polyset_dim · reference_value_size]`. See [Tabulation].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetraloma_dims::CellType;
+    /// use tetraloma_element::{Element, ElementKey, Family, Variant};
+    /// use tetraloma_refcell::NodeFamily;
+    ///
+    /// // On [0, 1], ψ₀ = 1 and ψ₁ = √3 (2ξ − 1), so φ₀ = 1 − ξ = ½ ψ₀ − ψ₁ / (2√3).
+    /// let el = Element::get(ElementKey {
+    ///     family: Family::Lagrange,
+    ///     cell: CellType::Interval,
+    ///     degree: 1,
+    ///     variant: Variant::Nodal(NodeFamily::Equispaced),
+    /// })?;
+    /// let c = el.coefficients();
+    /// assert_eq!(c.len(), 4);
+    /// assert!((c[0] - 0.5).abs() < 1e-15);
+    /// assert!((c[1] + 0.5 / 3.0_f64.sqrt()).abs() < 1e-15);
+    /// # Ok::<(), tetraloma_element::ElementError>(())
+    /// ```
+    ///
+    /// [Tabulation]: https://tetracl.github.io/tetraloma/fem/elements.html#tabulation
     pub fn coefficients(&self) -> &[f64] {
-        unimplemented!("pending M11.T5")
+        &self.coefficients
     }
 
-    #[doc(hidden)]
+    // Design: section 26 ("Finite elements"), Listing E1, "Derivative orders"; ADR-0072.
+    /// Tabulates basis values (`nderivs == 0`) or values and first partial derivatives
+    /// (`nderivs == 1`) at flat node-major `points` (`[num_points][tdim]`), returning entries in
+    /// `[derivative][point][basis][component]` order. See [Tabulation].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ElementError::RefCell`] wrapping `UnsupportedDerivativeOrder` if `nderivs > 1`
+    /// or `PointsShape` if `points.len()` is not a multiple of the cell's topological dimension.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetraloma_dims::CellType;
+    /// use tetraloma_element::{Element, ElementKey, Family, Variant};
+    /// use tetraloma_refcell::NodeFamily;
+    ///
+    /// let el = Element::get(ElementKey {
+    ///     family: Family::Lagrange,
+    ///     cell: CellType::Triangle,
+    ///     degree: 1,
+    ///     variant: Variant::Nodal(NodeFamily::Equispaced),
+    /// })?;
+    /// let tab = el.tabulate(&[1.0 / 3.0, 1.0 / 3.0], 1)?;
+    /// assert_eq!((tab.nderivs, tab.num_points, tab.dim, tab.value_size), (1, 1, 3, 1));
+    /// assert!(tab.values[0..3].iter().all(|&v| (v - 1.0 / 3.0).abs() < 1e-14));
+    /// assert!(tab.values[3..6].iter().zip([-1.0, 1.0, 0.0]).all(|(&g, w)| (g - w).abs() < 1e-14));
+    /// # Ok::<(), tetraloma_element::ElementError>(())
+    /// ```
+    ///
+    /// [Tabulation]: https://tetracl.github.io/tetraloma/fem/elements.html#tabulation
     pub fn tabulate(
         &self,
         points: &[f64],
         nderivs: u32,
     ) -> Result<ElementTabulation, ElementError> {
-        let _ = (points, nderivs);
-        unimplemented!("pending M11.T5")
+        ciarlet::tabulate_from_coefficients(
+            self.key.cell,
+            self.key.degree,
+            self.dim,
+            &self.coefficients,
+            points,
+            nderivs,
+        )
     }
 
-    #[doc(hidden)]
+    // Design: section 26 ("Finite elements"), Listing E1.
+    /// Reference sample points `[m][tdim]` paired with [`Element::interpolation_matrix`] so that
+    /// the DOF vector of a reference function û is `M û(points)`. See [Interpolation].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetraloma_dims::CellType;
+    /// use tetraloma_element::{Element, ElementKey, Family, Variant};
+    /// use tetraloma_refcell::NodeFamily;
+    ///
+    /// let el = Element::get(ElementKey {
+    ///     family: Family::Lagrange,
+    ///     cell: CellType::Interval,
+    ///     degree: 2,
+    ///     variant: Variant::Nodal(NodeFamily::Equispaced),
+    /// })?;
+    /// assert_eq!(el.interpolation_points(), &[0.0, 1.0, 0.5]);
+    /// # Ok::<(), tetraloma_element::ElementError>(())
+    /// ```
+    ///
+    /// [Interpolation]: https://tetracl.github.io/tetraloma/fem/elements.html#interpolation
     pub fn interpolation_points(&self) -> &[f64] {
-        unimplemented!("pending M11.T5")
+        &self.interpolation_points
     }
 
-    #[doc(hidden)]
+    // Design: section 26 ("Finite elements"), Listing E1.
+    /// Row-major interpolation matrix M of shape `[dim][m · reference_value_size]` mapping
+    /// samples `û(interpolation_points())` to DOF values. See [Interpolation].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetraloma_dims::CellType;
+    /// use tetraloma_element::{Element, ElementKey, Family, Variant};
+    ///
+    /// let el = Element::get(ElementKey {
+    ///     family: Family::Lagrange,
+    ///     cell: CellType::Triangle,
+    ///     degree: 2,
+    ///     variant: Variant::Legendre,
+    /// })?;
+    /// let (dim, pts, mat) = (el.dim(), el.interpolation_points(), el.interpolation_matrix());
+    /// let (m, tab) = (pts.len() / 2, el.tabulate(pts, 0)?);
+    /// for i in 0..dim {
+    ///     let diag: f64 = (0..m).map(|q| mat[i * m + q] * tab.values[q * dim + i]).sum();
+    ///     assert!((diag - 1.0).abs() < 1e-12);
+    /// }
+    /// # Ok::<(), tetraloma_element::ElementError>(())
+    /// ```
+    ///
+    /// [Interpolation]: https://tetracl.github.io/tetraloma/fem/elements.html#interpolation
     pub fn interpolation_matrix(&self) -> &[f64] {
-        unimplemented!("pending M11.T5")
+        &self.interpolation_matrix
     }
+
+    // M11.T0 stubs below, implemented in M11.T6–T7; not part of the stable API yet (dependency
+    // rule 7).
 
     #[doc(hidden)]
     pub fn transformation_kind(&self) -> TransformationKind {
@@ -599,13 +715,43 @@ impl Element {
     }
 }
 
-// M11.T0 stub, implemented in M11.T5; not part of the stable API yet (dependency rule 7).
-#[doc(hidden)]
+// Design: section 26 ("Finite elements"), Listing E1, "Derivative orders"; ADR-0072.
+/// Basis values and (optionally) first partial derivatives returned by [`Element::tabulate`].
+///
+/// Entries in `values` are laid out as `[derivative][point][basis][component]`, where derivative
+/// block `0` holds values and (when `nderivs == 1`) block `1 + d` holds ∂φ/∂ξ_d. See [Tabulation].
+///
+/// # Example
+///
+/// ```
+/// use tetraloma_dims::CellType;
+/// use tetraloma_element::{Element, ElementKey, Family, Variant};
+/// use tetraloma_refcell::NodeFamily;
+///
+/// let el = Element::get(ElementKey {
+///     family: Family::Lagrange,
+///     cell: CellType::Quadrilateral,
+///     degree: 1,
+///     variant: Variant::Nodal(NodeFamily::Equispaced),
+/// })?;
+/// let tab = el.tabulate(&[0.5, 0.5], 1)?;
+/// assert_eq!((tab.nderivs, tab.num_points, tab.dim, tab.value_size), (1, 1, 4, 1));
+/// assert_eq!(tab.values.len(), 3 * 1 * 4 * 1);
+/// # Ok::<(), tetraloma_element::ElementError>(())
+/// ```
+///
+/// [Tabulation]: https://tetracl.github.io/tetraloma/fem/elements.html#tabulation
+#[derive(Clone, Debug, PartialEq)]
 pub struct ElementTabulation {
+    /// Highest derivative order stored (`0` for values only; `1` for values and first derivatives).
     pub nderivs: u32,
+    /// Number of evaluation points.
     pub num_points: usize,
+    /// Number of basis functions (`Element::dim`).
     pub dim: usize,
+    /// Number of reference components per basis function (`Element::reference_value_size`).
     pub value_size: usize,
+    /// Flat table in `[derivative][point][basis][component]` order.
     pub values: Vec<f64>,
 }
 
@@ -665,6 +811,7 @@ mod tests {
                         b.fetch_add(1, Ordering::SeqCst);
                         Element::build(k)
                     })
+                    .unwrap()
                 })
             })
             .collect();
@@ -680,6 +827,20 @@ mod tests {
             .map(|h| h.join().unwrap())
             .collect();
         assert!(global[1..].iter().all(|el| Arc::ptr_eq(&global[0], el)));
+
+        // A failed build is also cached so the closure runs strictly once.
+        let err_cache = RwLock::new(HashMap::new());
+        let err_builds = AtomicUsize::new(0);
+        let want_err = ElementError::RefCell(RefCellError::Singular);
+        for _ in 0..2 {
+            let got = cache_get_or_build(&err_cache, key, |_| {
+                err_builds.fetch_add(1, Ordering::SeqCst);
+                Err(want_err.clone())
+            })
+            .unwrap_err();
+            assert_eq!(got, want_err);
+        }
+        assert_eq!(err_builds.load(Ordering::SeqCst), 1);
     }
 
     #[test]

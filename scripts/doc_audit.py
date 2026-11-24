@@ -120,7 +120,7 @@ OUTLINE = [
     ("elements/basix-dolfinx.md", "Basix and DOLFINx",
      ["Cell and vertex numbering", "Node orderings", "Converting a mesh"]),
     ("fem/elements.md", "Finite elements",
-     ["Elements and DOFs", "Families and degrees", "Variants"]),
+     ["Elements and DOFs", "Families and degrees", "Variants", "Tabulation", "Interpolation"]),
     ("tutorials/build-mesh.md", "Building a mesh",
      ["From arrays", "Several cell types", "Higher-degree geometry", "Errors"]),
     ("tutorials/read-write.md", "Reading and writing files",

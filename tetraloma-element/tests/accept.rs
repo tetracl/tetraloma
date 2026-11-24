@@ -141,7 +141,6 @@ fn unsupported_keys_return_unsupported() {
 /// (`Nodal(Equispaced)`: p <= 6), applying its interpolation to its basis gives the identity
 /// to 1e-12.
 #[test]
-#[ignore = "pending M11.T5"]
 fn interpolation_of_basis_is_identity() {
     for cell in ALL_CELLS {
         let td = tdim(cell);
@@ -191,7 +190,6 @@ fn interpolation_of_basis_is_identity() {
 /// M11 acceptance A7: for `Legendre` on every cell, p = 0–10 (pyramids: p = 0–8), the reference
 /// mass matrix under a `Gauss` rule of degree 2p is the identity to 1e-12.
 #[test]
-#[ignore = "pending M11.T5"]
 fn legendre_mass_matrix_is_identity() {
     for cell in ALL_CELLS {
         for degree in 0..=max_degree(cell).min(10) {

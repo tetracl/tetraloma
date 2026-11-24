@@ -173,7 +173,6 @@ fn check_tabulation(key: ElementKey, points: &[f64], want: &[f64], dof_map: Opti
 /// tetrahedra and hexahedra and `Nodal(Gll)` on intervals, quadrilaterals and hexahedra,
 /// p = 1–6, values and first derivatives at the fixture points equal ndelement's to 1e-12.
 #[test]
-#[ignore = "pending M11.T5"]
 fn lagrange_tabulation_matches_ndelement() {
     let data = fixture("lagrange_ndelement.json");
     let cells = data.as_object().unwrap();
@@ -211,7 +210,6 @@ fn lagrange_tabulation_matches_ndelement() {
 /// `Nodal(Equispaced)` on prisms (p = 1–6) and pyramids (p = 1–3), values and first derivatives
 /// at the fixture points equal Basix's after the A.11 conversion to 1e-12.
 #[test]
-#[ignore = "pending M11.T5"]
 fn lagrange_tabulation_matches_basix() {
     let data = fixture("lagrange_basix.json");
     let cells = data.as_object().unwrap();

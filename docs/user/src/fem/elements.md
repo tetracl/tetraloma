@@ -207,3 +207,81 @@ assert!(leg.entity_closure_dofs(2, 0).is_empty());
 assert_eq!(leg.entity_dofs(3, 0).len(), 10);
 # Ok::<(), tetraloma_element::ElementError>(())
 ```
+
+## Tabulation
+
+Each Lagrange element expresses its scalar basis functions $\phi_0, \dots, \phi_{n-1}$ in the
+cell's $L^2$-orthonormal polynomial set $\{\psi_k\}$
+([Orthonormal polynomial sets](../concepts/quadrature.md#orthonormal-polynomial-sets)):
+$\phi_i(\xi) = \sum_{k=0}^{n_{\mathrm{poly}}-1} C_{i, k}\, \psi_k(\xi)$. `Element::coefficients`
+returns this row-major `[dim][polyset_dim * reference_value_size]` table (`[dim][polyset_dim]`
+for scalar Lagrange, where `reference_value_size() == 1`), obtained once per key by inverting the
+Ciarlet dual matrix $D_{ij} = l_i(\psi_j)$ in `f64` with `DenseLu`.
+
+`Element::tabulate(points, nderivs)` evaluates the basis at flat node-major reference points
+(`tdim` coordinates per point) and returns an
+[`ElementTabulation`](../api/tetraloma_element/struct.ElementTabulation.html) in
+`[derivative][point][basis][component]` order: block `0` holds values, and for `nderivs == 1`
+block `1 + d` holds $\partial \phi_i / \partial \xi_d$. Orders above `1` return
+[`ElementError::RefCell`](../api/tetraloma_element/enum.ElementError.html) wrapping
+`UnsupportedDerivativeOrder`, and a mis-sized point slice returns `PointsShape`.
+
+```rust
+use tetraloma::{CellType, NodeFamily};
+use tetraloma_element::{Element, ElementKey, Family, Variant};
+
+let el = Element::get(ElementKey {
+    family: Family::Lagrange,
+    cell: CellType::Triangle,
+    degree: 2,
+    variant: Variant::Nodal(NodeFamily::Gll),
+})?;
+let tab = el.tabulate(&[0.2, 0.3, 0.5, 0.1], 1)?;
+assert_eq!((tab.nderivs, tab.num_points, tab.dim, tab.value_size), (1, 2, 6, 1));
+for q in 0..tab.num_points {
+    let sum: f64 = tab.values[q * tab.dim..(q + 1) * tab.dim].iter().sum();
+    assert!((sum - 1.0).abs() < 1e-13);
+    for d in 0..2 {
+        let base = ((1 + d) * tab.num_points + q) * tab.dim;
+        let dsum: f64 = tab.values[base..base + tab.dim].iter().sum();
+        assert!(dsum.abs() < 1e-13);
+    }
+}
+# Ok::<(), tetraloma_element::ElementError>(())
+```
+
+## Interpolation
+
+Every element exposes its dual functionals $\mathcal L = \{l_0, \dots, l_{n-1}\}$ through
+`Element::interpolation_points` (flat `[m][tdim]`) and `Element::interpolation_matrix`
+(row-major `[dim][m * reference_value_size]`). For a scalar Lagrange function $\hat u$, the DOF
+values are $l_i(\hat u) = \sum_{q=0}^{m-1} M_{i, q}\,\hat u(\xi_q)$.
+
+For nodal Lagrange variants at $p \ge 1$, the points are the Lagrange nodes and $M = I$; at
+$p = 0$, the single point is the mean of the cell's vertices and $M = [1]$. For
+`Variant::Legendre`, the points come from a degree-$2p$ Gauss rule and $M_{i,q} = w_q \psi_i(\xi_q)$.
+Because $l_i(\phi_j) = \delta_{ij}$, applying $M$ to the basis tabulated at
+`interpolation_points()` recovers the identity to $10^{-12}$ (up to $p = 10$ for `Gll` and
+`Legendre`, and $p = 6$ for `Equispaced`).
+
+```rust
+use tetraloma::CellType;
+use tetraloma_element::{Element, ElementKey, Family, Variant};
+
+let el = Element::get(ElementKey {
+    family: Family::Lagrange,
+    cell: CellType::Triangle,
+    degree: 2,
+    variant: Variant::Legendre,
+})?;
+let (pts, mat) = (el.interpolation_points(), el.interpolation_matrix());
+let m = pts.len() / 2;
+let samples: Vec<f64> = pts.chunks_exact(2).map(|p| 2.0 * p[0] + 3.0 * p[1] - 1.0).collect();
+let dofs: Vec<f64> = (0..el.dim())
+    .map(|i| mat[i * m..(i + 1) * m].iter().zip(&samples).map(|(a, s)| a * s).sum())
+    .collect();
+let tab = el.tabulate(&[0.25, 0.4], 0)?;
+let approx: f64 = dofs.iter().zip(&tab.values).map(|(c, b)| c * b).sum();
+assert!((approx - (2.0 * 0.25 + 3.0 * 0.4 - 1.0)).abs() < 1e-13);
+# Ok::<(), tetraloma_element::ElementError>(())
+```
