@@ -127,6 +127,10 @@ pub enum TransformationKind {
     /// non-trivial.
     SignedPermutation,
     /// At least one sub-entity base transformation is a dense matrix block.
+    ///
+    /// No currently supported element produces this variant (`Family::N1curl` and
+    /// `Family::RaviartThomas` currently return [`ElementError::Unsupported`] from
+    /// [`Element::get`]).
     Dense,
 }
 
@@ -874,6 +878,10 @@ pub enum BaseTransformation {
         negate: Vec<bool>,
     },
     /// A row-major `n × n` dense matrix block: `y[i] = Σ_j matrix[i * n + j] * x[j]`.
+    ///
+    /// No currently supported element constructs this variant (`Family::N1curl` and
+    /// `Family::RaviartThomas` currently return [`ElementError::Unsupported`] from
+    /// [`Element::get`]).
     Dense {
         /// Number of interior DOFs on the sub-entity.
         n: usize,

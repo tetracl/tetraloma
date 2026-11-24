@@ -17,7 +17,11 @@ use crate::{
 /// Tolerance for recognising a numerically computed base transformation matrix as a signed
 /// permutation (one entry per row and column within `SIGNED_PERM_TOL` of `±1`, all others
 /// within `SIGNED_PERM_TOL` of `0`).
-const SIGNED_PERM_TOL: f64 = 1e-6;
+///
+/// Tight enough to reject any genuinely dense transformation block, while leaving roughly three
+/// orders of magnitude of margin above the worst-conditioned supported dense equispaced element
+/// (`Quadrilateral` at degree 20, residual ~3e-12).
+const SIGNED_PERM_TOL: f64 = 1e-9;
 
 /// All five `(sub-entity type, generator)` pairs defined by Appendix A.6.
 const ENTITY_GENERATORS: [(CellType, Generator); 5] = [
@@ -254,7 +258,15 @@ pub(crate) fn build_lagrange_transformations(
             points: entity_pts,
         };
         let matrix = compute_nodal_matrix(key, dim, coefficients, sub, generator)?;
-        tables[idx] = Some(classify_matrix(matrix, dofs.len()));
+        let bt = classify_matrix(matrix, dofs.len());
+        assert!(
+            matches!(
+                &bt,
+                BaseTransformation::SignedPermutation { negate, .. } if negate.iter().all(|&b| !b)
+            ),
+            "Lagrange base transformation for {key:?} ({entity:?}, {generator:?}) was not a pure permutation"
+        );
+        tables[idx] = Some(bt);
     }
 
     let kind = classify_kind(&tables);
@@ -362,7 +374,20 @@ mod tests {
             TransformationKind::Dense
         );
 
+        // Threshold boundary: just below SIGNED_PERM_TOL classifies as SignedPermutation;
+        // just above (on diagonal or off-diagonal) classifies as Dense.
+        let eps_ok = 0.5 * SIGNED_PERM_TOL;
+        let eps_bad = 2.0 * SIGNED_PERM_TOL;
+        assert_eq!(
+            classify_matrix(vec![eps_ok, -1.0 + eps_ok, 1.0 - eps_ok, -eps_ok], 2),
+            BaseTransformation::SignedPermutation {
+                perm: vec![1, 0],
+                negate: vec![true, false],
+            }
+        );
         for bad in [
+            vec![0.0, -1.0 + eps_bad, 1.0, 0.0],
+            vec![eps_bad, -1.0, 1.0, 0.0],
             vec![1.0, 0.0, 1.0, 0.0],
             vec![1.0, f64::NAN, 0.0, 1.0],
             vec![f64::NAN, 0.0, 0.0, 1.0],
@@ -405,10 +430,12 @@ mod tests {
 
         for (cell, family, degree) in [
             (CellType::Triangle, NodeFamily::Equispaced, 15),
+            (CellType::Quadrilateral, NodeFamily::Equispaced, 20),
+            (CellType::Tetrahedron, NodeFamily::Equispaced, 15),
             (CellType::Tetrahedron, NodeFamily::Gll, 5),
             (CellType::Hexahedron, NodeFamily::Gll, 4),
             (CellType::Prism, NodeFamily::Gll, 4),
-            (CellType::Pyramid, NodeFamily::Equispaced, 4),
+            (CellType::Pyramid, NodeFamily::Equispaced, 8),
         ] {
             let el = Element::get(lagrange(cell, degree, Variant::Nodal(family))).unwrap();
             let td = tdim(cell);
