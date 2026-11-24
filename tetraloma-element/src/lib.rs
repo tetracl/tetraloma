@@ -1,6 +1,4 @@
 // Design: section 26 ("Finite elements"), Listing E1; ADR-0071, ADR-0072.
-// Remaining `#[doc(hidden)]` stubs (`Factor1d`, `TensorFactors` and `Element::tensor_factors`)
-// are not part of the stable API yet; they lose `#[doc(hidden)]` in M11.T7 (dependency rule 7).
 //! Finite elements in Ciarlet's sense on the reference cells of tetraloma.
 //!
 //! This crate computes finite-element definitions on the host in `f64`, with no device
@@ -271,10 +269,11 @@ pub struct Element {
     embedded_superdegree: u32,
     entity_dofs: Vec<Vec<Vec<usize>>>,
     entity_closure_dofs: Vec<Vec<Vec<usize>>>,
-    coefficients: Vec<f64>,
+    coefficients: OnceLock<Vec<f64>>,
     interpolation_points: Vec<f64>,
-    interpolation_matrix: Vec<f64>,
+    interpolation_matrix: OnceLock<Vec<f64>>,
     transformations: transform::BaseTransformations,
+    tensor_factors: Option<TensorFactors>,
 }
 
 impl fmt::Debug for Element {
@@ -330,27 +329,64 @@ impl Element {
         match key.family {
             Family::Lagrange => {
                 let dofs = layout::build_lagrange_layout(key);
-                let data = ciarlet::build_lagrange_dense(key, dofs.dim)?;
-                let transformations = transform::build_lagrange_transformations(
-                    key,
-                    dofs.dim,
-                    &dofs.entity_dofs,
-                    &data.coefficients,
-                )?;
-                Ok(Self {
-                    key,
-                    map_type: MapType::Identity,
-                    reference_value_size: 1,
-                    dim: dofs.dim,
-                    discontinuous_only: dofs.discontinuous_only,
-                    embedded_superdegree: key.degree,
-                    entity_dofs: dofs.entity_dofs,
-                    entity_closure_dofs: dofs.entity_closure_dofs,
-                    coefficients: data.coefficients,
-                    interpolation_points: data.interpolation_points,
-                    interpolation_matrix: data.interpolation_matrix,
-                    transformations,
-                })
+                if tensor::is_tensor_cell(key.cell) {
+                    let tf = tensor::build_lagrange_tensor_factors(key, dofs.dim)?;
+                    let interpolation_points =
+                        ciarlet::lagrange_interpolation_points(key.cell, key.degree, key.variant)?;
+                    let transformations = transform::build_lagrange_transformations(
+                        key,
+                        dofs.dim,
+                        &dofs.entity_dofs,
+                        |pts| tensor::tabulate_lagrange(key.cell, dofs.dim, &tf, pts, 0),
+                    )?;
+                    Ok(Self {
+                        key,
+                        map_type: MapType::Identity,
+                        reference_value_size: 1,
+                        dim: dofs.dim,
+                        discontinuous_only: dofs.discontinuous_only,
+                        embedded_superdegree: key.degree,
+                        entity_dofs: dofs.entity_dofs,
+                        entity_closure_dofs: dofs.entity_closure_dofs,
+                        coefficients: OnceLock::new(),
+                        interpolation_points,
+                        interpolation_matrix: OnceLock::new(),
+                        transformations,
+                        tensor_factors: Some(tf),
+                    })
+                } else {
+                    let data = ciarlet::build_lagrange_dense(key, dofs.dim)?;
+                    let transformations = transform::build_lagrange_transformations(
+                        key,
+                        dofs.dim,
+                        &dofs.entity_dofs,
+                        |pts| {
+                            ciarlet::tabulate_from_coefficients(
+                                key.cell,
+                                key.degree,
+                                dofs.dim,
+                                &data.coefficients,
+                                pts,
+                                0,
+                            )
+                        },
+                    )?;
+                    Ok(Self {
+                        key,
+                        map_type: MapType::Identity,
+                        reference_value_size: 1,
+                        dim: dofs.dim,
+                        discontinuous_only: dofs.discontinuous_only,
+                        embedded_superdegree: key.degree,
+                        entity_dofs: dofs.entity_dofs,
+                        entity_closure_dofs: dofs.entity_closure_dofs,
+                        coefficients: OnceLock::from(data.coefficients),
+                        interpolation_points: data.interpolation_points,
+                        interpolation_matrix: OnceLock::from(data.interpolation_matrix),
+                        transformations,
+                        tensor_factors: None,
+                    })
+                }
             }
             Family::N1curl | Family::RaviartThomas => {
                 unreachable!("unsupported family {:?} passed validate_key", key.family)
@@ -593,7 +629,9 @@ impl Element {
 
     // Design: section 26 ("Finite elements"), Listing E1.
     /// Basis expansion coefficients in `tetraloma-refcell`'s orthonormal polynomial set,
-    /// row-major `[dim][polyset_dim · reference_value_size]`. See [Tabulation].
+    /// row-major `[dim][polyset_dim · reference_value_size]`. On quadrilaterals and hexahedra,
+    /// this table is assembled from the 1D tensor factors on first use. See [Tabulation] and
+    /// [Tensor factors].
     ///
     /// # Example
     ///
@@ -617,8 +655,15 @@ impl Element {
     /// ```
     ///
     /// [Tabulation]: https://tetracl.github.io/tetraloma/fem/elements.html#tabulation
+    /// [Tensor factors]: https://tetracl.github.io/tetraloma/fem/elements.html#tensor-factors
     pub fn coefficients(&self) -> &[f64] {
-        &self.coefficients
+        self.coefficients.get_or_init(|| {
+            let tf = self
+                .tensor_factors
+                .as_ref()
+                .expect("non-tensor element coefficients are initialised eagerly");
+            tensor::assemble_lagrange_coefficients(self.key, tf)
+        })
     }
 
     // Design: section 26 ("Finite elements"), Listing E1, "Derivative orders"; ADR-0072.
@@ -657,14 +702,18 @@ impl Element {
         points: &[f64],
         nderivs: u32,
     ) -> Result<ElementTabulation, ElementError> {
-        ciarlet::tabulate_from_coefficients(
-            self.key.cell,
-            self.key.degree,
-            self.dim,
-            &self.coefficients,
-            points,
-            nderivs,
-        )
+        if let Some(tf) = &self.tensor_factors {
+            tensor::tabulate_lagrange(self.key.cell, self.dim, tf, points, nderivs)
+        } else {
+            ciarlet::tabulate_from_coefficients(
+                self.key.cell,
+                self.key.degree,
+                self.dim,
+                self.coefficients(),
+                points,
+                nderivs,
+            )
+        }
     }
 
     // Design: section 26 ("Finite elements"), Listing E1.
@@ -695,7 +744,9 @@ impl Element {
 
     // Design: section 26 ("Finite elements"), Listing E1.
     /// Row-major interpolation matrix M of shape `[dim][m · reference_value_size]` mapping
-    /// samples `û(interpolation_points())` to DOF values. See [Interpolation].
+    /// samples `û(interpolation_points())` to DOF values. On quadrilaterals and hexahedra, this
+    /// table is assembled from the 1D tensor factors on first use. See [Interpolation] and
+    /// [Tensor factors].
     ///
     /// # Example
     ///
@@ -719,8 +770,10 @@ impl Element {
     /// ```
     ///
     /// [Interpolation]: https://tetracl.github.io/tetraloma/fem/elements.html#interpolation
+    /// [Tensor factors]: https://tetracl.github.io/tetraloma/fem/elements.html#tensor-factors
     pub fn interpolation_matrix(&self) -> &[f64] {
-        &self.interpolation_matrix
+        self.interpolation_matrix
+            .get_or_init(|| tensor::assemble_lagrange_interpolation_matrix(self.key, self.dim))
     }
 
     // Design: section 26 ("Finite elements", "DOF transformations"), Listing E1.
@@ -812,12 +865,47 @@ impl Element {
         self.transformations.get(entity, generator)
     }
 
-    // M11.T0 stub below, implemented in M11.T7; not part of the stable API yet (dependency
-    // rule 7).
-
-    #[doc(hidden)]
+    // Design: section 26 ("Finite elements", "Tensor factors"), Listing E1.
+    /// Tensor-product decomposition into one-dimensional factors on quadrilaterals and hexahedra,
+    /// or `None` on all other reference cells. See [Tensor factors].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetraloma_dims::CellType;
+    /// use tetraloma_element::{Element, ElementKey, Factor1d, Family, Variant};
+    /// use tetraloma_refcell::NodeFamily;
+    ///
+    /// let hex = Element::get(ElementKey {
+    ///     family: Family::Lagrange,
+    ///     cell: CellType::Hexahedron,
+    ///     degree: 3,
+    ///     variant: Variant::Nodal(NodeFamily::Gll),
+    /// })?;
+    /// let tf = hex.tensor_factors().expect("hexahedron has tensor factors");
+    /// assert_eq!(tf.factors[0], vec![(Factor1d::NodalH1(NodeFamily::Gll), 3); 3]);
+    ///
+    /// let tri = Element::get(ElementKey {
+    ///     family: Family::Lagrange,
+    ///     cell: CellType::Triangle,
+    ///     degree: 3,
+    ///     variant: Variant::Nodal(NodeFamily::Gll),
+    /// })?;
+    /// assert!(tri.tensor_factors().is_none());
+    /// # Ok::<(), tetraloma_element::ElementError>(())
+    /// ```
+    ///
+    /// [Tensor factors]: https://tetracl.github.io/tetraloma/fem/elements.html#tensor-factors
     pub fn tensor_factors(&self) -> Option<&TensorFactors> {
-        unimplemented!("pending M11.T7")
+        self.tensor_factors.as_ref()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn lazy_tables_initialised(&self) -> (bool, bool) {
+        (
+            self.coefficients.get().is_some(),
+            self.interpolation_matrix.get().is_some(),
+        )
     }
 }
 

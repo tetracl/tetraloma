@@ -10,8 +10,8 @@ use tetraloma_refcell::{
 };
 
 use crate::{
-    BaseTransformation, ElementError, ElementKey, Family, Generator, TransformationKind, Variant,
-    ciarlet,
+    BaseTransformation, ElementError, ElementKey, ElementTabulation, Family, Generator,
+    TransformationKind, Variant,
 };
 
 /// Tolerance for recognising a numerically computed base transformation matrix as a signed
@@ -19,9 +19,9 @@ use crate::{
 /// within `SIGNED_PERM_TOL` of `0`).
 ///
 /// Tight enough to reject any genuinely dense transformation block, while staying well above
-/// rounding error across the dense high-degree Lagrange elements tested here (up to degree 20 on
-/// quadrilaterals, degree 15 on triangles, tetrahedra and prisms, and degree 8 on pyramids;
-/// hexahedra above degree 10 await M11.T7's tensor-factor construction).
+/// rounding error across all supported Lagrange elements (up to degree 20 on intervals,
+/// quadrilaterals and hexahedra, degree 15 on triangles, tetrahedra and prisms, and degree 8 on
+/// pyramids).
 const SIGNED_PERM_TOL: f64 = 1e-9;
 
 /// All five `(sub-entity type, generator)` pairs defined by Appendix A.6.
@@ -175,19 +175,21 @@ struct SubEntityRef<'a> {
 
 /// Numerically computes the `n × n` base transformation matrix on one sub-entity of a nodal
 /// Lagrange element by evaluating the basis at the reoriented interior nodes of that sub-entity.
-fn compute_nodal_matrix(
-    key: ElementKey,
+fn compute_nodal_matrix<F>(
+    cell: CellType,
     dim: usize,
-    coefficients: &[f64],
+    tabulate_values: &F,
     sub: SubEntityRef<'_>,
     generator: Generator,
-) -> Result<Vec<f64>, ElementError> {
+) -> Result<Vec<f64>, ElementError>
+where
+    F: Fn(&[f64]) -> Result<ElementTabulation, ElementError>,
+{
     let ed = tdim(sub.entity);
     let n = sub.dofs.len();
     let reoriented = apply_generator(sub.entity, generator, sub.points);
-    let cell_pts = sub_entity_points_to_cell(key.cell, ed, sub.index, &reoriented);
-    let tab =
-        ciarlet::tabulate_from_coefficients(key.cell, key.degree, dim, coefficients, &cell_pts, 0)?;
+    let cell_pts = sub_entity_points_to_cell(cell, ed, sub.index, &reoriented);
+    let tab = tabulate_values(&cell_pts)?;
     let mut matrix = Vec::with_capacity(n * n);
     for i in 0..n {
         let row = &tab.values[i * dim..(i + 1) * dim];
@@ -199,12 +201,15 @@ fn compute_nodal_matrix(
 }
 
 /// Computes and classifies all base transformations of a validated Lagrange element.
-pub(crate) fn build_lagrange_transformations(
+pub(crate) fn build_lagrange_transformations<F>(
     key: ElementKey,
     dim: usize,
     entity_dofs: &[Vec<Vec<usize>>],
-    coefficients: &[f64],
-) -> Result<BaseTransformations, ElementError> {
+    tabulate_values: F,
+) -> Result<BaseTransformations, ElementError>
+where
+    F: Fn(&[f64]) -> Result<ElementTabulation, ElementError>,
+{
     debug_assert_eq!(key.family, Family::Lagrange);
     let mut tables: [Option<BaseTransformation>; 5] = [None, None, None, None, None];
 
@@ -258,7 +263,7 @@ pub(crate) fn build_lagrange_transformations(
             dofs,
             points: entity_pts,
         };
-        let matrix = compute_nodal_matrix(key, dim, coefficients, sub, generator)?;
+        let matrix = compute_nodal_matrix(key.cell, dim, &tabulate_values, sub, generator)?;
         let bt = classify_matrix(matrix, dofs.len());
         assert!(
             matches!(
@@ -437,7 +442,8 @@ mod tests {
             (CellType::Quadrilateral, NodeFamily::Gll, 20),
             (CellType::Tetrahedron, NodeFamily::Equispaced, 15),
             (CellType::Tetrahedron, NodeFamily::Gll, 15),
-            (CellType::Hexahedron, NodeFamily::Gll, 4),
+            (CellType::Hexahedron, NodeFamily::Equispaced, 20),
+            (CellType::Hexahedron, NodeFamily::Gll, 20),
             (CellType::Prism, NodeFamily::Equispaced, 15),
             (CellType::Prism, NodeFamily::Gll, 15),
             (CellType::Pyramid, NodeFamily::Equispaced, 8),
@@ -489,9 +495,14 @@ mod tests {
                         dofs,
                         points: epts,
                     };
-                    let mat =
-                        compute_nodal_matrix(el.key(), el.dim(), el.coefficients(), sub, generator)
-                            .unwrap();
+                    let mat = compute_nodal_matrix(
+                        cell,
+                        el.dim(),
+                        &|pts| el.tabulate(pts, 0),
+                        sub,
+                        generator,
+                    )
+                    .unwrap();
                     assert_eq!(&classify_matrix(mat, dofs.len()), want);
                 }
             }

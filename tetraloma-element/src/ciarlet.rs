@@ -38,6 +38,25 @@ fn cell_midpoint(cell: CellType) -> Vec<f64> {
         .collect()
 }
 
+/// Builds `interpolation_points` for a validated Lagrange element key without assembling the
+/// `dim × m` interpolation matrix.
+pub(crate) fn lagrange_interpolation_points(
+    cell: CellType,
+    degree: u32,
+    variant: Variant,
+) -> Result<Vec<f64>, ElementError> {
+    match variant {
+        Variant::Nodal(family) => {
+            if degree == 0 {
+                Ok(cell_midpoint(cell))
+            } else {
+                Ok(lagrange_points(cell, degree, family)?)
+            }
+        }
+        Variant::Legendre => Ok(gauss_rule(cell, 2 * degree).points),
+    }
+}
+
 /// Builds `(interpolation_points, interpolation_matrix)` for a validated Lagrange element key.
 fn lagrange_interpolation(
     cell: CellType,
@@ -46,12 +65,8 @@ fn lagrange_interpolation(
     dim: usize,
 ) -> Result<(Vec<f64>, Vec<f64>), ElementError> {
     match variant {
-        Variant::Nodal(family) => {
-            let points = if degree == 0 {
-                cell_midpoint(cell)
-            } else {
-                lagrange_points(cell, degree, family)?
-            };
+        Variant::Nodal(_) => {
+            let points = lagrange_interpolation_points(cell, degree, variant)?;
             let mut matrix = vec![0.0; dim * dim];
             for i in 0..dim {
                 matrix[i * dim + i] = 1.0;
@@ -159,16 +174,12 @@ pub(crate) fn build_lagrange_dense(
     })
 }
 
-/// Tabulates a scalar (`reference_value_size == 1`) element from its `polyset` expansion
-/// `coefficients` (`[dim][n_poly]`) into `[derivative][point][basis][component]` order.
-pub(crate) fn tabulate_from_coefficients(
+/// Validates `nderivs` (0 or 1) and `points` shape for `cell`, returning the number of points.
+pub(crate) fn validate_tabulate_args(
     cell: CellType,
-    degree: u32,
-    dim: usize,
-    coefficients: &[f64],
     points: &[f64],
     nderivs: u32,
-) -> Result<ElementTabulation, ElementError> {
+) -> Result<usize, ElementError> {
     if nderivs > 1 {
         return Err(ElementError::RefCell(
             RefCellError::UnsupportedDerivativeOrder(nderivs),
@@ -186,7 +197,21 @@ pub(crate) fn tabulate_from_coefficients(
             tdim: td,
         }));
     }
-    let num_points = points.len().checked_div(td).unwrap_or(1);
+    Ok(points.len().checked_div(td).unwrap_or(1))
+}
+
+/// Tabulates a scalar (`reference_value_size == 1`) element from its `polyset` expansion
+/// `coefficients` (`[dim][n_poly]`) into `[derivative][point][basis][component]` order.
+pub(crate) fn tabulate_from_coefficients(
+    cell: CellType,
+    degree: u32,
+    dim: usize,
+    coefficients: &[f64],
+    points: &[f64],
+    nderivs: u32,
+) -> Result<ElementTabulation, ElementError> {
+    let num_points = validate_tabulate_args(cell, points, nderivs)?;
+    let td = tdim(cell);
     let num_derivs = if nderivs == 0 { 1 } else { 1 + td };
     if num_points == 0 {
         return Ok(ElementTabulation {
