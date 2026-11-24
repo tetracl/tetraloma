@@ -98,13 +98,15 @@ sub-entities as a [`TransformationKind`](../api/tetraloma_element/enum.Transform
   and `Family::RaviartThomas` currently return `ElementError::Unsupported` from `Element::get`, so
   no currently supported element produces `Dense`.
 
-Let $M_c$ be the block-diagonal matrix mapping canonical global DOFs to cell $c$'s local
-coefficients ($u_{\text{local}} = M_c u_{\text{global}}$), so the transformed basis is
-$\phi_c = T_c \phi_{\text{ref}}$ with $T_c = M_c^{\mathsf T}$. Evaluation applies $M_c$ to
-coefficients (equivalently $T_c$ to the basis), transposed assembly applies $M_c^{\mathsf T}$
-($= T_c$), and interpolation recovers canonical DOFs with $M_c^{-1}$ ($= T_c^{-\mathsf T}$).
-Because every signed permutation is orthogonal ($M_c^{-1} = M_c^{\mathsf T}$), interpolation
-applies the transpose (inverse) signed permutation rather than a matrix solve.
+Let $T_c$ map the reference basis to cell $c$'s basis ($\phi_c = T_c \phi_{\text{ref}}$), so its
+transpose $M_c = T_c^{\mathsf T}$ maps canonical global coefficients to cell-local coefficients
+($u_{\text{local}} = M_c u_{\text{global}} = T_c^{\mathsf T} u_{\text{global}}$). Applying $T_c$
+transforms basis data (tabulations and element vectors), applying $T_c^{\mathsf T} = M_c$ maps
+canonical global coefficients into cell $c$, and interpolation recovers canonical coefficients with
+$T_c^{-\mathsf T} = M_c^{-1}$. Because every signed permutation is orthogonal
+($T_c^{-\mathsf T} = T_c$ and $M_c^{-1} = M_c^{\mathsf T}$), basis transformation and interpolation
+use $T_c$ while global-to-local coefficient mapping uses $T_c^{\mathsf T} = M_c$, with no matrix
+solve.
 
 ```rust
 use tetraloma::{CellType, NodeFamily};

@@ -18,9 +18,10 @@ use crate::{
 /// permutation (one entry per row and column within `SIGNED_PERM_TOL` of `±1`, all others
 /// within `SIGNED_PERM_TOL` of `0`).
 ///
-/// Tight enough to reject any genuinely dense transformation block, while leaving roughly three
-/// orders of magnitude of margin above the worst-conditioned supported dense equispaced element
-/// (`Quadrilateral` at degree 20, residual ~3e-12).
+/// Tight enough to reject any genuinely dense transformation block, while staying well above
+/// rounding error across the dense high-degree Lagrange elements tested here (up to degree 20 on
+/// quadrilaterals, degree 15 on triangles, tetrahedra and prisms, and degree 8 on pyramids;
+/// hexahedra above degree 10 await M11.T7's tensor-factor construction).
 const SIGNED_PERM_TOL: f64 = 1e-9;
 
 /// All five `(sub-entity type, generator)` pairs defined by Appendix A.6.
@@ -223,7 +224,7 @@ pub(crate) fn build_lagrange_transformations(
     let td = tdim(key.cell);
     let mut cached_entity: Option<(CellType, Vec<f64>)> = None;
 
-    for (idx, (entity, generator)) in ENTITY_GENERATORS.into_iter().enumerate() {
+    for (entity, generator) in ENTITY_GENERATORS {
         let ed = tdim(entity);
         if ed >= td {
             continue;
@@ -266,6 +267,7 @@ pub(crate) fn build_lagrange_transformations(
             ),
             "Lagrange base transformation for {key:?} ({entity:?}, {generator:?}) was not a pure permutation"
         );
+        let idx = slot(entity, generator).expect("ENTITY_GENERATORS entry has a slot");
         tables[idx] = Some(bt);
     }
 
@@ -430,11 +432,14 @@ mod tests {
 
         for (cell, family, degree) in [
             (CellType::Triangle, NodeFamily::Equispaced, 15),
+            (CellType::Triangle, NodeFamily::Gll, 15),
             (CellType::Quadrilateral, NodeFamily::Equispaced, 20),
+            (CellType::Quadrilateral, NodeFamily::Gll, 20),
             (CellType::Tetrahedron, NodeFamily::Equispaced, 15),
-            (CellType::Tetrahedron, NodeFamily::Gll, 5),
+            (CellType::Tetrahedron, NodeFamily::Gll, 15),
             (CellType::Hexahedron, NodeFamily::Gll, 4),
-            (CellType::Prism, NodeFamily::Gll, 4),
+            (CellType::Prism, NodeFamily::Equispaced, 15),
+            (CellType::Prism, NodeFamily::Gll, 15),
             (CellType::Pyramid, NodeFamily::Equispaced, 8),
         ] {
             let el = Element::get(lagrange(cell, degree, Variant::Nodal(family))).unwrap();
