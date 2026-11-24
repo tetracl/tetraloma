@@ -57,7 +57,7 @@ impl tetraloma::Partitioner for BoxPartitioner {
         comm: &dyn CommDyn,
         g: &tetraloma::DistGraph,
         nparts: usize,
-    ) -> tetraloma::Result<Vec<i32>> {
+    ) -> Result<Vec<i32>, tetraloma::PartitionError> {
         self.0.partition(comm, g, nparts)
     }
 }
@@ -66,7 +66,7 @@ impl tetraloma::Partitioner for BoxPartitioner {
 /// rank (ADR-0029, item 12): here a ring of four vertices, all on the last rank.
 #[cfg(feature = "parmetis")]
 fn parmetis_rejects_empty_ranks(comm: &tetraloma::Mpi) {
-    use tetraloma::{GridError, Partitioner};
+    use tetraloma::{PartitionError, Partitioner};
 
     let (rank, size) = (comm.rank(), comm.size());
     let last = rank + 1 == size;
@@ -84,7 +84,7 @@ fn parmetis_rejects_empty_ranks(comm: &tetraloma::Mpi) {
     assert!(
         matches!(
             r,
-            Err(GridError::PartitionerFailed {
+            Err(PartitionError::PartitionerFailed {
                 name: "parmetis",
                 code: -1
             })

@@ -195,10 +195,10 @@ impl Partitioner for RoundRobin {
         comm: &dyn CommDyn,
         g: &DistGraph,
         nparts: usize,
-    ) -> tetraloma::Result<Vec<i32>> {
+    ) -> std::result::Result<Vec<i32>, tetraloma::PartitionError> {
         // This rank holds the graph vertices vtxdist[rank]..vtxdist[rank + 1].
         let rank = comm.rank();
-        let nparts = i64::try_from(nparts).map_err(|_| GridError::TooLarge)?;
+        let nparts = i64::try_from(nparts).map_err(|_| tetraloma::PartitionError::TooLarge)?;
         Ok((g.vtxdist[rank]..g.vtxdist[rank + 1])
             .map(|i| (i % nparts) as i32)
             .collect())

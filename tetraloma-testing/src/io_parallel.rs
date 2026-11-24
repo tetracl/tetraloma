@@ -68,7 +68,12 @@ impl Partitioner for BoxPartitioner {
         self.0.name()
     }
 
-    fn partition(&self, comm: &dyn CommDyn, g: &DistGraph, nparts: usize) -> Result<Vec<i32>> {
+    fn partition(
+        &self,
+        comm: &dyn CommDyn,
+        g: &DistGraph,
+        nparts: usize,
+    ) -> std::result::Result<Vec<i32>, tetraloma::PartitionError> {
         self.0.partition(comm, g, nparts)
     }
 }

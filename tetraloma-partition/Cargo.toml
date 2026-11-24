@@ -13,13 +13,13 @@ workspace = true
 [features]
 # The distributed partitioners call the libraries on `CommDyn::raw`, which needs MPI (ADR-0029,
 # item 4).
-ptscotch = ["dep:ptscotch-sys", "ptscotch-sys/mpi", "tetraloma-parallel/mpi"]
-parmetis = ["dep:parmetis-sys", "parmetis-sys/mpi", "tetraloma-parallel/mpi"]
+ptscotch = ["dep:ptscotch-sys", "ptscotch-sys/mpi", "tetraloma-comm/mpi"]
+parmetis = ["dep:parmetis-sys", "parmetis-sys/mpi", "tetraloma-comm/mpi"]
 metis = ["dep:metis"]
 scotch = ["dep:scotch", "dep:scotch-sys", "dep:scotch-sys-bindgen"]
 
 [dependencies]
-tetraloma-parallel = { path = "../tetraloma-parallel" }
+tetraloma-comm = { path = "../tetraloma-comm" }
 metis = { workspace = true, optional = true }
 parmetis-sys = { path = "../parmetis-sys", optional = true }
 ptscotch-sys = { path = "../ptscotch-sys", optional = true }
@@ -32,6 +32,3 @@ scotch-sys-bindgen = { workspace = true, optional = true }
 
 [dev-dependencies]
 proptest.workspace = true
-# The client and test meshes of the API examples, on hidden lines (ADR-0067, rule 6.3). With
-# `mpi` on, its ThreadComm needs `tetraloma-testing/mpi` too.
-tetraloma-testing = { path = "../tetraloma-testing" }

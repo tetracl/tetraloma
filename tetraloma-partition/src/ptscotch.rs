@@ -9,12 +9,12 @@ use std::ptr;
 use std::sync::PoisonError;
 
 use ptscotch_sys::{self as s, SCOTCH_NUM_BITS, SCOTCH_Num as Num};
-use tetraloma_parallel::{CommDyn, GridError, Result};
+use tetraloma_comm::{CommDyn, agree};
 
-use crate::graph::{Checked, agree, local_weights, signed_max, validate};
+use crate::graph::{Checked, local_weights, signed_max, validate};
 use crate::owned::{self, Owned};
 use crate::rank0::{RANDOM_STATE, narrow};
-use crate::{DistGraph, Partitioner};
+use crate::{DistGraph, PartitionError, Partitioner, Result};
 
 const NAME: &str = "ptscotch";
 
@@ -53,13 +53,13 @@ const NAME: &str = "ptscotch";
 /// # Example
 ///
 /// The example runs as one process without MPI. One part needs no library call; two parts need
-/// an MPI communicator. Under `mpirun`, pass the MPI communicator `Mpi` of tetraloma-parallel
+/// an MPI communicator. Under `mpirun`, pass the MPI communicator `Mpi` of tetraloma-comm
 /// (for example `Mpi::world(&universe)`) instead of `Serial`, with `nparts` set to
 /// `comm.size()`.
 ///
 /// ```
-/// use tetraloma_parallel::{GridError, Serial};
-/// use tetraloma_partition::{DistGraph, Partitioner, PtScotch};
+/// use tetraloma_comm::Serial;
+/// use tetraloma_partition::{DistGraph, PartitionError, Partitioner, PtScotch};
 ///
 /// // A path of four vertices with weights 1, 1, 1, 3, all on this rank.
 /// let g = DistGraph {
@@ -72,9 +72,9 @@ const NAME: &str = "ptscotch";
 /// assert_eq!(partitioner.partition(&Serial, &g, 1)?, [0, 0, 0, 0]);
 /// assert!(matches!(
 ///     partitioner.partition(&Serial, &g, 2),
-///     Err(GridError::NeedsMpiCommunicator("ptscotch"))
+///     Err(PartitionError::NeedsMpiCommunicator("ptscotch"))
 /// ));
-/// # Ok::<(), GridError>(())
+/// # Ok::<(), PartitionError>(())
 /// ```
 ///
 /// [Cargo features]: https://tetracl.github.io/tetraloma/features.html#partitioners
@@ -91,12 +91,12 @@ impl PtScotch {
     /// # Example
     ///
     /// The example runs as one process without MPI, so it can only ask for one part, which needs
-    /// no library call. Under `mpirun`, pass the MPI communicator `Mpi` of tetraloma-parallel
+    /// no library call. Under `mpirun`, pass the MPI communicator `Mpi` of tetraloma-comm
     /// instead of `Serial`.
     ///
     /// ```
-    /// use tetraloma_parallel::Serial;
-    /// use tetraloma_partition::{DistGraph, Partitioner, PtScotch};
+    /// use tetraloma_comm::Serial;
+    /// use tetraloma_partition::{DistGraph, PartitionError, Partitioner, PtScotch};
     ///
     /// // A ring of six vertices, all on this rank.
     /// let g = DistGraph {
@@ -108,7 +108,7 @@ impl PtScotch {
     /// let partitioner = PtScotch::default().seed(42);
     /// assert_eq!(partitioner.name(), "ptscotch");
     /// assert_eq!(partitioner.partition(&Serial, &g, 1)?, [0; 6]);
-    /// # Ok::<(), tetraloma_parallel::GridError>(())
+    /// # Ok::<(), PartitionError>(())
     /// ```
     ///
     /// [Distributed meshes]: https://tetracl.github.io/tetraloma/tutorials/distributed.html#partitioners
@@ -127,7 +127,7 @@ impl PtScotch {
     ) -> Result<Vec<i32>> {
         let raw = agree(
             comm,
-            comm.raw().ok_or(GridError::NeedsMpiCommunicator(NAME)),
+            comm.raw().ok_or(PartitionError::NeedsMpiCommunicator(NAME)),
         )?;
         let n = (checked.end - checked.begin) as usize;
         // Declared before the graph, which borrows them, so they outlive it.
@@ -137,7 +137,7 @@ impl PtScotch {
             let velotab: Option<Vec<Num>> = local_weights(g, checked.weighted)
                 .map(|w| narrow(&w))
                 .transpose()?;
-            let num = |c: usize| Num::try_from(c).map_err(|_| GridError::TooLarge);
+            let num = |c: usize| Num::try_from(c).map_err(|_| PartitionError::TooLarge);
             let (vertnbr, edgenbr) = (num(n)?, num(edgetab.len())?);
             let (procnbr, partnbr) = (num(comm.size())?, num(nparts)?);
             Ok((
@@ -249,7 +249,7 @@ impl PtScotch {
             #[allow(clippy::useless_conversion)]
             parttab
                 .into_iter()
-                .map(|p| i32::try_from(p).map_err(|_| GridError::TooLarge))
+                .map(|p| i32::try_from(p).map_err(|_| PartitionError::TooLarge))
                 .collect()
         });
         agree(comm, parts)

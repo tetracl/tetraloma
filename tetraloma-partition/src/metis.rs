@@ -4,11 +4,11 @@ use std::sync::PoisonError;
 
 use metis::Idx;
 use metis::option::{Seed, UFactor};
-use tetraloma_parallel::{CommDyn, GridError, Result};
+use tetraloma_comm::CommDyn;
 
 use crate::graph::validate;
 use crate::rank0::{Csr, RANDOM_STATE, gather_to_root, narrow, scatter_parts};
-use crate::{DistGraph, Partitioner};
+use crate::{DistGraph, PartitionError, Partitioner, Result};
 
 // Design: "Partitioning"; ADR-0029 (item 9: the validation), ADR-0033 (`metis` excludes
 // `parmetis`).
@@ -41,8 +41,8 @@ use crate::{DistGraph, Partitioner};
 /// # Example
 ///
 /// ```
-/// use tetraloma_parallel::Serial;
-/// use tetraloma_partition::{DistGraph, Metis, Partitioner};
+/// use tetraloma_comm::Serial;
+/// use tetraloma_partition::{DistGraph, Metis, PartitionError, Partitioner};
 ///
 /// // A path of four vertices with weights 1, 1, 1, 3.
 /// let g = DistGraph {
@@ -55,7 +55,7 @@ use crate::{DistGraph, Partitioner};
 /// assert_eq!(parts.len(), 4);
 /// assert!(parts.iter().all(|&p| p == 0 || p == 1));
 /// assert_ne!(parts[0], parts[3]);
-/// # Ok::<(), tetraloma_parallel::GridError>(())
+/// # Ok::<(), PartitionError>(())
 /// ```
 ///
 /// [Cargo features]: https://tetracl.github.io/tetraloma/features.html#partitioners
@@ -72,8 +72,8 @@ impl Metis {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::Serial;
-    /// use tetraloma_partition::{DistGraph, Metis, Partitioner};
+    /// use tetraloma_comm::Serial;
+    /// use tetraloma_partition::{DistGraph, Metis, PartitionError, Partitioner};
     ///
     /// // A ring of six vertices.
     /// let g = DistGraph {
@@ -86,7 +86,7 @@ impl Metis {
     /// let again = Metis::default().seed(42).partition(&Serial, &g, 3)?;
     /// assert_eq!(first, again);
     /// assert!(first.iter().all(|&p| (0..3).contains(&p)));
-    /// # Ok::<(), tetraloma_parallel::GridError>(())
+    /// # Ok::<(), PartitionError>(())
     /// ```
     ///
     /// [Distributed meshes]: https://tetracl.github.io/tetraloma/tutorials/distributed.html#partitioners
@@ -103,8 +103,8 @@ impl Metis {
         let xadj: Vec<Idx> = narrow(&csr.xadj)?;
         let adjncy: Vec<Idx> = narrow(&csr.adjncy)?;
         let vwgt: Option<Vec<Idx>> = csr.vwgt.as_deref().map(narrow).transpose()?;
-        let nparts = Idx::try_from(nparts).map_err(|_| GridError::TooLarge)?;
-        let failed = |code| GridError::PartitionerFailed {
+        let nparts = Idx::try_from(nparts).map_err(|_| PartitionError::TooLarge)?;
+        let failed = |code| PartitionError::PartitionerFailed {
             name: "metis",
             code,
         };
@@ -131,7 +131,7 @@ impl Metis {
         // `idx_t` is 32 bits vendored, 32 or 64 with `use-system` (ADR-0029, item 14).
         #[allow(clippy::useless_conversion)]
         part.into_iter()
-            .map(|p| i32::try_from(p).map_err(|_| GridError::TooLarge))
+            .map(|p| i32::try_from(p).map_err(|_| PartitionError::TooLarge))
             .collect()
     }
 }

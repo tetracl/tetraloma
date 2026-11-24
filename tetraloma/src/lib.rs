@@ -142,5 +142,5 @@ pub use tetraloma_partition::ParMetis;
 pub use tetraloma_partition::PtScotch;
 #[cfg(feature = "scotch")]
 pub use tetraloma_partition::Scotch;
-pub use tetraloma_partition::{Block, DistGraph, Partitioner};
+pub use tetraloma_partition::{Block, DistGraph, PartitionError, Partitioner};
 pub use tetraloma_topology::{CellBlock, Connectivity, EntityBlock};

@@ -4532,7 +4532,6 @@ dependencies = [
  "tetraloma-dims",
  "tetraloma-geometry",
  "tetraloma-parallel",
- "tetraloma-partition",
  "tetraloma-refcell",
  "tetraloma-testing",
  "tetraloma-topology",
@@ -4571,8 +4570,7 @@ dependencies = [
  "ptscotch-sys",
  "scotch",
  "scotch-sys",
- "tetraloma-parallel",
- "tetraloma-testing",
+ "tetraloma-comm",
 ]
 
 [[package]]

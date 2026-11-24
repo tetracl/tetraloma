@@ -6,7 +6,9 @@
 //! distributed partitioners' error without an MPI communicator (features `ptscotch`,
 //! `parmetis`, with `tetraloma-testing/mpi`).
 
-use tetraloma::{Block, Comm, CommDyn, CommExt, D1, D2, D3, DistGraph, GridError, Partitioner};
+use tetraloma::{
+    Block, Comm, CommDyn, CommExt, D1, D2, D3, DistGraph, PartitionError, Partitioner,
+};
 use tetraloma_testing::partition::host_dual_graph;
 use tetraloma_testing::{HostMesh, ThreadComm};
 
@@ -72,11 +74,11 @@ fn errors_are_agreed() {
             g.xadj.pop();
         }
         match Block.partition(&comm, &g, 3) {
-            Err(GridError::LengthMismatch {
+            Err(PartitionError::LengthMismatch {
                 expected: 3,
                 found: 2,
             }) if comm.rank() == 1 => {}
-            Err(GridError::RemoteFailure { rank: 1 }) if comm.rank() != 1 => {}
+            Err(PartitionError::RemoteFailure { rank: 1 }) if comm.rank() != 1 => {}
             other => panic!("rank {}: {other:?}", comm.rank()),
         }
     });
@@ -162,7 +164,7 @@ fn dual_graph_on_equals_the_partitioner_input() {
             comm: &dyn CommDyn,
             g: &DistGraph,
             nparts: usize,
-        ) -> tetraloma::Result<Vec<i32>> {
+        ) -> Result<Vec<i32>, PartitionError> {
             *self.0.lock().unwrap() = Some(g.clone());
             Block.partition(comm, g, nparts)
         }
@@ -363,7 +365,7 @@ fn distributed_partitioners_need_mpi() {
         });
         for r in out {
             assert!(
-                matches!(r, Err(GridError::NeedsMpiCommunicator(n)) if n == *name),
+                matches!(r, Err(PartitionError::NeedsMpiCommunicator(n)) if n == *name),
                 "{name}: {r:?}"
             );
         }

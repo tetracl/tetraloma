@@ -24,7 +24,6 @@ tetraloma-device = { path = "../tetraloma-device" }
 tetraloma-dims = { path = "../tetraloma-dims" }
 tetraloma-geometry = { path = "../tetraloma-geometry" }
 tetraloma-parallel = { path = "../tetraloma-parallel" }
-tetraloma-partition = { path = "../tetraloma-partition" }
 tetraloma-refcell = { path = "../tetraloma-refcell" }
 tetraloma-topology = { path = "../tetraloma-topology" }
 hdf5-metno = { workspace = true, optional = true }
