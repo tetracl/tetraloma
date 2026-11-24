@@ -2,8 +2,9 @@
 
 use cubecl::prelude::*;
 
+use crate::device_error::{DeviceError, Result};
 use crate::plan::debug_assert_bindings;
-use crate::{DeviceBuffer, DeviceScalar, GridError, KernelKind, LaunchPlan, Result, VECTOR_PAD};
+use crate::{DeviceBuffer, DeviceScalar, KernelKind, LaunchPlan, VECTOR_PAD};
 
 /// `out[v]` lane by lane from `src` at the indices of `idx[v]`, for every vector
 /// `v < num_vectors` (Listing B5 loop). The read address is clamped to `src_len - 1`, and an
@@ -104,7 +105,7 @@ pub fn gather<T: DeviceScalar>(
     if src.len() == 0 {
         return DeviceBuffer::zeros(client, idx.len());
     }
-    let src_len = u32::try_from(src.len()).map_err(|_| GridError::TooLarge)?;
+    let src_len = u32::try_from(src.len()).map_err(|_| DeviceError::TooLarge)?;
     let plan = LaunchPlan::elementwise(
         client,
         KernelKind::Gather,
@@ -174,12 +175,12 @@ pub fn scatter<T: DeviceScalar>(
     dst: &mut DeviceBuffer<T>,
 ) -> Result<()> {
     if idx.len() != src.len() {
-        return Err(GridError::LengthMismatch {
+        return Err(DeviceError::LengthMismatch {
             expected: src.len(),
             found: idx.len(),
         });
     }
-    let dst_len = u32::try_from(dst.len()).map_err(|_| GridError::TooLarge)?;
+    let dst_len = u32::try_from(dst.len()).map_err(|_| DeviceError::TooLarge)?;
     if src.len() == 0 || dst_len == 0 {
         return Ok(());
     }
@@ -193,7 +194,7 @@ pub fn scatter<T: DeviceScalar>(
         );
     }
     let client = src.client();
-    let len = u32::try_from(src.len()).map_err(|_| GridError::TooLarge)?;
+    let len = u32::try_from(src.len()).map_err(|_| DeviceError::TooLarge)?;
     let plan =
         LaunchPlan::elementwise(client, KernelKind::Scalar, src.len(), size_of::<T>(), 1, 1)?;
     debug_assert_bindings(client, 3);

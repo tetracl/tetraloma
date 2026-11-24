@@ -382,7 +382,7 @@ fn copy_length_mismatch() {
     let src = upload(&client, &[1u32, 2, 3]);
     let mut dst = DeviceBuffer::<u32>::uninit(&client, 4).expect("uninit");
     match copy(&src, &mut dst) {
-        Err(GridError::LengthMismatch {
+        Err(DeviceError::LengthMismatch {
             expected: 3,
             found: 4,
         }) => {}
@@ -395,7 +395,7 @@ fn radix_sort_length_mismatch() {
     let client = test_client();
     let keys = upload_keys(&client, &[3, 1, 2], 1);
     match radix_sort(&keys, &upload(&client, &[0u32, 1])) {
-        Err(GridError::LengthMismatch {
+        Err(DeviceError::LengthMismatch {
             expected: 3,
             found: 2,
         }) => {}
@@ -408,7 +408,7 @@ fn unique_by_key_length_mismatch() {
     let client = test_client();
     let keys = upload_keys(&client, &[1, 1, 2], 1);
     match unique_by_key(&keys, &upload(&client, &[0u32; 4])) {
-        Err(GridError::LengthMismatch {
+        Err(DeviceError::LengthMismatch {
             expected: 3,
             found: 4,
         }) => {}

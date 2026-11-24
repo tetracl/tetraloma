@@ -11,11 +11,9 @@
 use cubecl::prelude::*;
 
 use super::reduce::launch_reduce;
+use crate::device_error::{DeviceError, Result};
 use crate::plan::debug_assert_bindings;
-use crate::{
-    DeviceBuffer, DeviceScalar, GridError, KernelKind, LaunchPlan, ReduceOp, Result, VECTOR_PAD,
-    fill,
-};
+use crate::{DeviceBuffer, DeviceScalar, KernelKind, LaunchPlan, ReduceOp, VECTOR_PAD, fill};
 
 /// The vector of `x` at `v` with lanes at index >= `len` set to 0. A vector that starts at or
 /// past `len` is not read.
@@ -209,7 +207,7 @@ pub fn exclusive_scan<T: DeviceScalar>(x: &DeviceBuffer<T>) -> Result<DeviceBuff
 fn scan<T: DeviceScalar>(x: &DeviceBuffer<T>, exclusive: bool) -> Result<DeviceBuffer<T>> {
     let client = x.client();
     let items = if exclusive {
-        x.len().checked_add(1).ok_or(GridError::TooLarge)?
+        x.len().checked_add(1).ok_or(DeviceError::TooLarge)?
     } else {
         x.len()
     };
@@ -227,7 +225,7 @@ fn scan<T: DeviceScalar>(x: &DeviceBuffer<T>, exclusive: bool) -> Result<DeviceB
         if cubes + 1 >= items {
             // The recursive scan over cubes + 1 items would not shrink. Only injected
             // properties give cubes that cover fewer than VECTOR_PAD scalars.
-            return Err(GridError::TooLarge);
+            return Err(DeviceError::TooLarge);
         }
         let sums = DeviceBuffer::<T>::uninit(client, cubes)?;
         launch_reduce(x, &sums, &plan, ReduceOp::Sum)?;
@@ -252,7 +250,7 @@ fn launch_scan_tile<T: DeviceScalar>(
 ) -> Result<()> {
     let client = x.client();
     let n = plan.vector_size;
-    let len = u32::try_from(x.len()).map_err(|_| GridError::TooLarge)?;
+    let len = u32::try_from(x.len()).map_err(|_| DeviceError::TooLarge)?;
     let cube_dim = plan.cube_dim.num_elems();
     debug_assert_bindings(client, 3);
     // SAFETY: the kernel reads vector v of `x` only if v · n < len; `x` holds `padded_len()`

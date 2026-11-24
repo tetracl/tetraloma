@@ -373,6 +373,25 @@ impl From<tetraloma_comm::CommError> for GridError {
     }
 }
 
+// Design: section 7; ADR-0074. Moves to tetraloma-topology with `GridError` in M18.T6.
+impl From<crate::DeviceError> for GridError {
+    fn from(error: crate::DeviceError) -> Self {
+        match error {
+            crate::DeviceError::TooLarge => GridError::TooLarge,
+            crate::DeviceError::AllocationTooLarge { bytes, max } => {
+                GridError::AllocationTooLarge { bytes, max }
+            }
+            crate::DeviceError::UnsupportedPrecision { scalar, device } => {
+                GridError::UnsupportedPrecision { scalar, device }
+            }
+            crate::DeviceError::LengthMismatch { expected, found } => {
+                GridError::LengthMismatch { expected, found }
+            }
+            crate::DeviceError::Server(error) => GridError::Server(error),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::GridError;
@@ -496,6 +515,50 @@ mod tests {
         assert!(matches!(
             GridError::from(CommError::RemoteFailure { rank: 16 }),
             GridError::RemoteFailure { rank: 16 }
+        ));
+    }
+
+    #[test]
+    fn device_error_converts_to_matching_grid_error() {
+        use crate::DeviceError;
+        use cubecl::server::{Collective, ServerError};
+
+        assert!(matches!(
+            GridError::from(DeviceError::TooLarge),
+            GridError::TooLarge
+        ));
+        assert!(matches!(
+            GridError::from(DeviceError::AllocationTooLarge { bytes: 21, max: 22 }),
+            GridError::AllocationTooLarge { bytes: 21, max: 22 }
+        ));
+        assert!(matches!(
+            GridError::from(DeviceError::UnsupportedPrecision {
+                scalar: "f64",
+                device: "device-a",
+            }),
+            GridError::UnsupportedPrecision {
+                scalar: "f64",
+                device: "device-a",
+            }
+        ));
+        assert!(matches!(
+            GridError::from(DeviceError::LengthMismatch {
+                expected: 23,
+                found: 24,
+            }),
+            GridError::LengthMismatch {
+                expected: 23,
+                found: 24,
+            }
+        ));
+        assert!(matches!(
+            GridError::from(DeviceError::Server(ServerError::no_device_transport(
+                Collective::AllReduce,
+            ))),
+            GridError::Server(ServerError::NoDeviceTransport {
+                operation: Collective::AllReduce,
+                ..
+            })
         ));
     }
 }

@@ -3,8 +3,9 @@
 use cubecl::prelude::*;
 use cubecl::server::Handle;
 
+use crate::device_error::{DeviceError, Result};
 use crate::plan::debug_assert_bindings;
-use crate::{DeviceBuffer, GridError, KernelKind, LaunchPlan, Result, VECTOR_PAD};
+use crate::{DeviceBuffer, KernelKind, LaunchPlan, VECTOR_PAD};
 
 /// `dst[v] = src[v]` for every vector `v < num_vectors`, by the loop of Listing B5.
 #[cube(launch_unchecked)]
@@ -49,7 +50,7 @@ fn copy_kernel<N: Size>(
 pub fn copy<T: CubeElement>(src: &DeviceBuffer<T>, dst: &mut DeviceBuffer<T>) -> Result<()> {
     const { assert!(size_of::<T>().is_multiple_of(4), "copy moves u32 words") };
     if src.len() != dst.len() {
-        return Err(GridError::LengthMismatch {
+        return Err(DeviceError::LengthMismatch {
             expected: src.len(),
             found: dst.len(),
         });
@@ -61,7 +62,7 @@ pub fn copy<T: CubeElement>(src: &DeviceBuffer<T>, dst: &mut DeviceBuffer<T>) ->
     let words = src
         .padded_len()
         .checked_mul(size_of::<T>() / 4)
-        .ok_or(GridError::TooLarge)?;
+        .ok_or(DeviceError::TooLarge)?;
     launch_copy(src.client(), src.handle(), dst.handle(), words)
 }
 

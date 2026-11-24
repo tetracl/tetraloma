@@ -160,7 +160,7 @@ pub(crate) fn touching_cells(
             );
         }
     }
-    segmented_reduce(&values, offsets, ReduceOp::Min)
+    Ok(segmented_reduce(&values, offsets, ReduceOp::Min)?)
 }
 
 /// Step 7, first pass: the renumbering `old2new` of the `runs` provisional entities of one
@@ -206,7 +206,8 @@ pub(crate) fn place_ghosts(
     let client = old2new.client().clone();
     let idx = DeviceBuffer::from_host(&client, ghosts)?;
     let new = DeviceBuffer::from_host(&client, new)?;
-    scatter(&new, &idx, old2new)
+    scatter(&new, &idx, old2new)?;
+    Ok(())
 }
 
 /// `old2new[g]` for the provisional ids `g` in `entities`, on the host: the local indices of
@@ -216,5 +217,5 @@ pub(crate) fn local_indices(old2new: &DeviceBuffer<u32>, entities: &[u32]) -> Re
         return Ok(Vec::new());
     }
     let idx = DeviceBuffer::from_host(old2new.client(), entities)?;
-    gather(old2new, &idx)?.to_host()
+    Ok(gather(old2new, &idx)?.to_host()?)
 }

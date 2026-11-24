@@ -12,7 +12,7 @@
 //! - [`primitives`] holds the deterministic device algorithms tetraloma is built on: fill,
 //!   copy, gather and scatter, pack and unpack, reductions, prefix sums, a radix sort and
 //!   run-length encoding.
-//! - [`GridError`] and [`Result`] are the error and result types of every tetraloma crate.
+//! - [`DeviceError`] is the error type of this crate and converts into [`GridError`].
 //!
 //! The facade crate `tetraloma` re-exports what a program needs from here. The chapter
 //! [Compute devices](https://tetracl.github.io/tetraloma/devices.html) explains how to open a
@@ -44,7 +44,6 @@ pub use cubecl::prelude::{Client, CubeElement};
 /// depending on `cubecl` directly. See [Errors from the compute
 /// server](https://tetracl.github.io/tetraloma/troubleshooting.html#errors-from-the-compute-server).
 pub use cubecl::server::ServerError;
-#[doc(hidden)]
 pub use device_error::DeviceError;
 pub use error::{ConnKey, GridError, Result};
 pub use plan::{LaunchPlan, debug_assert_bindings};

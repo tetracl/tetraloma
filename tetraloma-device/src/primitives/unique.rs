@@ -9,10 +9,9 @@
 use cubecl::prelude::*;
 
 use crate::buffer::pad_len;
+use crate::device_error::{DeviceError, Result};
 use crate::plan::debug_assert_bindings;
-use crate::{
-    DeviceBuffer, GridError, KernelKind, LaunchPlan, Result, SortKeys, exclusive_scan, fill,
-};
+use crate::{DeviceBuffer, KernelKind, LaunchPlan, SortKeys, exclusive_scan, fill};
 
 /// `flags[i]` = 1 if key `i` differs from key `i - 1` in any word, or `i` = 0; else 0.
 #[cube(launch_unchecked)]
@@ -363,7 +362,7 @@ type Numbering = (LaunchPlan, DeviceBuffer<u32>);
 fn groups(sorted: &SortKeys, payload: &DeviceBuffer<u32>) -> Result<(Unique, Option<Numbering>)> {
     let len = sorted.len();
     if payload.len() != len {
-        return Err(GridError::LengthMismatch {
+        return Err(DeviceError::LengthMismatch {
             expected: len,
             found: payload.len(),
         });
@@ -440,7 +439,7 @@ fn number_runs(keys: &SortKeys) -> Result<(LaunchPlan, DeviceBuffer<u32>, usize)
 
 /// `v` as a u32 index or length; `TooLarge` if it does not fit.
 fn to_u32(v: usize) -> Result<u32> {
-    u32::try_from(v).map_err(|_| GridError::TooLarge)
+    u32::try_from(v).map_err(|_| DeviceError::TooLarge)
 }
 
 /// Element `i` of `x`: an explicit, blocking 4-byte device-to-host read (ADR-0009).
@@ -449,7 +448,7 @@ fn read_u32(x: &DeviceBuffer<u32>, i: usize) -> Result<u32> {
     let bytes_of = |n: usize| {
         n.checked_mul(size_of::<u32>())
             .and_then(|b| u64::try_from(b).ok())
-            .ok_or(GridError::TooLarge)
+            .ok_or(DeviceError::TooLarge)
     };
     let size = bytes_of(x.padded_len())?;
     let start = bytes_of(i)?;

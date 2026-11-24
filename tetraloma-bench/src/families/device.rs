@@ -131,7 +131,7 @@ impl SplitMix {
     }
 }
 
-fn host_error(e: tetraloma_device::GridError) -> String {
+fn host_error(e: impl core::fmt::Display) -> String {
     e.to_string()
 }
 

@@ -4,10 +4,9 @@ use cubecl::ir::DeviceProperties;
 use cubecl::prelude::*;
 
 use crate::buffer::pad_len;
+use crate::device_error::{DeviceError, Result};
 use crate::policy::is_vector_size;
-use crate::{
-    CpuUnits, DeviceClass, GridError, KernelKind, Result, VectorPolicy, VectorSizeOverride, testing,
-};
+use crate::{CpuUnits, DeviceClass, KernelKind, VectorPolicy, VectorSizeOverride, testing};
 
 /// Units per cube on GPUs, or `max_units_per_cube` if that is smaller.
 const GPU_CUBE_DIM: u32 = 256;
@@ -251,7 +250,7 @@ fn plan_for(
     let policy = VectorPolicy::for_class(class);
     let cpu_block = policy.cpu_block_bytes(kind, elem_bytes);
     let (cube_dim, items_per_unit) = if let Some(block) = cpu_block {
-        let bytes = n.checked_mul(elem_bytes).ok_or(GridError::TooLarge)?;
+        let bytes = n.checked_mul(elem_bytes).ok_or(DeviceError::TooLarge)?;
         (
             cpu_units(props, policy, kind, elem_bytes),
             cpu_items_per_unit(bytes, block),
@@ -267,7 +266,7 @@ fn plan_for(
     let cube_dim = cube_dim.max(1);
     let per_cube = (cube_dim as usize)
         .checked_mul(items_per_unit)
-        .ok_or(GridError::TooLarge)?;
+        .ok_or(DeviceError::TooLarge)?;
     let shape = Shape {
         cube_dim,
         items_per_unit,
@@ -303,7 +302,7 @@ fn per_group_for(
         props, class, kind, g.groups, elem_bytes, max_vector, live, vector,
     )?;
     if g.shared_bytes > hw.max_shared_memory_size {
-        return Err(GridError::TooLarge);
+        return Err(DeviceError::TooLarge);
     }
 
     let policy = VectorPolicy::for_class(class);
@@ -323,14 +322,14 @@ fn per_group_for(
     let cube_dim = units_per_group * (cap / units_per_group);
     let items_per_unit = match cpu_block {
         Some(block) => {
-            let bytes = n.checked_mul(elem_bytes).ok_or(GridError::TooLarge)?;
+            let bytes = n.checked_mul(elem_bytes).ok_or(DeviceError::TooLarge)?;
             cpu_items_per_unit(bytes, block)
         }
         None => 1,
     };
     let per_cube = ((cube_dim / units_per_group) as usize)
         .checked_mul(items_per_unit)
-        .ok_or(GridError::TooLarge)?;
+        .ok_or(DeviceError::TooLarge)?;
     let shape = Shape {
         cube_dim,
         items_per_unit,
@@ -378,7 +377,7 @@ fn vectors(
     assert!(elem_bytes > 0, "elem_bytes is 0");
     let n = vector_size(props, class, kind, elem_bytes, max_vector, live, vector);
     let num_vectors = pad_len(items)? / n;
-    u32::try_from(num_vectors).map_err(|_| GridError::TooLarge)?;
+    u32::try_from(num_vectors).map_err(|_| DeviceError::TooLarge)?;
     Ok((n, num_vectors))
 }
 
@@ -403,9 +402,9 @@ impl Shape {
             .map(|f| f as usize)
             .chain([self.items_per_unit])
             .try_fold(1usize, |acc, f| acc.checked_mul(f))
-            .ok_or(GridError::TooLarge)?;
-        u32::try_from(covered).map_err(|_| GridError::TooLarge)?;
-        let fit = |v: usize| u32::try_from(v).map_err(|_| GridError::TooLarge);
+            .ok_or(DeviceError::TooLarge)?;
+        u32::try_from(covered).map_err(|_| DeviceError::TooLarge)?;
+        let fit = |v: usize| u32::try_from(v).map_err(|_| DeviceError::TooLarge);
         Ok(LaunchPlan {
             cube_count: CubeCount::Static(x, y, z),
             cube_dim: CubeDim::new_1d(self.cube_dim),
@@ -479,11 +478,11 @@ fn spread_cubes(cubes: usize, max: (u32, u32, u32)) -> Result<(u32, u32, u32)> {
     let (mx, my, mz) = (max.0.max(1) as usize, max.1.max(1) as usize, max.2 as usize);
     let x = n.min(mx);
     let y = n.div_ceil(x).min(my);
-    let z = n.div_ceil(x.checked_mul(y).ok_or(GridError::TooLarge)?);
+    let z = n.div_ceil(x.checked_mul(y).ok_or(DeviceError::TooLarge)?);
     if z > mz {
-        return Err(GridError::TooLarge);
+        return Err(DeviceError::TooLarge);
     }
-    let fit = |v: usize| u32::try_from(v).map_err(|_| GridError::TooLarge);
+    let fit = |v: usize| u32::try_from(v).map_err(|_| DeviceError::TooLarge);
     Ok((fit(x)?, fit(y)?, fit(z)?))
 }
 
@@ -883,7 +882,7 @@ mod tests {
         assert_eq!(spread_cubes(10, (3, 3, 3)).unwrap(), (3, 3, 2));
         assert!(matches!(
             spread_cubes(28, (3, 3, 3)),
-            Err(GridError::TooLarge)
+            Err(DeviceError::TooLarge)
         ));
         assert_eq!(
             spread_cubes(100_000, (65_535, 65_535, 65_535)).unwrap(),
@@ -1032,8 +1031,8 @@ mod tests {
             };
             assert!(plan(0).is_ok());
             assert!(plan(max).is_ok());
-            assert!(matches!(plan(max + 1), Err(GridError::TooLarge)));
-            assert!(matches!(plan(usize::MAX), Err(GridError::TooLarge)));
+            assert!(matches!(plan(max + 1), Err(DeviceError::TooLarge)));
+            assert!(matches!(plan(usize::MAX), Err(DeviceError::TooLarge)));
         }
     }
 
@@ -1045,7 +1044,7 @@ mod tests {
             for groups in [usize::MAX, 1 << 33] {
                 assert!(matches!(
                     group_plan(&props, groups, 4),
-                    Err(GridError::TooLarge)
+                    Err(DeviceError::TooLarge)
                 ));
             }
         }
@@ -1056,14 +1055,14 @@ mod tests {
         assert!(group_plan(&tight, 1 << 12, 64).is_ok());
         assert!(matches!(
             group_plan(&tight, 1 << 20, 64),
-            Err(GridError::TooLarge)
+            Err(DeviceError::TooLarge)
         ));
         // The launched units exceed u32 although the vectors fit.
         let mut wide = gpu(1024, 1024);
         wide.hardware.max_cube_count = (u32::MAX, u32::MAX, u32::MAX);
         assert!(matches!(
             group_plan(&wide, (u32::MAX - 15) as usize, 1),
-            Err(GridError::TooLarge)
+            Err(DeviceError::TooLarge)
         ));
     }
 
@@ -1128,7 +1127,7 @@ mod tests {
                 1,
                 VectorSizeOverride::Scalar
             ),
-            Err(GridError::TooLarge)
+            Err(DeviceError::TooLarge)
         ));
         assert!(matches!(
             plan_for(
@@ -1140,7 +1139,7 @@ mod tests {
                 1,
                 VectorSizeOverride::Scalar
             ),
-            Err(GridError::TooLarge)
+            Err(DeviceError::TooLarge)
         ));
     }
 }

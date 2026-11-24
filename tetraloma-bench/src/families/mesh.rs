@@ -163,7 +163,7 @@ fn lifted(h: &HostMesh) -> HostMesh {
     }
 }
 
-fn device_error(e: tetraloma::GridError) -> String {
+fn device_error(e: impl core::fmt::Display) -> String {
     e.to_string()
 }
 

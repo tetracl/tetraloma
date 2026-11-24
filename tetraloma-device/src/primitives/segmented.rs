@@ -3,8 +3,9 @@
 use cubecl::prelude::*;
 
 use super::reduce::{Op, combine, identity};
+use crate::device_error::{DeviceError, Result};
 use crate::plan::debug_assert_bindings;
-use crate::{DeviceBuffer, DeviceScalar, GridError, KernelKind, LaunchPlan, ReduceOp, Result};
+use crate::{DeviceBuffer, DeviceScalar, KernelKind, LaunchPlan, ReduceOp};
 
 /// `out[s]` combines `values[lo..hi]` in index order, with `lo` and `hi` the offsets of
 /// segment s clamped to `len`; an empty or decreasing pair gives the identity.
@@ -72,8 +73,8 @@ pub fn segmented_reduce<T: DeviceScalar>(
     if segments == 0 {
         return Ok(out);
     }
-    let len = u32::try_from(values.len()).map_err(|_| GridError::TooLarge)?;
-    let num_segments = u32::try_from(segments).map_err(|_| GridError::TooLarge)?;
+    let len = u32::try_from(values.len()).map_err(|_| DeviceError::TooLarge)?;
+    let num_segments = u32::try_from(segments).map_err(|_| DeviceError::TooLarge)?;
     let plan = LaunchPlan::elementwise(client, KernelKind::Scalar, segments, size_of::<T>(), 1, 1)?;
     debug_assert_bindings(client, 3);
     // SAFETY: the kernel reads offsets[s] and offsets[s + 1] only for s < num_segments, so

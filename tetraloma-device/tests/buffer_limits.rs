@@ -3,7 +3,7 @@
 
 use cubecl::prelude::*;
 use tetraloma_device::testing::with_properties;
-use tetraloma_device::{DeviceBuffer, GridError, VECTOR_PAD, check_precision};
+use tetraloma_device::{DeviceBuffer, DeviceError, VECTOR_PAD, check_precision};
 use tetraloma_testing::{supports, test_client};
 
 /// The injected `max_page_size`: 1024 bytes, 256 u32 elements.
@@ -20,9 +20,9 @@ fn padded_bytes(len: usize) -> usize {
     len.max(1).next_multiple_of(VECTOR_PAD) * size_of::<u32>()
 }
 
-fn assert_too_large<T>(result: tetraloma_device::Result<T>, len: usize, what: &str) {
+fn assert_too_large<T>(result: Result<T, DeviceError>, len: usize, what: &str) {
     match result {
-        Err(GridError::AllocationTooLarge { bytes, max }) => {
+        Err(DeviceError::AllocationTooLarge { bytes, max }) => {
             assert_eq!(bytes, padded_bytes(len), "{what}: bytes");
             assert_eq!(max, LIMIT, "{what}: max");
         }
@@ -91,7 +91,7 @@ fn f64_unsupported_where_device_lacks_it() {
     }
     match result {
         Ok(()) => assert!(supported, "Ok although supports_type(f64) is false"),
-        Err(GridError::UnsupportedPrecision { scalar, device }) => {
+        Err(DeviceError::UnsupportedPrecision { scalar, device }) => {
             assert!(!supported, "UnsupportedPrecision although f64 is supported");
             assert_eq!(scalar, "f64");
             assert_eq!(device, client.name());

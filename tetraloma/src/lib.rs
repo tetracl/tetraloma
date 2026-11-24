@@ -121,7 +121,8 @@ pub use tetraloma_comm::{
     Comm, CommDyn, CommError, CommExt, CommScalar, DType, Neighbourhood, Serial, local_gpu_index,
 };
 pub use tetraloma_device::{
-    ConnKey, DeviceBuffer, DeviceCsr, DeviceStrided, GridError, Real, Result, VECTOR_PAD,
+    ConnKey, DeviceBuffer, DeviceCsr, DeviceError, DeviceStrided, GridError, Real, Result,
+    VECTOR_PAD,
 };
 pub use tetraloma_dims::{
     Cell1, Cell2, Cell3, CellType, Codim0, Codim1, D0, D1, D2, D3, Dim, EmbeddedIn, TopoDim,

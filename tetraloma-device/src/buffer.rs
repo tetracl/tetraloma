@@ -5,8 +5,9 @@ use core::marker::PhantomData;
 use cubecl::prelude::*;
 use cubecl::server::Handle;
 
+use crate::device_error::{DeviceError, Result};
 use crate::primitives::launch_fill;
-use crate::{GridError, Result, testing};
+use crate::testing;
 
 /// The padding of every device buffer: its allocation holds a multiple of `VECTOR_PAD` = 16
 /// elements, at least one block, so vectorised kernels need no scalar tail.
@@ -39,7 +40,7 @@ pub const VECTOR_PAD: usize = 16;
 /// A buffer is not `Clone`: [`share`](Self::share) makes a second view of the same memory, and
 /// [`deep_clone`](Self::deep_clone) an independent copy. Every constructor checks the
 /// allocation against the largest allocation the device allows, its `max_page_size`, and
-/// returns `GridError::AllocationTooLarge` above it.
+/// returns `DeviceError::AllocationTooLarge` above it.
 ///
 /// # Example
 ///
@@ -287,7 +288,7 @@ impl<T: CubeElement> DeviceBuffer<T> {
     ///
     /// # Errors
     ///
-    /// `GridError::Server` if the device reports an error.
+    /// `DeviceError::Server` if the device reports an error.
     ///
     /// # Example
     ///
@@ -324,18 +325,18 @@ impl<T: CubeElement> DeviceBuffer<T> {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_device::{DeviceBuffer, GridError};
+    /// use tetraloma_device::{DeviceBuffer, DeviceError};
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
     /// # let client = tetraloma_testing::test_client();
     /// let mut b = DeviceBuffer::from_host(&client, &[1u32, 2, 3]).unwrap();
     /// b.write_host(&[7, 8, 9]).unwrap();
     /// assert_eq!(b.to_host().unwrap(), vec![7, 8, 9]);
-    /// assert!(matches!(b.write_host(&[1]), Err(GridError::LengthMismatch { expected: 3, found: 1 })));
+    /// assert!(matches!(b.write_host(&[1]), Err(DeviceError::LengthMismatch { expected: 3, found: 1 })));
     /// ```
     pub fn write_host(&mut self, data: &[T]) -> Result<()> {
         if data.len() != self.len {
-            return Err(GridError::LengthMismatch {
+            return Err(DeviceError::LengthMismatch {
                 expected: self.len,
                 found: data.len(),
             });
@@ -467,7 +468,7 @@ impl<T: CubeElement> DeviceBuffer<T> {
 pub fn pad_len(len: usize) -> Result<usize> {
     len.max(1)
         .checked_next_multiple_of(VECTOR_PAD)
-        .ok_or(GridError::TooLarge)
+        .ok_or(DeviceError::TooLarge)
 }
 
 /// Whether `Client::staging` moves host data into pinned memory on `client`'s runtime: CUDA
@@ -484,9 +485,11 @@ fn check_allocation<T: CubeElement>(client: &Client, len: usize) -> Result<usize
 
 /// Bytes for `len` elements of `T`, checked against overflow and `max` bytes.
 fn check_bytes<T: CubeElement>(len: usize, max: u64) -> Result<usize> {
-    let bytes = len.checked_mul(size_of::<T>()).ok_or(GridError::TooLarge)?;
+    let bytes = len
+        .checked_mul(size_of::<T>())
+        .ok_or(DeviceError::TooLarge)?;
     if u64::try_from(bytes).map_or(true, |b| b > max) {
-        return Err(GridError::AllocationTooLarge { bytes, max });
+        return Err(DeviceError::AllocationTooLarge { bytes, max });
     }
     Ok(bytes)
 }
@@ -494,9 +497,11 @@ fn check_bytes<T: CubeElement>(len: usize, max: u64) -> Result<usize> {
 /// The first `len` elements of `bytes`. Copies through bytes when `bytes` is not aligned for
 /// `T`, so a read-back view at any offset decodes.
 fn decode<T: CubeElement>(bytes: &[u8], len: usize) -> Result<Vec<T>> {
-    let need = len.checked_mul(size_of::<T>()).ok_or(GridError::TooLarge)?;
+    let need = len
+        .checked_mul(size_of::<T>())
+        .ok_or(DeviceError::TooLarge)?;
     let Some(bytes) = bytes.get(..need) else {
-        return Err(GridError::LengthMismatch {
+        return Err(DeviceError::LengthMismatch {
             expected: need,
             found: bytes.len(),
         });
@@ -580,8 +585,11 @@ mod tests {
 
     #[test]
     fn pad_len_overflow_is_too_large() {
-        assert!(matches!(pad_len(usize::MAX), Err(GridError::TooLarge)));
-        assert!(matches!(pad_len(usize::MAX - 14), Err(GridError::TooLarge)));
+        assert!(matches!(pad_len(usize::MAX), Err(DeviceError::TooLarge)));
+        assert!(matches!(
+            pad_len(usize::MAX - 14),
+            Err(DeviceError::TooLarge)
+        ));
         let largest = usize::MAX - usize::MAX % VECTOR_PAD;
         assert_eq!(pad_len(largest).unwrap(), largest);
     }
@@ -591,14 +599,14 @@ mod tests {
         assert_eq!(check_bytes::<u32>(256, 1024).unwrap(), 1024);
         assert!(matches!(
             check_bytes::<u32>(272, 1024),
-            Err(GridError::AllocationTooLarge {
+            Err(DeviceError::AllocationTooLarge {
                 bytes: 1088,
                 max: 1024
             })
         ));
         assert!(matches!(
             check_bytes::<f64>(usize::MAX / 4, u64::MAX),
-            Err(GridError::TooLarge)
+            Err(DeviceError::TooLarge)
         ));
         assert_eq!(check_bytes::<f64>(0, 0).unwrap(), 0);
     }
@@ -613,7 +621,7 @@ mod tests {
         assert_eq!(decode::<u32>(shifted, 2).unwrap(), &words[..2]);
         assert!(matches!(
             decode::<u32>(shifted, 5),
-            Err(GridError::LengthMismatch {
+            Err(DeviceError::LengthMismatch {
                 expected: 20,
                 found: 16
             })

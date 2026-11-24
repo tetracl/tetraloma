@@ -84,7 +84,14 @@ fn transpose_ids_kernel(
 ///
 /// `TooLarge` as for [`LaunchPlan::elementwise`].
 pub(crate) fn plan(client: &Client, cells: usize) -> Result<LaunchPlan> {
-    LaunchPlan::elementwise(client, KernelKind::Scalar, cells, size_of::<u32>(), 1, 1)
+    Ok(LaunchPlan::elementwise(
+        client,
+        KernelKind::Scalar,
+        cells,
+        size_of::<u32>(),
+        1,
+        1,
+    )?)
 }
 
 /// Checked u32 sizes of a copy: (cells, padded, words of `planes` planes).

@@ -1473,7 +1473,7 @@ fn kernel_cache(machine: &Machine) -> String {
     }
 }
 
-fn error(e: tetraloma::GridError) -> String {
+fn error(e: impl core::fmt::Display) -> String {
     e.to_string()
 }
 

@@ -2,8 +2,9 @@
 
 use cubecl::prelude::*;
 
+use crate::DeviceBuffer;
 use crate::buffer::pad_len;
-use crate::{DeviceBuffer, GridError, Result};
+use crate::device_error::{DeviceError, Result};
 
 /// `len()` keys of one to four `u32` words each on the device, the input of
 /// [`radix_sort`](crate::radix_sort), [`run_length`](crate::run_length) and
@@ -219,7 +220,7 @@ fn planar_len(len: usize, num_words: usize) -> Result<usize> {
     check_num_words(num_words);
     pad_len(len)?
         .checked_mul(num_words)
-        .ok_or(GridError::TooLarge)
+        .ok_or(DeviceError::TooLarge)
 }
 
 fn check_num_words(num_words: usize) {
