@@ -73,9 +73,10 @@ fn lagrange_interpolation(
     }
 }
 
+// M12 extends this with subspace span coefficients and the vector layout.
 /// Constructs scalar (`reference_value_size == 1`) Ciarlet basis coefficients in
 /// `tetraloma-refcell`'s orthonormal set from interpolation points (`[m][tdim]`) and matrix
-/// (`[dim][m]`). M12 extends this with subspace span coefficients and the vector layout.
+/// (`[dim][m]`).
 ///
 /// Forms `D[i, k] = l_i(ψ_k)`, solves `D Y = I` with `DenseLu`, and transposes `Y` into
 /// `[dim][polyset_dim]` order so `φ_j = Σ_k C[j, k] ψ_k`.
@@ -88,7 +89,7 @@ pub(crate) fn solve_ciarlet_coefficients(
 ) -> Result<Vec<f64>, ElementError> {
     let td = tdim(cell);
     assert!(
-        td > 0 && interpolation_points.len().is_multiple_of(td),
+        td > 0 && !interpolation_points.is_empty() && interpolation_points.len().is_multiple_of(td),
         "solve_ciarlet_coefficients: invalid point array length {} for tdim {td}",
         interpolation_points.len()
     );
