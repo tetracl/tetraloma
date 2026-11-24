@@ -94,9 +94,12 @@ The kernels themselves are compiled at run time and are equally fast in both pro
 
 A device problem shows up when your program opens a device or creates its first mesh. The chapter
 [Compute devices](devices.md) describes every backend; the entries below cover the errors you are
-most likely to see. Calling `DeviceBuffer` methods or device primitives directly returns
-[`DeviceError`](api/tetraloma/enum.DeviceError.html) with the same variant names and fields, which
-`?` converts into `GridError` in functions returning `tetraloma::Result`.
+most likely to see. Calling `DeviceBuffer` methods or functions of
+[`tetraloma-device`](api/tetraloma_device/index.html) directly returns
+[`DeviceError`](api/tetraloma/enum.DeviceError.html), whose variants (`TooLarge`,
+`AllocationTooLarge`, `UnsupportedPrecision`, `LengthMismatch` and `Server`) match the `GridError`
+variants of the same names and fields; `?` converts a `DeviceError` into `GridError` in functions
+returning `tetraloma::Result`.
 
 ### `NotLinked` or `NoSuchDevice`
 

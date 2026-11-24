@@ -4,12 +4,13 @@ use core::fmt;
 
 use cubecl::server::ServerError;
 
-/// The result type of tetraloma: `Ok(T)` or a [`GridError`].
+/// The result type of tetraloma's mesh functions: `Ok(T)` or a [`GridError`].
 ///
-/// Every fallible function of tetraloma returns it, so `?` passes errors through, and a
-/// [`GridError`] converts into `Box<dyn std::error::Error>`. The tutorial [Building a
-/// mesh](https://tetracl.github.io/tetraloma/tutorials/build-mesh.html#errors) shows the errors
-/// of mesh creation.
+/// Mesh-level functions return it, and `?` converts errors from lower-level foundation calls
+/// (such as `DeviceBuffer` methods and communicators, which return their own error types) into
+/// [`GridError`]. A [`GridError`] also converts into `Box<dyn std::error::Error>`. The tutorial
+/// [Building a mesh](https://tetracl.github.io/tetraloma/tutorials/build-mesh.html#errors) shows
+/// the errors of mesh creation.
 ///
 /// # Example
 ///
@@ -523,42 +524,60 @@ mod tests {
         use crate::DeviceError;
         use cubecl::server::{Collective, ServerError};
 
+        let check_display = |e: &DeviceError, g: &GridError| {
+            assert_eq!(e.to_string(), g.to_string());
+        };
+
+        let e = DeviceError::TooLarge;
+        let g = GridError::from(e.clone());
+        assert!(matches!(g, GridError::TooLarge));
+        check_display(&e, &g);
+
+        let e = DeviceError::AllocationTooLarge { bytes: 21, max: 22 };
+        let g = GridError::from(e.clone());
         assert!(matches!(
-            GridError::from(DeviceError::TooLarge),
-            GridError::TooLarge
-        ));
-        assert!(matches!(
-            GridError::from(DeviceError::AllocationTooLarge { bytes: 21, max: 22 }),
+            g,
             GridError::AllocationTooLarge { bytes: 21, max: 22 }
         ));
+        check_display(&e, &g);
+
+        let e = DeviceError::UnsupportedPrecision {
+            scalar: "f64",
+            device: "device-a",
+        };
+        let g = GridError::from(e.clone());
         assert!(matches!(
-            GridError::from(DeviceError::UnsupportedPrecision {
-                scalar: "f64",
-                device: "device-a",
-            }),
+            g,
             GridError::UnsupportedPrecision {
                 scalar: "f64",
                 device: "device-a",
             }
         ));
+        check_display(&e, &g);
+
+        let e = DeviceError::LengthMismatch {
+            expected: 23,
+            found: 24,
+        };
+        let g = GridError::from(e.clone());
         assert!(matches!(
-            GridError::from(DeviceError::LengthMismatch {
-                expected: 23,
-                found: 24,
-            }),
+            g,
             GridError::LengthMismatch {
                 expected: 23,
                 found: 24,
             }
         ));
+        check_display(&e, &g);
+
+        let e = DeviceError::Server(ServerError::no_device_transport(Collective::AllReduce));
+        let g = GridError::from(e.clone());
         assert!(matches!(
-            GridError::from(DeviceError::Server(ServerError::no_device_transport(
-                Collective::AllReduce,
-            ))),
+            g,
             GridError::Server(ServerError::NoDeviceTransport {
                 operation: Collective::AllReduce,
                 ..
             })
         ));
+        check_display(&e, &g);
     }
 }

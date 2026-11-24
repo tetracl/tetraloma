@@ -156,7 +156,8 @@ mod tests {
         }
 
         let server = ServerError::no_device_transport(Collective::AllReduce);
-        let expected_display = format!("compute server error: {server}");
+        let server_display = server.to_string();
+        let expected_display = format!("compute server error: {server_display}");
         let err = DeviceError::from(server);
         assert!(matches!(
             err,
@@ -167,6 +168,9 @@ mod tests {
         ));
         assert_eq!(err.to_string(), expected_display);
         let dyn_err: &dyn std::error::Error = &err;
-        assert!(dyn_err.source().is_some());
+        assert_eq!(
+            dyn_err.source().expect("Server source").to_string(),
+            server_display
+        );
     }
 }
