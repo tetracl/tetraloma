@@ -8,9 +8,10 @@
 
 use cubecl::prelude::*;
 
+use crate::device_error::{DeviceError, Result};
 use crate::plan::debug_assert_bindings;
 use crate::primitives::launch_fill;
-use crate::{DeviceBuffer, GridError, KernelKind, LaunchPlan, Result, VECTOR_PAD};
+use crate::{DeviceBuffer, KernelKind, LaunchPlan, VECTOR_PAD};
 
 /// `out[v]` lane by lane: packed word o = v·N + l is word o mod `block_words` of source block
 /// `idx[o / block_words]`. Lanes past `total` and source blocks past `src_blocks` give 0
@@ -85,13 +86,13 @@ fn unpack_kernel<N: Size>(
 fn words<T>(n: usize) -> Result<u32> {
     n.checked_mul(size_of::<T>() / 4)
         .and_then(|w| u32::try_from(w).ok())
-        .ok_or(GridError::TooLarge)
+        .ok_or(DeviceError::TooLarge)
 }
 
 /// `LengthMismatch` unless `len` is a whole number of blocks of `block`; the block count.
 fn blocks_of(len: usize, block: usize) -> Result<usize> {
     if !len.is_multiple_of(block) {
-        return Err(GridError::LengthMismatch {
+        return Err(DeviceError::LengthMismatch {
             expected: len.next_multiple_of(block),
             found: len,
         });
@@ -101,9 +102,9 @@ fn blocks_of(len: usize, block: usize) -> Result<usize> {
 
 /// `LengthMismatch` unless `packed` holds `block` elements per index.
 fn check_packed(packed: usize, num_idx: usize, block: usize) -> Result<()> {
-    let expected = num_idx.checked_mul(block).ok_or(GridError::TooLarge)?;
+    let expected = num_idx.checked_mul(block).ok_or(DeviceError::TooLarge)?;
     if packed != expected {
-        return Err(GridError::LengthMismatch {
+        return Err(DeviceError::LengthMismatch {
             expected,
             found: packed,
         });
@@ -147,7 +148,7 @@ pub fn pack<T: CubeElement>(
 ) -> Result<()> {
     const { assert!(size_of::<T>().is_multiple_of(4), "pack moves u32 words") };
     if block == 0 {
-        return Err(GridError::LengthMismatch {
+        return Err(DeviceError::LengthMismatch {
             expected: 1,
             found: 0,
         });
@@ -165,9 +166,9 @@ pub fn pack<T: CubeElement>(
         return launch_fill::<u32>(client, out.handle(), padded as usize, 0);
     }
     let block_words = words::<T>(block)?;
-    let src_blocks = u32::try_from(src_blocks).map_err(|_| GridError::TooLarge)?;
+    let src_blocks = u32::try_from(src_blocks).map_err(|_| DeviceError::TooLarge)?;
     words::<T>(src.len())?;
-    let num_idx = u32::try_from(idx.len()).map_err(|_| GridError::TooLarge)?;
+    let num_idx = u32::try_from(idx.len()).map_err(|_| DeviceError::TooLarge)?;
     let plan = LaunchPlan::elementwise(
         client,
         KernelKind::Pack,
@@ -251,7 +252,7 @@ pub fn unpack<T: CubeElement>(
 ) -> Result<()> {
     const { assert!(size_of::<T>().is_multiple_of(4), "unpack moves u32 words") };
     if block == 0 {
-        return Err(GridError::LengthMismatch {
+        return Err(DeviceError::LengthMismatch {
             expected: 1,
             found: 0,
         });
@@ -261,7 +262,7 @@ pub fn unpack<T: CubeElement>(
     if idx.len() == 0 {
         return Ok(());
     }
-    let dst_blocks = u32::try_from(dst_blocks).map_err(|_| GridError::TooLarge)?;
+    let dst_blocks = u32::try_from(dst_blocks).map_err(|_| DeviceError::TooLarge)?;
     #[cfg(debug_assertions)]
     {
         let max = super::reduce(idx, crate::ReduceOp::Max)?.to_host()?[0];

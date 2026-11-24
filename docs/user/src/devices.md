@@ -273,6 +273,12 @@ assert_eq!(values.to_host()?, [4.0f64, 5.0, 6.0]);
 # }
 ```
 
+Methods of `DeviceBuffer` and the functions of
+[`tetraloma-device`](api/tetraloma_device/index.html) (its primitives, `LaunchPlan` and
+`check_precision`) return [`DeviceError`](api/tetraloma/enum.DeviceError.html) rather than
+`GridError`. In any function that returns `tetraloma::Result`, `?` converts a `DeviceError` into
+the matching `GridError` variant.
+
 ## Performance settings
 
 Build with `--release`. The kernels are compiled at run time and are equally fast in either

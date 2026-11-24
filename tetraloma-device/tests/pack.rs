@@ -103,7 +103,7 @@ fn lengths_are_checked() {
     // 6 is not a whole number of blocks of 4.
     assert!(matches!(
         pack(&src, &idx, 4, &mut out),
-        Err(GridError::LengthMismatch {
+        Err(DeviceError::LengthMismatch {
             expected: 8,
             found: 6
         })
@@ -111,14 +111,14 @@ fn lengths_are_checked() {
     // Two indices of blocks of 3 need 6 packed values, not 4.
     assert!(matches!(
         pack(&src, &idx, 3, &mut out),
-        Err(GridError::LengthMismatch {
+        Err(DeviceError::LengthMismatch {
             expected: 6,
             found: 4
         })
     ));
     assert!(matches!(
         unpack(&out, &idx, 0, &mut src.deep_clone().unwrap()),
-        Err(GridError::LengthMismatch { .. })
+        Err(DeviceError::LengthMismatch { .. })
     ));
 }
 
@@ -185,13 +185,13 @@ fn write_host_round_trip() {
         assert_eq!(b.to_host().unwrap(), next);
         assert!(matches!(
             b.write_host(&vec![0.0; len + 1]),
-            Err(GridError::LengthMismatch { .. })
+            Err(DeviceError::LengthMismatch { .. })
         ));
     }
     let mut b = DeviceBuffer::from_host(&client, &[1u32, 2]).unwrap();
     assert!(matches!(
         b.write_host(&[1, 2, 3]),
-        Err(GridError::LengthMismatch {
+        Err(DeviceError::LengthMismatch {
             expected: 2,
             found: 3
         })

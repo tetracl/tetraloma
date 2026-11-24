@@ -1004,8 +1004,9 @@ impl<TD: TopoDim> Topology<TD> {
     ///
     /// [Meshes and topology]: https://tetracl.github.io/tetraloma/concepts/meshes.html
     pub fn try_clone(&self, comm: &dyn CommDyn) -> Result<Self> {
-        let clone_opt =
-            |b: &Option<DeviceBuffer<u32>>| b.as_ref().map(DeviceBuffer::deep_clone).transpose();
+        let clone_opt = |b: &Option<DeviceBuffer<u32>>| -> Result<_> {
+            Ok(b.as_ref().map(DeviceBuffer::deep_clone).transpose()?)
+        };
         Ok(Topology {
             client: self.client.clone(),
             cell_blocks: self

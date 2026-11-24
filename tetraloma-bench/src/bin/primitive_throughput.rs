@@ -204,7 +204,7 @@ impl Measured {
 fn time_runs<R>(
     client: &Client,
     runs: usize,
-    mut op: impl FnMut() -> tetraloma_device::Result<R>,
+    mut op: impl FnMut() -> Result<R, tetraloma_device::DeviceError>,
 ) -> Result<Vec<f64>, String> {
     let mut times = Vec::with_capacity(runs);
     for _ in 0..runs {

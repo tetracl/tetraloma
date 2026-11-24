@@ -581,7 +581,7 @@ pub fn read<F: Real, C: Comm>(
     path: impl AsRef<Path>,
     options: GmshOptions,
 ) -> Result<AnyMesh<F, C>> {
-    agree(&comm, check_precision::<F>(client))?;
+    agree(&comm, check_precision::<F>(client).map_err(Into::into))?;
     let path = path.as_ref();
     log_memory(client, "read (start)");
     let (chunk, names, gdim) = local(&comm, path, options.gdim)?;

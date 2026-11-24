@@ -4,12 +4,13 @@ use core::fmt;
 
 use cubecl::server::ServerError;
 
-/// The result type of tetraloma: `Ok(T)` or a [`GridError`].
+/// The result type of tetraloma's mesh functions: `Ok(T)` or a [`GridError`].
 ///
-/// Every fallible function of tetraloma returns it, so `?` passes errors through, and a
-/// [`GridError`] converts into `Box<dyn std::error::Error>`. The tutorial [Building a
-/// mesh](https://tetracl.github.io/tetraloma/tutorials/build-mesh.html#errors) shows the errors
-/// of mesh creation.
+/// Mesh-level functions return it, and `?` converts errors from lower-level foundation calls
+/// (such as `DeviceBuffer` methods and communicators, which return their own error types) into
+/// [`GridError`]. A [`GridError`] also converts into `Box<dyn std::error::Error>`. The tutorial
+/// [Building a mesh](https://tetracl.github.io/tetraloma/tutorials/build-mesh.html#errors) shows
+/// the errors of mesh creation.
 ///
 /// # Example
 ///
@@ -373,6 +374,25 @@ impl From<tetraloma_comm::CommError> for GridError {
     }
 }
 
+// Design: section 7; ADR-0074. Moves to tetraloma-topology with `GridError` in M18.T6.
+impl From<crate::DeviceError> for GridError {
+    fn from(error: crate::DeviceError) -> Self {
+        match error {
+            crate::DeviceError::TooLarge => GridError::TooLarge,
+            crate::DeviceError::AllocationTooLarge { bytes, max } => {
+                GridError::AllocationTooLarge { bytes, max }
+            }
+            crate::DeviceError::UnsupportedPrecision { scalar, device } => {
+                GridError::UnsupportedPrecision { scalar, device }
+            }
+            crate::DeviceError::LengthMismatch { expected, found } => {
+                GridError::LengthMismatch { expected, found }
+            }
+            crate::DeviceError::Server(error) => GridError::Server(error),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::GridError;
@@ -497,5 +517,67 @@ mod tests {
             GridError::from(CommError::RemoteFailure { rank: 16 }),
             GridError::RemoteFailure { rank: 16 }
         ));
+    }
+
+    #[test]
+    fn device_error_converts_to_matching_grid_error() {
+        use crate::DeviceError;
+        use cubecl::server::{Collective, ServerError};
+
+        let check_display = |e: &DeviceError, g: &GridError| {
+            assert_eq!(e.to_string(), g.to_string());
+        };
+
+        let e = DeviceError::TooLarge;
+        let g = GridError::from(e.clone());
+        assert!(matches!(g, GridError::TooLarge));
+        check_display(&e, &g);
+
+        let e = DeviceError::AllocationTooLarge { bytes: 21, max: 22 };
+        let g = GridError::from(e.clone());
+        assert!(matches!(
+            g,
+            GridError::AllocationTooLarge { bytes: 21, max: 22 }
+        ));
+        check_display(&e, &g);
+
+        let e = DeviceError::UnsupportedPrecision {
+            scalar: "f64",
+            device: "device-a",
+        };
+        let g = GridError::from(e.clone());
+        assert!(matches!(
+            g,
+            GridError::UnsupportedPrecision {
+                scalar: "f64",
+                device: "device-a",
+            }
+        ));
+        check_display(&e, &g);
+
+        let e = DeviceError::LengthMismatch {
+            expected: 23,
+            found: 24,
+        };
+        let g = GridError::from(e.clone());
+        assert!(matches!(
+            g,
+            GridError::LengthMismatch {
+                expected: 23,
+                found: 24,
+            }
+        ));
+        check_display(&e, &g);
+
+        let e = DeviceError::Server(ServerError::no_device_transport(Collective::AllReduce));
+        let g = GridError::from(e.clone());
+        assert!(matches!(
+            g,
+            GridError::Server(ServerError::NoDeviceTransport {
+                operation: Collective::AllReduce,
+                ..
+            })
+        ));
+        check_display(&e, &g);
     }
 }

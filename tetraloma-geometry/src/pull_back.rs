@@ -629,10 +629,10 @@ where
     let scratch = || -> Result<DeviceBuffer<F>> {
         let cells = ranges.iter().map(|r| r.padded_cells).max().unwrap_or(0);
         let per_cell = nb.checked_mul(gd).ok_or(GridError::TooLarge)?;
-        DeviceBuffer::<F>::uninit(
+        Ok(DeviceBuffer::<F>::uninit(
             client,
             per_cell.checked_mul(cells).ok_or(GridError::TooLarge)?,
-        )
+        )?)
     };
     if s == Strategy::SumFactorised || (staged && sumfact) {
         let data = xe.tensor_coefficients(cell, degree, family, origin.as_ref())?;

@@ -38,7 +38,7 @@ impl BenchOutput {
     ///
     /// Device read errors.
     pub fn to_host(&self) -> Result<Vec<Vec<u32>>> {
-        self.buffers.iter().map(DeviceBuffer::to_host).collect()
+        self.buffers.iter().map(|b| Ok(b.to_host()?)).collect()
     }
 }
 

@@ -125,7 +125,7 @@ where
         .facet_blocks
         .iter()
         .map(|(cells, _)| DeviceBuffer::zeros(client, cells.len()))
-        .collect::<Result<_>>()?;
+        .collect::<core::result::Result<_, _>>()?;
     if TD::N != GD::N || out.iter().all(|f| f.len() == 0) {
         return Ok(out);
     }

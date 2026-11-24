@@ -893,7 +893,7 @@ fn forward_global_ids(client: &Client, map: &IndexMap, block: usize) -> Result<V
     }
     let mut x = DeviceBuffer::from_host(client, &host)?;
     map.scatterer(client, block)?.forward(&mut x)?;
-    x.to_host()
+    Ok(x.to_host()?)
 }
 
 /// The reverse `Add` of ones over `map` at `block` values per index; returns the result.
@@ -901,7 +901,7 @@ fn reverse_add_ones(client: &Client, map: &IndexMap, block: usize) -> Result<Vec
     let mut x = DeviceBuffer::from_host(client, &vec![1_i32; map.num_local() * block])?;
     map.scatterer(client, block)?
         .reverse(&mut x, ReverseOp::Add)?;
-    x.to_host()
+    Ok(x.to_host()?)
 }
 
 /// The scatter acceptance check of one case on `comm`.

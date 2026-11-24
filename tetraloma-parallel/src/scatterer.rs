@@ -282,7 +282,7 @@ impl Scatterer {
     ///     let r = rank as u32;
     ///     let mut x = DeviceBuffer::from_host(client, &[10 * r, 10 * r + 1, 0, 0])?;
     ///     scatterer.forward(&mut x)?;
-    ///     x.to_host()
+    ///     Ok(x.to_host()?)
     /// }
     ///
     /// // `results`: `swap` called on each of two ranks, run as two threads of this process
@@ -300,7 +300,7 @@ impl Scatterer {
             return Ok(());
         }
         let mut b = self.take_buffers::<T>(x.client())?;
-        let result = (|| {
+        let result = (|| -> Result<()> {
             let Buffers {
                 owned,
                 ghost,
@@ -318,7 +318,8 @@ impl Scatterer {
                 || Ok(()),
             )?;
             ghost.write_host(host_ghost)?;
-            unpack(ghost, &self.indices.recv_idx, self.block, x)
+            unpack(ghost, &self.indices.recv_idx, self.block, x)?;
+            Ok(())
         })();
         self.put_buffers(b);
         result
@@ -356,7 +357,7 @@ impl Scatterer {
     ///     let v = comm.rank() as i32 + 1;
     ///     let mut x = DeviceBuffer::from_host(client, &[v, v])?;
     ///     scatterer.reverse(&mut x, ReverseOp::Max)?;
-    ///     x.to_host()
+    ///     Ok(x.to_host()?)
     /// }
     ///
     /// // `results`: `largest` called on each of two ranks, run as two threads of this process
@@ -381,7 +382,7 @@ impl Scatterer {
             return Ok(());
         }
         let mut b = self.take_buffers::<T>(&client)?;
-        let result = (|| {
+        let result = (|| -> Result<()> {
             let Buffers {
                 owned,
                 ghost,
@@ -444,7 +445,8 @@ impl Scatterer {
             };
             step()?;
             // The targets are distinct: `unpack` writes each target block once.
-            unpack(&values, &self.indices.targets, self.block, x)
+            unpack(&values, &self.indices.targets, self.block, x)?;
+            Ok(())
         })();
         self.put_buffers(b);
         result

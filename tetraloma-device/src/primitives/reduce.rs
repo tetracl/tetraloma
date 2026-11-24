@@ -7,11 +7,9 @@
 
 use cubecl::prelude::*;
 
+use crate::device_error::{DeviceError, Result};
 use crate::plan::debug_assert_bindings;
-use crate::{
-    DeviceBuffer, DeviceScalar, GridError, KernelKind, LaunchPlan, ReduceOp, Result, VECTOR_PAD,
-    fill,
-};
+use crate::{DeviceBuffer, DeviceScalar, KernelKind, LaunchPlan, ReduceOp, VECTOR_PAD, fill};
 
 /// `ReduceOp` as a comptime kernel parameter.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -203,7 +201,7 @@ pub fn reduce<T: DeviceScalar>(x: &DeviceBuffer<T>, op: ReduceOp) -> Result<Devi
         if cubes > 1 && cubes >= len {
             // A level that does not shrink would never finish. Only injected properties give
             // cubes that cover fewer than VECTOR_PAD scalars, the padded length of a short level.
-            return Err(GridError::TooLarge);
+            return Err(DeviceError::TooLarge);
         }
         let partials = DeviceBuffer::<T>::uninit(client, cubes)?;
         launch_reduce(&level, &partials, &plan, op)?;
@@ -225,7 +223,7 @@ pub(crate) fn launch_reduce<T: DeviceScalar>(
 ) -> Result<()> {
     let client = x.client();
     let n = plan.vector_size;
-    let len = u32::try_from(x.len()).map_err(|_| GridError::TooLarge)?;
+    let len = u32::try_from(x.len()).map_err(|_| DeviceError::TooLarge)?;
     let cube_dim = plan.cube_dim.num_elems();
     debug_assert_bindings(client, 2);
     // SAFETY: the kernel reads vector v only if v · n < len; `x` holds `padded_len()`

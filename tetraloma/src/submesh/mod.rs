@@ -39,7 +39,14 @@ pub(super) fn fit(x: usize) -> Result<u32> {
 
 /// A scalar launch over `len` u32 items.
 pub(super) fn plan(client: &Client, len: usize) -> Result<LaunchPlan> {
-    LaunchPlan::elementwise(client, KernelKind::Scalar, len, 4, 1, 1)
+    Ok(LaunchPlan::elementwise(
+        client,
+        KernelKind::Scalar,
+        len,
+        4,
+        1,
+        1,
+    )?)
 }
 
 /// `dst[base + i] = src[i]` for i < len.

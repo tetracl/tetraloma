@@ -25,11 +25,9 @@
 use cubecl::prelude::*;
 
 use crate::buffer::pad_len;
+use crate::device_error::{DeviceError, Result};
 use crate::plan::debug_assert_bindings;
-use crate::{
-    DeviceBuffer, GridError, KernelKind, LaunchPlan, Result, SortKeys, VECTOR_PAD, exclusive_scan,
-    testing,
-};
+use crate::{DeviceBuffer, KernelKind, LaunchPlan, SortKeys, VECTOR_PAD, exclusive_scan, testing};
 
 /// Digits per pass: 8 bits.
 const RADIX: usize = 256;
@@ -464,7 +462,7 @@ fn sort(source: Source<'_>) -> Result<(SortKeys, DeviceBuffer<u32>)> {
     };
     let len = keys.len();
     if payload.len() != len {
-        return Err(GridError::LengthMismatch {
+        return Err(DeviceError::LengthMismatch {
             expected: len,
             found: payload.len(),
         });
@@ -481,7 +479,7 @@ fn sort(source: Source<'_>) -> Result<(SortKeys, DeviceBuffer<u32>)> {
         };
     }
     let client = &client.clone();
-    let to_u32 = |v: usize| u32::try_from(v).map_err(|_| GridError::TooLarge);
+    let to_u32 = |v: usize| u32::try_from(v).map_err(|_| DeviceError::TooLarge);
     let len_u32 = to_u32(len)?;
     let pad = pad_len(len)?;
     to_u32(keys.words().padded_len())?;
@@ -490,8 +488,8 @@ fn sort(source: Source<'_>) -> Result<(SortKeys, DeviceBuffer<u32>)> {
     let n = plan.vector_size;
     let cube_dim = plan.cube_dim.num_elems();
     let cubes = plan.num_cubes();
-    let num_counts = cubes.checked_mul(RADIX).ok_or(GridError::TooLarge)?;
-    to_u32(num_counts.checked_add(1).ok_or(GridError::TooLarge)?)?;
+    let num_counts = cubes.checked_mul(RADIX).ok_or(DeviceError::TooLarge)?;
+    to_u32(num_counts.checked_add(1).ok_or(DeviceError::TooLarge)?)?;
     let pad_u32 = to_u32(pad)?;
     let num_words_u32 = to_u32(num_words)?;
     let cubes_u32 = to_u32(cubes)?;
@@ -499,8 +497,8 @@ fn sort(source: Source<'_>) -> Result<(SortKeys, DeviceBuffer<u32>)> {
     let block = plan
         .items_per_unit
         .checked_mul(n_u32)
-        .ok_or(GridError::TooLarge)?;
-    let slots = cube_dim.checked_mul(n_u32).ok_or(GridError::TooLarge)?;
+        .ok_or(DeviceError::TooLarge)?;
+    let slots = cube_dim.checked_mul(n_u32).ok_or(DeviceError::TooLarge)?;
     let shared = testing::properties(client).hardware.max_shared_memory_size;
     let scheme = scheme(&plan, shared)?;
 
@@ -526,7 +524,7 @@ fn sort(source: Source<'_>) -> Result<(SortKeys, DeviceBuffer<u32>)> {
         };
         let (dst_keys, dst_payload) = &out[pass % 2];
         let word = num_words - 1 - pass / 4;
-        let plane = to_u32(word.checked_mul(pad).ok_or(GridError::TooLarge)?)?;
+        let plane = to_u32(word.checked_mul(pad).ok_or(DeviceError::TooLarge)?)?;
         let shift = 8 * (pass % 4) as u32;
 
         let counts = DeviceBuffer::<u32>::uninit(client, num_counts)?;
@@ -640,10 +638,10 @@ fn scheme(plan: &LaunchPlan, shared: usize) -> Result<Scheme> {
         // The largest power-of-two chunk of digits whose per-unit counters fit.
         let per_digit = units
             .checked_mul(size_of::<u32>())
-            .ok_or(GridError::TooLarge)?;
+            .ok_or(DeviceError::TooLarge)?;
         let fit = shared / per_digit;
         if fit == 0 {
-            return Err(GridError::TooLarge);
+            return Err(DeviceError::TooLarge);
         }
         let chunk_digits = (1usize << fit.ilog2()).min(RADIX);
         Ok(Scheme::Blocks {
@@ -652,14 +650,14 @@ fn scheme(plan: &LaunchPlan, shared: usize) -> Result<Scheme> {
     } else {
         let slots = units
             .checked_mul(plan.vector_size)
-            .ok_or(GridError::TooLarge)?;
+            .ok_or(DeviceError::TooLarge)?;
         let bytes = slots
             .checked_add(units)
             .and_then(|w| w.checked_add(RADIX))
             .and_then(|w| w.checked_mul(size_of::<u32>()))
-            .ok_or(GridError::TooLarge)?;
+            .ok_or(DeviceError::TooLarge)?;
         if slots > 1 << SLOT_BITS || bytes > shared {
-            return Err(GridError::TooLarge);
+            return Err(DeviceError::TooLarge);
         }
         Ok(Scheme::Split)
     }

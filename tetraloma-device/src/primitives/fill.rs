@@ -3,8 +3,9 @@
 use cubecl::prelude::*;
 use cubecl::server::Handle;
 
+use crate::device_error::Result;
 use crate::plan::debug_assert_bindings;
-use crate::{DeviceBuffer, DeviceScalar, KernelKind, LaunchPlan, Result, VECTOR_PAD};
+use crate::{DeviceBuffer, DeviceScalar, KernelKind, LaunchPlan, VECTOR_PAD};
 
 /// `x[v] = value` for every vector `v < num_vectors`, by the loop of Listing B5.
 #[cube(launch_unchecked)]

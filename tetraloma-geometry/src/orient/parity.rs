@@ -40,7 +40,14 @@ pub(crate) fn fit(x: usize) -> Result<u32> {
 
 /// A scalar launch over `len` items.
 pub(crate) fn plan(client: &Client, len: usize) -> Result<LaunchPlan> {
-    LaunchPlan::elementwise(client, KernelKind::Scalar, len, 4, 1, 1)
+    Ok(LaunchPlan::elementwise(
+        client,
+        KernelKind::Scalar,
+        len,
+        4,
+        1,
+        1,
+    )?)
 }
 
 /// `NonManifold` if any facet has more than two owned cells globally (step 1); one read of

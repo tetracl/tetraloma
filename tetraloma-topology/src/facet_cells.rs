@@ -120,7 +120,14 @@ fn fit(x: usize) -> Result<u32> {
 
 /// A scalar launch over `len` u32 items.
 fn plan(client: &Client, len: usize) -> Result<LaunchPlan> {
-    LaunchPlan::elementwise(client, KernelKind::Scalar, len, 4, 1, 1)
+    Ok(LaunchPlan::elementwise(
+        client,
+        KernelKind::Scalar,
+        len,
+        4,
+        1,
+        1,
+    )?)
 }
 
 /// The [`FacetCells`] of `topology`, whose facet entities exist: owned cells are counted per

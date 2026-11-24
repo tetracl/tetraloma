@@ -172,7 +172,7 @@ fn scoped<T: 'static, R>(
 ///
 /// ```
 /// use tetraloma_device::testing::with_properties;
-/// use tetraloma_device::{DeviceBuffer, GridError};
+/// use tetraloma_device::{DeviceBuffer, DeviceError};
 ///
 /// let client = tetraloma_testing::test_client();
 /// let mut props = client.properties().clone();
@@ -181,7 +181,7 @@ fn scoped<T: 'static, R>(
 ///     assert!(DeviceBuffer::<u32>::uninit(&client, 256).is_ok());
 ///     assert!(matches!(
 ///         DeviceBuffer::<u32>::uninit(&client, 257),
-///         Err(GridError::AllocationTooLarge { bytes: 1088, max: 1024 })
+///         Err(DeviceError::AllocationTooLarge { bytes: 1088, max: 1024 })
 ///     ));
 /// });
 /// ```

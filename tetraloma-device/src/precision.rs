@@ -2,7 +2,8 @@
 
 use cubecl::prelude::*;
 
-use crate::{GridError, Result, testing};
+use crate::device_error::{DeviceError, Result};
+use crate::testing;
 
 // Listing B3.
 /// The scalar type of a mesh: `f32` or `f64`.
@@ -114,20 +115,20 @@ impl FieldScalar for num_complex::Complex<f64> {
 ///
 /// # Errors
 ///
-/// `GridError::UnsupportedPrecision`, naming the type and the device, if the device does not
+/// `DeviceError::UnsupportedPrecision`, naming the type and the device, if the device does not
 /// support `F`.
 ///
 /// # Example
 ///
 /// ```
-/// use tetraloma_device::{GridError, check_precision};
+/// use tetraloma_device::{DeviceError, check_precision};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
 /// # let client = tetraloma_testing::test_client();
 /// check_precision::<f32>(&client).unwrap();
 /// match check_precision::<f64>(&client) {
 ///     Ok(()) => {}
-///     Err(GridError::UnsupportedPrecision { scalar, .. }) => assert_eq!(scalar, "f64"),
+///     Err(DeviceError::UnsupportedPrecision { scalar, .. }) => assert_eq!(scalar, "f64"),
 ///     Err(e) => panic!("{e}"),
 /// }
 /// ```
@@ -135,7 +136,7 @@ pub fn check_precision<F: Real>(client: &Client) -> Result<()> {
     if testing::properties(client).supports_type(F::cube_type()) {
         return Ok(());
     }
-    Err(GridError::UnsupportedPrecision {
+    Err(DeviceError::UnsupportedPrecision {
         scalar: F::type_name(),
         device: client.name(),
     })

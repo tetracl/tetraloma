@@ -12,7 +12,7 @@ use tetraloma_device::testing::{
     with_cpu_block_bytes, with_cpu_units, with_performance_cores, with_properties, with_vector_size,
 };
 use tetraloma_device::{
-    CpuUnits, DeviceBuffer, GridError, KernelKind, LaunchPlan, VECTOR_PAD, VectorPolicy,
+    CpuUnits, DeviceBuffer, DeviceError, KernelKind, LaunchPlan, VECTOR_PAD, VectorPolicy,
     VectorSizeOverride,
 };
 use tetraloma_testing::primitive_checks::{SplitMix, TestScalar};
@@ -299,7 +299,7 @@ proptest! {
         }
         match plan {
             Ok(plan) => check_plan(&plan, &props, items, max_vector),
-            Err(GridError::TooLarge) => {
+            Err(DeviceError::TooLarge) => {
                 // A plan must exist when even one vector of one scalar per cube fits.
                 let padded = items.max(1).next_multiple_of(VECTOR_PAD) as u128;
                 let cubes = u128::from(count.0) * u128::from(count.1) * u128::from(count.2);
@@ -356,7 +356,7 @@ fn check_group_plan(
     );
 }
 
-/// Whether `GridError::TooLarge` is justified for a `per_group` plan with `groups` groups,
+/// Whether `DeviceError::TooLarge` is justified for a `per_group` plan with `groups` groups,
 /// given the per-cube shape from a probe plan under the same properties and overrides.
 ///
 /// `vector_size`, `cube_dim`, `units_per_group` and `items_per_unit` do not depend on `groups`
@@ -443,7 +443,7 @@ fn per_group_grid_rounding_overflow_is_too_large() {
 
         match run(402_647_041) {
             Ok(plan) => check_group_plan(&plan, &props, 402_647_041, 8, 1),
-            Err(GridError::TooLarge) => assert!(
+            Err(DeviceError::TooLarge) => assert!(
                 per_group_too_large_is_justified(&fits, 402_647_041, count, 0, 18_874),
                 "{label}: TooLarge at 402_647_041 groups with max_cube_count {count:?} must be justified"
             ),
@@ -504,7 +504,7 @@ proptest! {
                 prop_assert!(shared_bytes <= shared_limit);
                 check_group_plan(&plan, &props, groups, units, max_vector);
             }
-            Err(GridError::TooLarge) => {
+            Err(DeviceError::TooLarge) => {
                 if shared_bytes <= shared_limit {
                     let mut probe_props = props.clone();
                     probe_props.hardware.max_cube_count = (u32::MAX, 1, 1);

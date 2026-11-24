@@ -6,8 +6,9 @@
 
 use cubecl::prelude::*;
 
+use crate::device_error::{DeviceError, Result};
 use crate::plan::debug_assert_bindings;
-use crate::{DeviceBuffer, GridError, KernelKind, LaunchPlan, Result, testing};
+use crate::{DeviceBuffer, KernelKind, LaunchPlan, testing};
 
 /// Bins of one chunk at most: 64 KiB of counts.
 const MAX_CHUNK_BINS: usize = 1 << 14;
@@ -80,7 +81,7 @@ pub fn histogram(values: &DeviceBuffer<u32>, num_bins: u32) -> Result<DeviceBuff
     if values.len() == 0 || num_bins == 0 {
         return Ok(out);
     }
-    let len = u32::try_from(values.len()).map_err(|_| GridError::TooLarge)?;
+    let len = u32::try_from(values.len()).map_err(|_| DeviceError::TooLarge)?;
     let plan = LaunchPlan::elementwise(client, KernelKind::Scalar, values.len(), 4, 1, 1)?;
     let cube_dim = plan.cube_dim.num_elems();
     let chunk_bins = chunk_bins(
