@@ -77,14 +77,11 @@ impl Real for f64 {
 /// Real or complex coefficient scalar: `f32`, `f64`, `num_complex::Complex<f32>` or
 /// `num_complex::Complex<f64>`.
 ///
-/// A mesh stores geometry in a real scalar `F: Real`, while a field's coefficients may be real or
-/// complex in the same underlying precision [`FieldScalar::Real`]. On the device, coefficients are
-/// stored as [`FieldScalar::PARTS`] consecutive real values per entry (`1` for real, `2` for
-/// complex, real part then imaginary part), so `&[T]` views directly as `&[T::Real]` via
-/// `bytemuck::Pod`.
-///
-/// This trait is not sealed: downstream crates may implement it for other `bytemuck::Pod`
-/// coefficient types. See [Coefficient
+/// A mesh stores geometry in a real scalar `F: Real`, while a function's coefficients may be real
+/// or complex in the same underlying precision [`FieldScalar::Real`]. For these four types,
+/// [`FieldScalar::PARTS`] is `1` for real scalars and `2` for complex scalars, and a slice `&[T]`
+/// reinterprets directly as `PARTS` consecutive values of `T::Real` per entry (`[re, im]` for
+/// complex values) via `bytemuck::Pod`. See [Coefficient
 /// scalars](https://tetracl.github.io/tetraloma/concepts/precision.html#coefficient-scalars).
 ///
 /// # Example

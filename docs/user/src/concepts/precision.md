@@ -70,10 +70,10 @@ check::<f64>(&client, 1e-12)?;
 ## Coefficient scalars
 
 While a mesh's geometry always uses a real scalar `F: Real`, the coefficients of a finite-element
-field may be real or complex in the same underlying precision. The trait
+function may be real or complex in the same underlying precision. The trait
 [`FieldScalar`](../api/tetraloma_device/trait.FieldScalar.html) in
-[`tetraloma-device`](../api/tetraloma_device/index.html) names those coefficient types and ties
-each to its real precision `FieldScalar::Real` and its number of real components
+[`tetraloma-device`](../api/tetraloma_device/index.html) names the four coefficient scalar types
+and ties each to its real precision `FieldScalar::Real` and its number of real components
 `FieldScalar::PARTS`:
 
 | Coefficient type | `FieldScalar::Real` | `FieldScalar::PARTS` |
@@ -83,16 +83,11 @@ each to its real precision `FieldScalar::Real` and its number of real components
 | `num_complex::Complex<f32>` | `f32` | `2` |
 | `num_complex::Complex<f64>` | `f64` | `2` |
 
-On the device, complex values are stored in real buffers (`DeviceBuffer<T::Real>`) as consecutive
-real and imaginary pairs, rather than as native complex GPU types. A buffer of $n$ coefficients
-therefore holds $n \cdot \text{PARTS}$ real elements, and a host slice `&[T]` reinterprets
-directly as `&[T::Real]` via `bytemuck::Pod` (with each complex value laid out as `[re, im]`).
-Device kernels write out complex arithmetic in real operations in a fixed order, so complex fields
-inherit the precision support and determinism rules of their underlying `Real`: `Complex<f32>` runs
-on every backend, including Metal, whereas `Complex<f64>` requires `f64` support.
-
-`FieldScalar` is not sealed, so downstream crates can implement it for their own `bytemuck::Pod`
-coefficient types when needed.
+For these types, $n$ coefficients correspond to $n \cdot \text{PARTS}$ real values: each real
+scalar has one part, and each complex scalar is laid out as a consecutive `[re, im]` pair so a
+host slice `&[T]` reinterprets directly as `&[T::Real]` via `bytemuck::Pod`. Coefficient arrays
+follow this interleaved real layout so real and complex values share the same real
+`DeviceBuffer<T::Real>` storage rather than relying on native complex device types.
 
 ## Tolerances
 

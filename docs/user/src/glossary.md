@@ -84,7 +84,7 @@ and volume meshes, codimension 1 surfaces in 3D and curves in the plane, codimen
 See [Codimension](concepts/typed-dimensions.md#codimension).
 
 Coefficient scalar, `FieldScalar`
-: The real or complex scalar type of a field's coefficients (`f32`, `f64`,
+: The real or complex scalar type of a function's coefficients (`f32`, `f64`,
 `num_complex::Complex<f32>` or `num_complex::Complex<f64>`). `FieldScalar::Real` names its
 underlying real precision and `FieldScalar::PARTS` is `1` for real scalars and `2` for complex
 ones.
