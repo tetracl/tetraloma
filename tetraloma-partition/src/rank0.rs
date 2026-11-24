@@ -111,7 +111,7 @@ pub(crate) fn scatter_parts(
         ),
         _ => (&[][..], vec![0; p]),
     };
-    let received = comm.all_to_all_v(send, &counts);
+    let received = comm.all_to_all_v(send, &counts).map_err(GridError::from);
     agree(comm, root.and(received).map(|(mine, _)| mine))
 }
 

@@ -23,6 +23,7 @@ testing = []
 bytemuck.workspace = true
 cubecl.workspace = true
 num-complex = { workspace = true, features = ["bytemuck"] }
+tetraloma-comm = { path = "../tetraloma-comm" }
 toml.workspace = true
 
 # The macOS performance-core count (`sysctlbyname`, ADR-0017).

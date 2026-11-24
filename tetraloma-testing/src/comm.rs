@@ -13,8 +13,10 @@ use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 use std::rc::Rc;
 use std::sync::{Arc, Condvar, LazyLock, Mutex, MutexGuard};
 
-use tetraloma::{CommDyn, DType, GridError, Neighbourhood, Result};
+use tetraloma::{CommDyn, CommError, DType, Neighbourhood};
 use tetraloma_device::ReduceOp;
+
+type Result<T> = core::result::Result<T, CommError>;
 
 /// The state the ranks of one [`ThreadComm::run`] share.
 struct Shared {
@@ -356,7 +358,7 @@ fn check_len(expected: usize, found: usize) -> Result<()> {
     if expected == found {
         Ok(())
     } else {
-        Err(GridError::LengthMismatch { expected, found })
+        Err(CommError::LengthMismatch { expected, found })
     }
 }
 
@@ -369,8 +371,8 @@ fn displacements(counts: &[usize], dtype: DType, len: usize) -> Result<Vec<usize
     for &c in counts {
         let bytes = c
             .checked_mul(dtype_size(dtype))
-            .ok_or(GridError::TooLarge)?;
-        at = at.checked_add(bytes).ok_or(GridError::TooLarge)?;
+            .ok_or(CommError::TooLarge)?;
+        at = at.checked_add(bytes).ok_or(CommError::TooLarge)?;
         offsets.push(at);
     }
     check_len(at, len)?;

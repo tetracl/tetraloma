@@ -5,7 +5,7 @@ use std::os::raw::c_int;
 
 use mpi::ffi::{self, MPI_Comm, MPI_Datatype};
 
-use crate::{GridError, Result};
+use crate::{CommError, Result};
 
 /// A distributed-graph communicator, freed on drop (unless MPI is already finalised).
 pub(crate) struct GraphComm(MPI_Comm);
@@ -14,7 +14,7 @@ pub(crate) struct GraphComm(MPI_Comm);
 fn mpi_ranks(ranks: &[usize]) -> Result<Vec<c_int>> {
     ranks
         .iter()
-        .map(|&r| c_int::try_from(r).map_err(|_| GridError::TooLarge))
+        .map(|&r| c_int::try_from(r).map_err(|_| CommError::TooLarge))
         .collect()
 }
 
@@ -29,8 +29,8 @@ impl GraphComm {
     ) -> Result<Self> {
         let sources = mpi_ranks(sources)?;
         let destinations = mpi_ranks(destinations)?;
-        let indegree = c_int::try_from(sources.len()).map_err(|_| GridError::TooLarge)?;
-        let outdegree = c_int::try_from(destinations.len()).map_err(|_| GridError::TooLarge)?;
+        let indegree = c_int::try_from(sources.len()).map_err(|_| CommError::TooLarge)?;
+        let outdegree = c_int::try_from(destinations.len()).map_err(|_| CommError::TooLarge)?;
         // SAFETY: reading an immutable handle constant that mpi-sys defines.
         let mut graph = unsafe { ffi::RSMPI_COMM_NULL };
         // SAFETY: `parent` is a live intra-communicator (from `Mpi`), every rank of it calls

@@ -15,7 +15,7 @@ use crate::CommDyn;
 /// # Example
 ///
 /// ```
-/// use tetraloma_parallel::{Serial, local_gpu_index};
+/// use tetraloma_comm::{Serial, local_gpu_index};
 ///
 /// // One rank, alone on its node.
 /// assert_eq!(local_gpu_index(&Serial), 0);

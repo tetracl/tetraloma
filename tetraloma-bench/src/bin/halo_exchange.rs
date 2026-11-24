@@ -332,7 +332,9 @@ fn measure_halo<T: ScatterNumeric + PartialEq + std::fmt::Debug>(
 ) -> Result<Vec<(&'static str, Vec<f64>)>, String> {
     let (rank, size) = (comm.rank(), comm.size());
     let (n, block) = (args.owned, args.block);
-    let dev = |e: tetraloma::GridError| e.to_string();
+    fn dev(e: impl std::fmt::Display) -> String {
+        e.to_string()
+    }
     // Ghost k is node k · stride of the next rank, which owns [owner · n, (owner + 1) · n).
     let stride = n / halo;
     let map = if size > 1 {

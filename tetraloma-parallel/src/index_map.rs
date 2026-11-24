@@ -3,9 +3,9 @@
 use std::cell::OnceCell;
 use std::rc::Rc;
 
+use tetraloma_comm::agree;
 use tetraloma_device::Client;
 
-use crate::comm::agree;
 use crate::scatterer::SharedIndices;
 use crate::{CommDyn, CommExt, DType, GridError, Neighbourhood, ReduceOp, Result, Scatterer};
 
@@ -535,7 +535,7 @@ mod tests {
             _: &mut [u8],
             _: &[usize],
             _: DType,
-        ) -> Result<()> {
+        ) -> tetraloma_comm::Result<()> {
             unimplemented!()
         }
         fn neighbour_all_to_all_v_bytes(
@@ -546,7 +546,7 @@ mod tests {
             _: &mut [u8],
             _: &[usize],
             _: DType,
-        ) -> Result<()> {
+        ) -> tetraloma_comm::Result<()> {
             unimplemented!()
         }
         #[cfg(feature = "mpi")]

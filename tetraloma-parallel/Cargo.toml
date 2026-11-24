@@ -11,10 +11,12 @@ repository.workspace = true
 workspace = true
 
 [features]
-mpi = ["dep:mpi"]
+# `dep:mpi` names `mpi::ffi::MPI_Comm` in `index_map`'s unit-test communicator (`Uniform`).
+mpi = ["tetraloma-comm/mpi", "dep:mpi"]
 
 [dependencies]
 bytemuck.workspace = true
+tetraloma-comm = { path = "../tetraloma-comm" }
 tetraloma-device = { path = "../tetraloma-device" }
 mpi = { workspace = true, optional = true }
 

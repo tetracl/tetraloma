@@ -1,0 +1,21 @@
+[package]
+name = "tetraloma-comm"
+description = "Host-only communicators and neighbourhood exchange of tetraloma"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+mpi = ["dep:mpi"]
+
+[dependencies]
+bytemuck.workspace = true
+mpi = { workspace = true, optional = true }
+
+[dev-dependencies]
+proptest.workspace = true

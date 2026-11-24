@@ -517,7 +517,8 @@ impl Scatterer {
             bytemuck::cast_slice_mut(recv),
             &words(recv_counts)?,
             DType::U32,
-        )
+        )?;
+        Ok(())
     }
 }
 

@@ -350,6 +350,26 @@ impl From<ServerError> for GridError {
     }
 }
 
+// Design: section 7; ADR-0074. Moves to tetraloma-topology with `GridError` in M18.T6.
+impl From<tetraloma_comm::CommError> for GridError {
+    fn from(error: tetraloma_comm::CommError) -> Self {
+        match error {
+            tetraloma_comm::CommError::TooLarge => GridError::TooLarge,
+            tetraloma_comm::CommError::LengthMismatch { expected, found } => {
+                GridError::LengthMismatch { expected, found }
+            }
+            tetraloma_comm::CommError::IndexOutOfRange { index, len } => {
+                GridError::IndexOutOfRange { index, len }
+            }
+            tetraloma_comm::CommError::MessageTooLarge { count } => {
+                GridError::MessageTooLarge { count }
+            }
+            tetraloma_comm::CommError::RemoteFailure { rank } => GridError::RemoteFailure { rank },
+            _ => unreachable!("non-exhaustive CommError variant"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::GridError;
@@ -442,5 +462,37 @@ mod tests {
         for (e, want) in cases {
             assert_eq!(e.to_string(), want);
         }
+    }
+
+    #[test]
+    fn comm_error_converts_to_matching_grid_error() {
+        use tetraloma_comm::CommError;
+
+        assert!(matches!(
+            GridError::from(CommError::TooLarge),
+            GridError::TooLarge
+        ));
+        assert!(matches!(
+            GridError::from(CommError::LengthMismatch {
+                expected: 11,
+                found: 12,
+            }),
+            GridError::LengthMismatch {
+                expected: 11,
+                found: 12,
+            }
+        ));
+        assert!(matches!(
+            GridError::from(CommError::IndexOutOfRange { index: 13, len: 14 }),
+            GridError::IndexOutOfRange { index: 13, len: 14 }
+        ));
+        assert!(matches!(
+            GridError::from(CommError::MessageTooLarge { count: 15 }),
+            GridError::MessageTooLarge { count: 15 }
+        ));
+        assert!(matches!(
+            GridError::from(CommError::RemoteFailure { rank: 16 }),
+            GridError::RemoteFailure { rank: 16 }
+        ));
     }
 }
