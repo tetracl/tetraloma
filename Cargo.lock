@@ -4554,7 +4554,6 @@ name = "tetraloma-parallel"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
- "mpi",
  "proptest",
  "tetraloma-comm",
  "tetraloma-device",

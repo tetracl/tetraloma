@@ -28,7 +28,7 @@ use crate::{CommError, Result};
 /// ```
 #[derive(Clone, Copy, Debug)]
 pub enum ReduceOp {
-    /// The sum, in a fixed order.
+    /// The sum (in a fixed order in device reductions).
     Sum,
     /// The smallest value.
     Min,

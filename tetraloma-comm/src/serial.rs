@@ -412,7 +412,9 @@ mod tests {
         assert_eq!(ok.unwrap(), 3);
         let err: Result<u32> = crate::agree(&Serial, Err(CommError::TooLarge));
         assert!(matches!(err, Err(CommError::TooLarge)));
-        // Exercises the generic `E: From<CommError>` bound used by callers outside tetraloma-comm.
+        // Compile-time check of the generic `E: From<CommError>` bound used by callers outside
+        // `tetraloma-comm` (the multi-rank `RemoteFailure` `.into()` arm is exercised by
+        // `comm_checks::ring` and `index_map_basics`).
         #[derive(Debug)]
         struct Custom(CommError);
         impl From<CommError> for Custom {

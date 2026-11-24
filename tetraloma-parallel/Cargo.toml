@@ -1,6 +1,6 @@
 [package]
 name = "tetraloma-parallel"
-description = "Communicators, IndexMap, Scatterer and neighbourhood exchange of tetraloma"
+description = "IndexMap, Scatterer and re-exported communicators of tetraloma"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,14 +11,12 @@ repository.workspace = true
 workspace = true
 
 [features]
-# `dep:mpi` names `mpi::ffi::MPI_Comm` in `index_map`'s unit-test communicator (`Uniform`).
-mpi = ["tetraloma-comm/mpi", "dep:mpi"]
+mpi = ["tetraloma-comm/mpi"]
 
 [dependencies]
 bytemuck.workspace = true
 tetraloma-comm = { path = "../tetraloma-comm" }
 tetraloma-device = { path = "../tetraloma-device" }
-mpi = { workspace = true, optional = true }
 
 [dev-dependencies]
 proptest.workspace = true

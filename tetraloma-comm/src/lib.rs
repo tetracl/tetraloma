@@ -13,8 +13,8 @@
 //! - [`CommError`] and [`Result`] are the error and result types of this crate.
 //!
 //! Without the feature `mpi` the crate does not depend on MPI, and it does not depend on CubeCL or
-//! any mesh crate. `tetraloma-parallel` and the facade crate `tetraloma` re-export these items.
-//! The tutorials [Distributed
+//! any mesh crate. `tetraloma-parallel` re-exports these items except [`Result`], and the facade
+//! crate `tetraloma` re-exports the communicators and [`CommError`]. The tutorials [Distributed
 //! meshes](https://tetracl.github.io/tetraloma/tutorials/distributed.html) and [Halo
 //! exchange](https://tetracl.github.io/tetraloma/tutorials/halo-exchange.html) show how to use
 //! them.
