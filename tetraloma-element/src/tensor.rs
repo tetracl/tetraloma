@@ -19,15 +19,17 @@ use crate::{Element, ElementError, ElementKey, ElementTabulation, Family, Varian
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Factor1d {
     /// One-dimensional Lagrange basis at a `tetraloma-refcell` point family (`Equispaced` or
-    /// `Gll`), in interval DOF order (endpoints `0` and `1` first, then interior nodes). At
-    /// degree 0 this is the single constant function `1`.
+    /// `Gll`), in interval DOF order (endpoints `0` and `1` first, then interior nodes). A factor
+    /// of degree `d` has `d + 1` basis functions; at degree 0 this is the single constant
+    /// function `1`.
     NodalH1(NodeFamily),
     /// Endpoint evaluations plus interior Legendre moments up to degree `p − 2`, used in the
     /// continuous directions of tensor-product H(curl) and H(div) elements.
     ///
     /// No currently supported element constructs this variant.
     MomentH1,
-    /// Orthonormal Legendre basis on `[0, 1]` with integral-moment DOFs.
+    /// Orthonormal Legendre basis on `[0, 1]` with integral-moment DOFs. A factor of degree `d`
+    /// spans the 1D polynomials of degree at most `d` (`P_d`) and has `d + 1` basis functions.
     LegendreL2,
 }
 
@@ -164,6 +166,17 @@ impl TensorFactors {
                     .values
             }
             Factor1d::LegendreL2 => {
+                crate::layout::validate_key(ElementKey {
+                    family: Family::Lagrange,
+                    cell: CellType::Interval,
+                    degree,
+                    variant: Variant::Legendre,
+                })
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "TensorFactors::tabulate_1d: unsupported 1D factor ({kind:?}, {degree}): {e}"
+                    )
+                });
                 let nb = polyset::dim(CellType::Interval, degree);
                 let len = num_derivs
                     .checked_mul(npts)
@@ -440,9 +453,16 @@ pub(crate) fn assemble_lagrange_interpolation_matrix(key: ElementKey, dim: usize
             let td = tdim(key.cell);
             let rule = gauss_rule(CellType::Interval, 2 * key.degree);
             let n = key.degree as usize + 1;
+            let m = rule.weights.len();
+            assert_eq!(
+                m,
+                n,
+                "1D Gauss rule for degree {} must have {n} points, got {m}",
+                2 * key.degree
+            );
             let phi = polyset::tabulate(CellType::Interval, key.degree, &rule.points, 0);
             let m1: Vec<f64> = phi
-                .chunks_exact(n)
+                .chunks_exact(m)
                 .flat_map(|row| row.iter().zip(&rule.weights).map(|(&p, &w)| w * p))
                 .collect();
             kronecker_power(&m1, n, td, None)
@@ -620,15 +640,23 @@ mod tests {
             Variant::Nodal(NodeFamily::Equispaced),
             Variant::Legendre,
         ] {
-            let el = Element::get(lagrange(CellType::Hexahedron, 20, variant)).unwrap();
+            // Use fresh `Element::build` instances here so laziness checks are independent of
+            // process-wide cache state and test execution order.
+            let el = Element::build(lagrange(CellType::Hexahedron, 20, variant)).unwrap();
             assert_eq!(el.dim(), 9261);
+            assert_eq!(el.lazy_tables_initialised(), (false, false));
             let tab = el.tabulate(&[0.23, 0.41, 0.79], 1).unwrap();
             assert_eq!(
                 (tab.nderivs, tab.num_points, tab.dim, tab.value_size),
                 (1, 1, 9261, 1)
             );
             if matches!(variant, Variant::Nodal(_)) {
-                assert!((tab.values[..9261].iter().sum::<f64>() - 1.0).abs() < 1e-10);
+                let sum: f64 = tab.values[..9261].iter().sum();
+                let lebesgue: f64 = tab.values[..9261].iter().map(|v| v.abs()).sum();
+                assert!(
+                    (sum - 1.0).abs() <= TOL * lebesgue.max(1.0),
+                    "{variant:?}: sum={sum}, lebesgue={lebesgue}"
+                );
                 assert!(
                     el.base_transformation(CellType::Interval, Generator::Reversal)
                         .is_some()
@@ -643,30 +671,38 @@ mod tests {
             for cell in [CellType::Quadrilateral, CellType::Hexahedron] {
                 for degree in [0u32, 1, 2, 4] {
                     let key = lagrange(cell, degree, variant);
-                    let e = Element::get(key).unwrap();
+                    let e = Element::build(key).unwrap();
+                    assert_eq!(e.lazy_tables_initialised(), (false, false));
                     let dense = crate::ciarlet::build_lagrange_dense(key, e.dim()).unwrap();
+
+                    let c_got = e.coefficients();
+                    assert_eq!(e.lazy_tables_initialised(), (true, false));
+                    assert_eq!(c_got.len(), dense.coefficients.len());
                     let c_scale = dense
                         .coefficients
                         .iter()
                         .fold(1.0_f64, |m, v| m.max(v.abs()));
                     assert!(
-                        e.coefficients()
+                        c_got
                             .iter()
                             .zip(&dense.coefficients)
                             .all(|(&g, &w)| (g - w).abs() / c_scale <= TOL)
                     );
+
                     assert_eq!(e.interpolation_points(), dense.interpolation_points);
+                    let m_got = e.interpolation_matrix();
+                    assert_eq!(e.lazy_tables_initialised(), (true, true));
+                    assert_eq!(m_got.len(), dense.interpolation_matrix.len());
                     let m_scale = dense
                         .interpolation_matrix
                         .iter()
                         .fold(1.0_f64, |m, v| m.max(v.abs()));
                     assert!(
-                        e.interpolation_matrix()
+                        m_got
                             .iter()
                             .zip(&dense.interpolation_matrix)
                             .all(|(&g, &w)| (g - w).abs() / m_scale <= TOL)
                     );
-                    assert_eq!(e.lazy_tables_initialised(), (true, true));
                 }
             }
         }
@@ -735,6 +771,16 @@ mod tests {
     fn tabulate_1d_panics_on_unsupported_nodal_degree() {
         let tf = TensorFactors {
             factors: vec![vec![(Factor1d::NodalH1(NodeFamily::Gll), 21)]],
+            lexicographic: vec![Vec::new()],
+        };
+        let _ = tf.tabulate_1d(0, 0, &[0.5], 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "unsupported 1D factor")]
+    fn tabulate_1d_panics_on_unsupported_legendre_degree() {
+        let tf = TensorFactors {
+            factors: vec![vec![(Factor1d::LegendreL2, 21)]],
             lexicographic: vec![Vec::new()],
         };
         let _ = tf.tabulate_1d(0, 0, &[0.5], 0);

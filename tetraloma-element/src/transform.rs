@@ -19,7 +19,7 @@ use crate::{
 /// within `SIGNED_PERM_TOL` of `0`).
 ///
 /// Tight enough to reject any genuinely dense transformation block, while staying well above
-/// rounding error across all supported Lagrange elements (up to degree 20 on intervals,
+/// rounding error across all supported Lagrange elements with sub-entity DOFs (up to degree 20 on
 /// quadrilaterals and hexahedra, degree 15 on triangles, tetrahedra and prisms, and degree 8 on
 /// pyramids).
 const SIGNED_PERM_TOL: f64 = 1e-9;

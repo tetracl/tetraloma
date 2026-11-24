@@ -304,17 +304,18 @@ without allocating dense tables unless you explicitly request them.
 and a 1D tabulator:
 
 - `factors[component][direction]` gives the `(Factor1d, degree)` pair for each reference component
-  and coordinate direction, using [`Factor1d`](../api/tetraloma_element/enum.Factor1d.html):
-  `NodalH1(family)` for 1D Lagrange basis functions in interval DOF order (endpoints first, or the
-  constant $1$ at degree $0$), `LegendreL2` for 1D $L^2$-orthonormal Legendre polynomials on
-  $[0, 1]$, and `MomentH1` (declared for tensor-product $H(\mathrm{curl})$ and $H(\mathrm{div})$
-  elements).
+  and coordinate direction, using [`Factor1d`](../api/tetraloma_element/enum.Factor1d.html). A
+  factor of degree $d$ has $d + 1$ basis functions: `NodalH1(family)` gives the 1D Lagrange basis
+  in interval DOF order (endpoints first, or the constant $1$ at degree $0$), `LegendreL2` gives
+  the 1D $L^2$-orthonormal Legendre basis spanning $\mathcal P_d$ on $[0, 1]$, and `MomentH1` is
+  declared for tensor-product $H(\mathrm{curl})$ and $H(\mathrm{div})$ elements.
 - `lexicographic[component][tensor_index]` maps each x-fastest multi-index
   $a_0 + n_0 a_1$ (on quadrilaterals) or $a_0 + n_0 (a_1 + n_1 a_2)$ (on hexahedra) to the
   element's local DOF index.
 - `tabulate_1d(component, direction, points, nderivs)` returns the 1D basis values (`nderivs == 0`)
   or values and first derivatives (`nderivs == 1`) at scalar points in $[0, 1]$, laid out in
-  `[derivative][point][basis]` order (panicking for `nderivs > 1` or out-of-range indices).
+  `[derivative][point][basis]` order (panicking for `nderivs > 1`, out-of-range indices,
+  `Factor1d::MomentH1`, or an unsupported interval degree).
 
 ```rust
 use tetraloma::{CellType, NodeFamily};
@@ -335,13 +336,21 @@ let ty = tf.tabulate_1d(0, 1, &[y], 1);
 let n = 4; // degree + 1
 let tab = el.tabulate(&[x, y], 1)?;
 
+let (mut sum_v, mut sum_dx, mut sum_dy) = (0.0, 0.0, 0.0);
 for a1 in 0..n {
     for a0 in 0..n {
         let dof = tf.lexicographic[0][a0 + n * a1];
-        assert!((tx[a0] * ty[a1] - tab.values[dof]).abs() < 1e-14);
-        assert!((tx[n + a0] * ty[a1] - tab.values[el.dim() + dof]).abs() < 1e-14);
-        assert!((tx[a0] * ty[n + a1] - tab.values[2 * el.dim() + dof]).abs() < 1e-14);
+        let (v, dx, dy) = (tx[a0] * ty[a1], tx[n + a0] * ty[a1], tx[a0] * ty[n + a1]);
+        assert!((v - tab.values[dof]).abs() < 1e-14);
+        assert!((dx - tab.values[el.dim() + dof]).abs() < 1e-14);
+        assert!((dy - tab.values[2 * el.dim() + dof]).abs() < 1e-14);
+        sum_v += v;
+        sum_dx += dx;
+        sum_dy += dy;
     }
 }
+// Partition of unity: values sum to 1 and partial derivatives sum to 0.
+assert!((sum_v - 1.0).abs() < 1e-13);
+assert!(sum_dx.abs() < 1e-13 && sum_dy.abs() < 1e-13);
 # Ok::<(), tetraloma_element::ElementError>(())
 ```

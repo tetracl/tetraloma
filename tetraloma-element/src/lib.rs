@@ -772,8 +772,13 @@ impl Element {
     /// [Interpolation]: https://tetracl.github.io/tetraloma/fem/elements.html#interpolation
     /// [Tensor factors]: https://tetracl.github.io/tetraloma/fem/elements.html#tensor-factors
     pub fn interpolation_matrix(&self) -> &[f64] {
-        self.interpolation_matrix
-            .get_or_init(|| tensor::assemble_lagrange_interpolation_matrix(self.key, self.dim))
+        self.interpolation_matrix.get_or_init(|| {
+            let _ = self
+                .tensor_factors
+                .as_ref()
+                .expect("non-tensor element interpolation_matrix is initialised eagerly");
+            tensor::assemble_lagrange_interpolation_matrix(self.key, self.dim)
+        })
     }
 
     // Design: section 26 ("Finite elements", "DOF transformations"), Listing E1.
@@ -1061,8 +1066,8 @@ mod tests {
 
     #[test]
     fn lagrange_accessors_and_degree_zero_behaviour() {
-        // Keep degrees <= 3 on 3D cells here so dense construction in M11.T5 stays fast
-        // (docs/plans/M11.md: no test builds a hexahedron above p = 10 before T7).
+        // Keep degrees <= 3 on 3D cells here so non-tensor dense builds stay fast; high-degree
+        // hexahedra are tested in `tensor::tests`.
         for (cell, expected_dims) in CELL_DIMS_0_TO_3 {
             let td = tdim(cell);
             let variants: &[Variant] = if cell == CellType::Pyramid {
