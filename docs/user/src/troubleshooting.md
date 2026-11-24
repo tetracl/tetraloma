@@ -200,9 +200,10 @@ which names the cause ([Building on a communicator](tutorials/distributed.md#bui
 
 `GridError::PartitionerFailed` passes on a status code of a partitioner library; tetraloma's own
 conditions use negative codes. Calling `Partitioner::partition` directly returns
-[`PartitionError`](api/tetraloma/enum.PartitionError.html) with the same variants, which
-`build_on` and `gmsh::read` convert into `GridError`. The code −1 from ParMETIS means that a rank holds no cell before
-partitioning, which ParMETIS does not allow: give every rank part of the input, or use PT-Scotch.
+[`PartitionError`](api/tetraloma/enum.PartitionError.html) with variants of the same names and
+fields, which `build_on` and `gmsh::read` convert into `GridError`. The code −1 from ParMETIS
+means that a rank holds no cell before partitioning, which ParMETIS does not allow: give every
+rank part of the input, or use PT-Scotch.
 `GridError::NeedsMpiCommunicator` means that `PtScotch` or `ParMetis` was asked for more than
 one part on a communicator that is not an `Mpi` communicator. Partitions that change from run to
 run with the same seed can come from Scotch 7.0.18, whose threaded build is not reproducible; use
