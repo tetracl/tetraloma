@@ -83,6 +83,9 @@ pub mod elements {
 pub mod fem {
     #[doc = include_str!("../../docs/user/src/fem/elements.md")]
     pub mod elements {}
+
+    #[doc = include_str!("../../docs/user/src/fem/dof-transformations.md")]
+    pub mod dof_transformations {}
 }
 
 /// The chapters in docs/user/src/tutorials/.

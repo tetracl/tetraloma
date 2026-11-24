@@ -30,6 +30,7 @@
 # Finite elements and grid functions
 
 - [Finite elements](fem/elements.md)
+- [DOF transformations](fem/dof-transformations.md)
 
 # Tutorials
 

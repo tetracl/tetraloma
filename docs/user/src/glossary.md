@@ -180,7 +180,7 @@ See [Elements and DOFs](fem/elements.md#elements-and-dofs).
 DOF transformation
 : A matrix that corrects the degrees of freedom on an edge or face of a cell according to the
 entity's orientation in that cell.
-See [Converting a mesh](elements/basix-dolfinx.md#converting-a-mesh).
+See [DOF transformations](fem/dof-transformations.md).
 
 Dofmap
 : The field `dofmap` of a geometry block: for each cell, one row with the indices of its nodes in

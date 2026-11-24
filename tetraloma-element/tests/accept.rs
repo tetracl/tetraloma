@@ -228,7 +228,6 @@ fn legendre_mass_matrix_is_identity() {
 /// M11 acceptance A8: every base transformation of every Lagrange element with p <= 10
 /// (pyramids: p <= 8) is a permutation without negation.
 #[test]
-#[ignore = "pending M11.T6"]
 fn lagrange_base_transformations_are_permutations() {
     let entity_generators = [
         (CellType::Interval, Generator::Reversal),
@@ -512,7 +511,6 @@ fn eval_at_points(coeffs: &[f64], values: &[f64], npts: usize) -> Vec<f64> {
 /// pair of cell types that can share it, a Lagrange function with random coefficients is
 /// continuous across the entity to 1e-12 for p <= 6.
 #[test]
-#[ignore = "pending M11.T6"]
 fn lagrange_is_continuous_across_shared_entities() {
     let dim_groups: &[&[CellType]] = &[
         &[CellType::Interval],
