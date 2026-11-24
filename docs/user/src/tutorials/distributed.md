@@ -155,7 +155,10 @@ A partitioner is any type that implements the
 returns the destination rank of each of this rank's graph vertices, and reports errors as
 [`PartitionError`](../api/tetraloma/enum.PartitionError.html) (re-exported at the root of
 `tetraloma`, not in `prelude`, and converted into [`GridError`](../api/tetraloma/enum.GridError.html)
-by `build_on`). The program's `RoundRobin` sends vertex $i$ to rank $i \bmod p$:
+by `build_on`). Unlike `CommError`, there is no `From` conversion from `PartitionError` into
+`GridError`, so a function that calls `Partitioner::partition` directly either returns
+`Result<_, tetraloma::PartitionError>` or maps the error with `map_err`. The program's
+`RoundRobin` sends vertex $i$ to rank $i \bmod p$:
 
 ```rust,ignore
 {{#include ../../../../tetraloma-examples/src/distributed_mesh.rs:round_robin}}
