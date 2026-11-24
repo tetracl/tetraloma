@@ -3,10 +3,13 @@
 A distributed mesh is split over the ranks of an MPI program. Each rank owns some of the cells,
 every cell has exactly one owner, and each rank may also hold copies of neighbouring cells that
 other ranks own, the ghost cells. The type says which communicator the mesh lives on: it is the
-last parameter `C` of [`Mesh<F, TD, GD, C>`](../api/tetraloma/struct.Mesh.html). A serial mesh
-uses [`Serial`](../api/tetraloma/struct.Serial.html), a communicator of one rank, and every
-distributed method works on it too. With the feature `mpi`,
-[`Mpi`](../api/tetraloma/struct.Mpi.html) wraps an MPI communicator.
+last parameter `C` of [`Mesh<F, TD, GD, C>`](../api/tetraloma/struct.Mesh.html). The communicators
+live in the host-only [`tetraloma-comm`](../api/tetraloma_comm/index.html) crate and are
+re-exported by `tetraloma`. A serial mesh uses [`Serial`](../api/tetraloma/struct.Serial.html), a
+communicator of one rank, and every distributed method works on it too. With the feature `mpi`,
+[`Mpi`](../api/tetraloma/struct.Mpi.html) wraps an MPI communicator. Their fallible collectives
+return [`CommError`](../api/tetraloma/enum.CommError.html), which `?` converts into
+[`GridError`](../api/tetraloma/enum.GridError.html) in functions that return `tetraloma::Result`.
 
 This tutorial follows the program `distributed_mesh`. It builds the unit square as $8 \times 8$
 quadrilaterals on every rank of `MPI_COMM_WORLD`, several times, with different partitioners,

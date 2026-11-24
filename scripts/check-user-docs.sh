@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The checks of the user documentation (ADR-0067, rule 7): builds the site with
-# scripts/build-site.sh (the book at site/, the API of the ten library crates at site/api/), lists
+# scripts/build-site.sh (the book at site/, the API of the eleven library crates at site/api/), lists
 # the doctests, and runs scripts/doc_audit.py on them.
 #
 # Usage: scripts/check-user-docs.sh [--no-build] [--audit-only CRATE] [--parmetis] [--verbose]
@@ -68,9 +68,9 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 if [[ -n $only ]]; then
-    case " tetraloma tetraloma-dims tetraloma-refcell tetraloma-device tetraloma-parallel tetraloma-topology tetraloma-geometry tetraloma-partition tetraloma-io tetraloma-element " in
+    case " tetraloma tetraloma-dims tetraloma-refcell tetraloma-comm tetraloma-device tetraloma-parallel tetraloma-topology tetraloma-geometry tetraloma-partition tetraloma-io tetraloma-element " in
         *" ${only//_/-} "*) ;;
-        *) die "--audit-only '$only' is not one of the ten library crates" ;;
+        *) die "--audit-only '$only' is not one of the eleven library crates" ;;
     esac
 fi
 

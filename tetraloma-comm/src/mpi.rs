@@ -11,7 +11,7 @@ use mpi::traits::{Communicator, CommunicatorCollectives};
 
 use crate::comm::{dtype_size, identity_bytes};
 use crate::counts::checked_counts;
-use crate::{CommDyn, DType, GridError, Neighbourhood, ReduceOp, Result};
+use crate::{CommDyn, CommError, DType, Neighbourhood, ReduceOp, Result};
 
 // Design: "MPI bindings" (deliberately not `Send`); ADR-0011 (the identity on rank 0).
 /// An MPI communicator; feature `mpi`.
@@ -25,14 +25,14 @@ use crate::{CommDyn, DType, GridError, Neighbourhood, ReduceOp, Result};
 ///
 /// - `exscan_bytes` writes the identity of the operation on rank 0, where MPI leaves the result
 ///   undefined.
-/// - Counts or displacements above `i32::MAX` give `GridError::MessageTooLarge`.
+/// - Counts or displacements above `i32::MAX` give `CommError::MessageTooLarge`.
 /// - Neighbourhood exchanges run on the MPI graph communicator of a [`Neighbourhood`] made on
 ///   this communicator (`MPI_Neighbor_alltoallv`).
 ///
 /// # Example
 ///
 /// ```rust,standalone_crate
-/// use tetraloma_parallel::{CommDyn, CommExt, Mpi};
+/// use tetraloma_comm::{CommDyn, CommExt, Mpi};
 ///
 /// let universe = mpi::initialize().expect("MPI is not initialised yet");
 /// let comm = Mpi::world(&universe);
@@ -50,7 +50,7 @@ impl Mpi {
     /// # Example
     ///
     /// ```rust,standalone_crate
-    /// use tetraloma_parallel::{CommDyn, Mpi};
+    /// use tetraloma_comm::{CommDyn, Mpi};
     ///
     /// // Once per process; dropping `universe` finalises MPI.
     /// let universe = mpi::initialize().expect("MPI is not initialised yet");
@@ -67,7 +67,7 @@ impl Mpi {
     /// # Example
     ///
     /// ```rust,standalone_crate
-    /// use tetraloma_parallel::{CommDyn, CommExt, Mpi};
+    /// use tetraloma_comm::{CommDyn, CommExt, Mpi};
     ///
     /// let universe = mpi::initialize().expect("MPI is not initialised yet");
     /// // Any communicator of the `mpi` crate; here the world communicator itself.
@@ -140,7 +140,7 @@ fn exscan_typed<T: bytemuck::Pod + Equivalence>(
 /// `LengthMismatch` unless `counts` has `n` entries whose elements fill `len` bytes.
 fn check_counts(counts: &[usize], n: usize, len: usize, dtype: DType) -> Result<()> {
     if counts.len() != n {
-        return Err(GridError::LengthMismatch {
+        return Err(CommError::LengthMismatch {
             expected: n,
             found: counts.len(),
         });
@@ -148,12 +148,12 @@ fn check_counts(counts: &[usize], n: usize, len: usize, dtype: DType) -> Result<
     let elements = counts
         .iter()
         .try_fold(0_usize, |a, &c| a.checked_add(c))
-        .ok_or(GridError::TooLarge)?;
+        .ok_or(CommError::TooLarge)?;
     let bytes = elements
         .checked_mul(dtype_size(dtype))
-        .ok_or(GridError::TooLarge)?;
+        .ok_or(CommError::TooLarge)?;
     if bytes != len {
-        return Err(GridError::LengthMismatch {
+        return Err(CommError::LengthMismatch {
             expected: bytes,
             found: len,
         });
@@ -241,7 +241,7 @@ impl CommDyn for Mpi {
         let Some(graph) = nb.graph() else {
             // Only the empty neighbourhood has no graph communicator: nothing to exchange.
             if ns + nd > 0 {
-                return Err(GridError::LengthMismatch {
+                return Err(CommError::LengthMismatch {
                     expected: 0,
                     found: ns + nd,
                 });

@@ -3,9 +3,9 @@
 use std::cell::OnceCell;
 use std::rc::Rc;
 
+use tetraloma_comm::agree;
 use tetraloma_device::Client;
 
-use crate::comm::agree;
 use crate::scatterer::SharedIndices;
 use crate::{CommDyn, CommExt, DType, GridError, Neighbourhood, ReduceOp, Result, Scatterer};
 
@@ -496,12 +496,18 @@ mod tests {
 
     /// Pretends to be rank `rank` of `size` ranks that all pass the same buffer: the sum is
     /// `size` times the value and the exclusive scan `rank` times. Only u64 sums.
+    ///
+    /// Compiled only without `feature = "mpi"`: `tetraloma-parallel` forwards `mpi` to
+    /// `tetraloma-comm` without a direct `mpi` dependency, so this unit-test mock does not name
+    /// `mpi::ffi::MPI_Comm` for `CommDyn::raw`. Default builds run all `Uniform` tests.
+    #[cfg(not(feature = "mpi"))]
     #[derive(Clone)]
     struct Uniform {
         rank: usize,
         size: usize,
     }
 
+    #[cfg(not(feature = "mpi"))]
     impl Uniform {
         fn scale(buf: &mut [u8], dtype: DType, op: ReduceOp, factor: usize) {
             assert!(matches!((dtype, op), (DType::U64, ReduceOp::Sum)));
@@ -514,6 +520,7 @@ mod tests {
         }
     }
 
+    #[cfg(not(feature = "mpi"))]
     impl CommDyn for Uniform {
         fn rank(&self) -> usize {
             self.rank
@@ -535,7 +542,7 @@ mod tests {
             _: &mut [u8],
             _: &[usize],
             _: DType,
-        ) -> Result<()> {
+        ) -> tetraloma_comm::Result<()> {
             unimplemented!()
         }
         fn neighbour_all_to_all_v_bytes(
@@ -546,12 +553,8 @@ mod tests {
             _: &mut [u8],
             _: &[usize],
             _: DType,
-        ) -> Result<()> {
+        ) -> tetraloma_comm::Result<()> {
             unimplemented!()
-        }
-        #[cfg(feature = "mpi")]
-        fn raw(&self) -> Option<mpi::ffi::MPI_Comm> {
-            None
         }
         fn duplicate(&self) -> std::rc::Rc<dyn CommDyn> {
             std::rc::Rc::new(self.clone())
@@ -584,6 +587,7 @@ mod tests {
         ));
     }
 
+    #[cfg(not(feature = "mpi"))]
     #[test]
     fn ranges_on_several_ranks() {
         for rank in 0..4 {
@@ -596,6 +600,7 @@ mod tests {
         }
     }
 
+    #[cfg(not(feature = "mpi"))]
     #[test]
     fn global_overflow_is_too_large_on_every_rank() {
         // 3 * 2^61 fits in i64; 4 * 2^61 = 2^63 does not.
@@ -630,6 +635,16 @@ mod tests {
         }
 
         #[test]
+        fn prop_too_large_serial(n in (i64::MAX as usize + 1)..=usize::MAX) {
+            prop_assert!(matches!(IndexMap::new(&Serial, n), Err(GridError::TooLarge)));
+        }
+    }
+
+    #[cfg(not(feature = "mpi"))]
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(256))]
+
+        #[test]
         fn prop_uniform_ranks(size in 1..64_usize, rank_seed in any::<usize>(), n in 0..(1_usize << 40)) {
             let rank = rank_seed % size;
             let map = IndexMap::new(&Uniform { rank, size }, n).unwrap();
@@ -637,11 +652,6 @@ mod tests {
             prop_assert_eq!(map.owned_range(), (begin, begin + n as i64));
             prop_assert_eq!(map.size_global(), (size * n) as i64);
             prop_assert_eq!(map.num_local(), n);
-        }
-
-        #[test]
-        fn prop_too_large_serial(n in (i64::MAX as usize + 1)..=usize::MAX) {
-            prop_assert!(matches!(IndexMap::new(&Serial, n), Err(GridError::TooLarge)));
         }
     }
 }

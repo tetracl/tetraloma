@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "tetraloma-dims",
     "tetraloma-refcell",
+    "tetraloma-comm",
     "tetraloma-device",
     "tetraloma-parallel",
     "tetraloma-topology",

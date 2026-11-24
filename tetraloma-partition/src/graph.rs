@@ -285,6 +285,7 @@ pub(crate) fn validate(
     agree(comm, local.and(fits))?;
     let local = comm
         .all_to_all_v(&queries, &counts)
+        .map_err(GridError::from)
         .and_then(|(pairs, _)| confirm_reverse(g, begin, &pairs, name));
     agree(comm, local.map(|()| checked))
 }

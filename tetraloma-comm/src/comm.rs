@@ -2,7 +2,39 @@
 
 use std::rc::Rc;
 
-use crate::{GridError, ReduceOp, Result};
+use crate::{CommError, Result};
+
+// Design: Listing S1b, Listing S2c; ADR-0074.
+/// The operation of a reduction: the sum, the minimum or the maximum.
+///
+/// [`CommDyn::all_reduce_bytes`], [`CommDyn::exscan_bytes`] and the device reductions of
+/// `tetraloma-device` take it. Floating-point sums in device reductions are taken in a fixed
+/// order, so they give the same bits on every run on a device ([Distributed
+/// meshes](https://tetracl.github.io/tetraloma/tutorials/distributed.html#building-on-a-communicator);
+/// [Precision](https://tetracl.github.io/tetraloma/concepts/precision.html#determinism)).
+///
+/// # Example
+///
+/// ```
+/// use tetraloma_comm::{CommDyn, DType, ReduceOp, Serial};
+///
+/// let mut buf = 3.0_f32.to_ne_bytes();
+/// Serial.exscan_bytes(&mut buf, DType::F32, ReduceOp::Sum);
+/// assert_eq!(f32::from_ne_bytes(buf), 0.0);
+/// Serial.exscan_bytes(&mut buf, DType::F32, ReduceOp::Min);
+/// assert_eq!(f32::from_ne_bytes(buf), f32::MAX);
+/// Serial.exscan_bytes(&mut buf, DType::F32, ReduceOp::Max);
+/// assert_eq!(f32::from_ne_bytes(buf), f32::MIN);
+/// ```
+#[derive(Clone, Copy, Debug)]
+pub enum ReduceOp {
+    /// The sum (in a fixed order in device reductions).
+    Sum,
+    /// The smallest value.
+    Min,
+    /// The largest value.
+    Max,
+}
 
 // Listing S2c.
 /// The interface of a communicator: a group of ranks and the collective operations between
@@ -23,7 +55,7 @@ use crate::{GridError, ReduceOp, Result};
 /// # Example
 ///
 /// ```
-/// use tetraloma_parallel::{CommDyn, DType, ReduceOp, Serial};
+/// use tetraloma_comm::{CommDyn, DType, ReduceOp, Serial};
 ///
 /// let comm: &dyn CommDyn = &Serial;
 /// assert_eq!((comm.rank(), comm.size()), (0, 1));
@@ -42,7 +74,7 @@ pub trait CommDyn: 'static {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{CommDyn, Serial};
+    /// use tetraloma_comm::{CommDyn, Serial};
     ///
     /// let comm: &dyn CommDyn = &Serial;
     /// assert_eq!(comm.rank(), 0);
@@ -54,7 +86,7 @@ pub trait CommDyn: 'static {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{CommDyn, Serial};
+    /// use tetraloma_comm::{CommDyn, Serial};
     ///
     /// let comm: &dyn CommDyn = &Serial;
     /// assert_eq!(comm.size(), 1);
@@ -66,7 +98,7 @@ pub trait CommDyn: 'static {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{CommDyn, Serial};
+    /// use tetraloma_comm::{CommDyn, Serial};
     ///
     /// // One rank: returns at once.
     /// Serial.barrier();
@@ -80,7 +112,7 @@ pub trait CommDyn: 'static {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{CommDyn, DType, ReduceOp, Serial};
+    /// use tetraloma_comm::{CommDyn, DType, ReduceOp, Serial};
     ///
     /// let mut buf = [2.5_f64.to_ne_bytes(), 4.0_f64.to_ne_bytes()].concat();
     /// Serial.all_reduce_bytes(&mut buf, DType::F64, ReduceOp::Max);
@@ -96,7 +128,7 @@ pub trait CommDyn: 'static {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{CommDyn, DType, ReduceOp, Serial};
+    /// use tetraloma_comm::{CommDyn, DType, ReduceOp, Serial};
     ///
     /// let mut buf = 5_u32.to_ne_bytes();
     /// Serial.exscan_bytes(&mut buf, DType::U32, ReduceOp::Sum);
@@ -119,14 +151,14 @@ pub trait CommDyn: 'static {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{CommDyn, DType, Serial};
+    /// use tetraloma_comm::{CommDyn, DType, Serial};
     ///
     /// let send = [1_i32.to_ne_bytes(), 2_i32.to_ne_bytes()].concat();
     /// let mut recv = [0_u8; 8];
     /// // One rank sends both elements to itself.
     /// Serial.all_to_all_v_bytes(&send, &[2], &mut recv, &[2], DType::I32)?;
     /// assert_eq!(recv[..], send[..]);
-    /// # Ok::<(), tetraloma_parallel::GridError>(())
+    /// # Ok::<(), tetraloma_comm::CommError>(())
     /// ```
     fn all_to_all_v_bytes(
         &self,
@@ -152,12 +184,12 @@ pub trait CommDyn: 'static {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{CommDyn, DType, Neighbourhood, Serial};
+    /// use tetraloma_comm::{CommDyn, DType, Neighbourhood, Serial};
     ///
     /// // One rank has no neighbours: nothing to send or receive.
     /// let nb = Neighbourhood::empty();
     /// Serial.neighbour_all_to_all_v_bytes(&nb, &[], &[], &mut [], &[], DType::F32)?;
-    /// # Ok::<(), tetraloma_parallel::GridError>(())
+    /// # Ok::<(), tetraloma_comm::CommError>(())
     /// ```
     fn neighbour_all_to_all_v_bytes(
         &self,
@@ -176,7 +208,7 @@ pub trait CommDyn: 'static {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{CommDyn, Serial};
+    /// use tetraloma_comm::{CommDyn, Serial};
     ///
     /// assert!(Serial.raw().is_none());
     /// ```
@@ -191,7 +223,7 @@ pub trait CommDyn: 'static {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{CommDyn, Serial};
+    /// use tetraloma_comm::{CommDyn, Serial};
     ///
     /// let copy = Serial.duplicate();
     /// assert_eq!((copy.rank(), copy.size()), (0, 1));
@@ -208,7 +240,7 @@ pub trait CommDyn: 'static {
 /// # Example
 ///
 /// ```
-/// use tetraloma_parallel::{Comm, Serial};
+/// use tetraloma_comm::{Comm, Serial};
 ///
 /// fn ranks<C: Comm>(comm: &C) -> usize {
 ///     comm.clone().size()
@@ -228,7 +260,7 @@ impl<T: CommDyn + Clone> Comm for T {}
 /// # Example
 ///
 /// ```
-/// use tetraloma_parallel::{CommDyn, CommExt, Serial};
+/// use tetraloma_comm::{CommDyn, CommExt, Serial};
 ///
 /// let comm: &dyn CommDyn = &Serial;
 /// assert_eq!(comm.sum(3_u64), 3);
@@ -242,7 +274,7 @@ pub trait CommExt {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{CommExt, Serial};
+    /// use tetraloma_comm::{CommExt, Serial};
     ///
     /// assert_eq!(Serial.sum(1.5_f32), 1.5);
     /// ```
@@ -253,7 +285,7 @@ pub trait CommExt {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{CommExt, Serial};
+    /// use tetraloma_comm::{CommExt, Serial};
     ///
     /// assert_eq!(Serial.max(-4_i64), -4);
     /// ```
@@ -265,7 +297,7 @@ pub trait CommExt {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{CommExt, Serial};
+    /// use tetraloma_comm::{CommExt, Serial};
     ///
     /// assert_eq!(Serial.exscan_sum(9_u32), 0);
     /// ```
@@ -276,7 +308,7 @@ pub trait CommExt {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{CommExt, Serial};
+    /// use tetraloma_comm::{CommExt, Serial};
     ///
     /// assert_eq!(Serial.min(2.5_f64), 2.5);
     /// ```
@@ -287,7 +319,7 @@ pub trait CommExt {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{CommExt, Serial};
+    /// use tetraloma_comm::{CommExt, Serial};
     ///
     /// assert_eq!(Serial.all_gather(7_i32), vec![7]);
     /// ```
@@ -306,11 +338,11 @@ pub trait CommExt {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{CommExt, GridError, Serial};
+    /// use tetraloma_comm::{CommExt, CommError, Serial};
     ///
     /// let (values, counts) = Serial.all_to_all_v(&[1_u64, 2], &[2])?;
     /// assert_eq!((values, counts), (vec![1, 2], vec![2]));
-    /// # Ok::<(), GridError>(())
+    /// # Ok::<(), CommError>(())
     /// ```
     fn all_to_all_v<T: CommScalar>(
         &self,
@@ -331,12 +363,12 @@ pub trait CommExt {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{CommExt, GridError, Neighbourhood, Serial};
+    /// use tetraloma_comm::{CommExt, CommError, Neighbourhood, Serial};
     ///
     /// let nb = Neighbourhood::new(&Serial, vec![], vec![])?;
     /// let (values, counts) = Serial.neighbour_all_to_all_v::<f32>(&nb, &[], &[])?;
     /// assert!(values.is_empty() && counts.is_empty());
-    /// # Ok::<(), GridError>(())
+    /// # Ok::<(), CommError>(())
     /// ```
     fn neighbour_all_to_all_v<T: CommScalar>(
         &self,
@@ -432,14 +464,14 @@ impl<C: CommDyn + ?Sized> CommExt for C {
 /// if the sum overflows.
 fn check_counts<T>(send: &[T], send_counts: &[usize], n: usize) -> Result<()> {
     if send_counts.len() != n {
-        return Err(GridError::LengthMismatch {
+        return Err(CommError::LengthMismatch {
             expected: n,
             found: send_counts.len(),
         });
     }
     let sum = total(send_counts)?;
     if sum != send.len() {
-        return Err(GridError::LengthMismatch {
+        return Err(CommError::LengthMismatch {
             expected: sum,
             found: send.len(),
         });
@@ -452,7 +484,7 @@ fn total(counts: &[usize]) -> Result<usize> {
     counts
         .iter()
         .try_fold(0_usize, |a, &c| a.checked_add(c))
-        .ok_or(GridError::TooLarge)
+        .ok_or(CommError::TooLarge)
 }
 
 /// Sends one u64 count per peer through `exchange` (one element to and from each peer) and
@@ -469,14 +501,18 @@ fn exchange_counts(
         bytemuck::cast_slice_mut(&mut recv),
     )?;
     recv.into_iter()
-        .map(|c| usize::try_from(c).map_err(|_| GridError::TooLarge))
+        .map(|c| usize::try_from(c).map_err(|_| CommError::TooLarge))
         .collect()
 }
 
-/// The agreed result of a collective step (ADR-0026, item 15): every rank learns the lowest
-/// failing rank. That rank, and every other failing rank, returns its own error; the others
-/// return `RemoteFailure { rank }`. Collective.
-pub(crate) fn agree<T>(comm: &dyn CommDyn, local: Result<T>) -> Result<T> {
+// Design: ADR-0026, item 15; ADR-0074; hidden item of M18 (dependency rule 7).
+/// The agreed result of a collective step: every rank learns the lowest failing rank. That rank,
+/// and every other failing rank, returns its own error; the others return
+/// `CommError::RemoteFailure { rank }.into()`. Collective.
+///
+/// For workspace crates (`tetraloma-parallel`, `tetraloma-partition`); not part of the stable API.
+#[doc(hidden)]
+pub fn agree<T, E: From<CommError>>(comm: &dyn CommDyn, local: Result<T, E>) -> Result<T, E> {
     let mine = if local.is_err() {
         comm.rank() as u64
     } else {
@@ -490,9 +526,10 @@ pub(crate) fn agree<T>(comm: &dyn CommDyn, local: Result<T>) -> Result<T> {
     );
     match local {
         Err(e) => Err(e),
-        Ok(_) if lowest != u64::MAX => Err(GridError::RemoteFailure {
+        Ok(_) if lowest != u64::MAX => Err(CommError::RemoteFailure {
             rank: lowest as usize,
-        }),
+        }
+        .into()),
         Ok(v) => Ok(v),
     }
 }
@@ -504,7 +541,7 @@ pub(crate) fn agree<T>(comm: &dyn CommDyn, local: Result<T>) -> Result<T> {
 /// # Example
 ///
 /// ```
-/// use tetraloma_parallel::{CommScalar, DType};
+/// use tetraloma_comm::{CommScalar, DType};
 ///
 /// assert!(matches!(<f64 as CommScalar>::DTYPE, DType::F64));
 /// ```
@@ -595,7 +632,7 @@ pub(crate) fn identity_bytes(dtype: DType, op: ReduceOp) -> [u8; 8] {
 /// # Example
 ///
 /// ```
-/// use tetraloma_parallel::{CommExt, CommScalar, Serial};
+/// use tetraloma_comm::{CommExt, CommScalar, Serial};
 ///
 /// fn total<T: CommScalar>(x: T) -> T {
 ///     Serial.sum(x)
@@ -630,7 +667,7 @@ impl CommScalar for f64 {
 /// The ranks this rank exchanges data with: the ranks it receives from (sources) and the ranks
 /// it sends to (destinations), with the communicator they belong to.
 ///
-/// An [`IndexMap`](crate::IndexMap) with ghosts holds two of them, one per direction of the halo
+/// An `IndexMap` with ghosts holds two of them, one per direction of the halo
 /// exchange ([Halo
 /// exchange](https://tetracl.github.io/tetraloma/tutorials/halo-exchange.html#scatterers)).
 /// [`Serial`](crate::Serial) accepts only the empty one.
@@ -641,7 +678,7 @@ impl CommScalar for f64 {
 /// # Example
 ///
 /// ```
-/// use tetraloma_parallel::{Neighbourhood, Serial};
+/// use tetraloma_comm::{Neighbourhood, Serial};
 ///
 /// let nb = Neighbourhood::empty();
 /// assert!(nb.sources().is_empty());
@@ -667,7 +704,7 @@ impl Neighbourhood {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::Neighbourhood;
+    /// use tetraloma_comm::Neighbourhood;
     ///
     /// let nb = Neighbourhood::empty();
     /// assert!(nb.sources().is_empty() && nb.destinations().is_empty());
@@ -700,13 +737,13 @@ impl Neighbourhood {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{GridError, Neighbourhood, Serial};
+    /// use tetraloma_comm::{CommError, Neighbourhood, Serial};
     ///
     /// let nb = Neighbourhood::new(&Serial, vec![], vec![])?;
     /// assert!(nb.sources().is_empty());
     /// let err = Neighbourhood::new(&Serial, vec![], vec![0]);
-    /// assert!(matches!(err, Err(GridError::IndexOutOfRange { index: 0, len: 1 })));
-    /// # Ok::<(), GridError>(())
+    /// assert!(matches!(err, Err(CommError::IndexOutOfRange { index: 0, len: 1 })));
+    /// # Ok::<(), CommError>(())
     /// ```
     pub fn new(comm: &dyn CommDyn, sources: Vec<usize>, destinations: Vec<usize>) -> Result<Self> {
         let check = |ranks: &[usize]| -> Result<()> {
@@ -714,7 +751,7 @@ impl Neighbourhood {
                 .iter()
                 .find(|&&r| r >= comm.size() || r == comm.rank())
             {
-                return Err(GridError::IndexOutOfRange {
+                return Err(CommError::IndexOutOfRange {
                     index: r,
                     len: comm.size(),
                 });
@@ -723,7 +760,7 @@ impl Neighbourhood {
             sorted.sort_unstable();
             sorted.dedup();
             if sorted.len() != ranks.len() {
-                return Err(GridError::LengthMismatch {
+                return Err(CommError::LengthMismatch {
                     expected: sorted.len(),
                     found: ranks.len(),
                 });
@@ -754,8 +791,12 @@ impl Neighbourhood {
     pub(crate) fn graph(&self) -> Option<&crate::graph::GraphComm> {
         self.graph.as_deref()
     }
+    // Design: ADR-0074; hidden item of M18 (dependency rule 7).
     /// The communicator the neighbourhood was made on; `None` for [`Neighbourhood::empty`].
-    pub(crate) fn comm(&self) -> Option<&Rc<dyn CommDyn>> {
+    ///
+    /// For `Scatterer` in `tetraloma-parallel`; not part of the stable API.
+    #[doc(hidden)]
+    pub fn comm(&self) -> Option<&Rc<dyn CommDyn>> {
         self.comm.as_ref()
     }
     /// A neighbourhood with the given ranks, for tests of the empty-only rule.
@@ -775,7 +816,7 @@ impl Neighbourhood {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::Neighbourhood;
+    /// use tetraloma_comm::Neighbourhood;
     ///
     /// let nb = Neighbourhood::empty();
     /// assert!(nb.sources().is_empty());
@@ -789,7 +830,7 @@ impl Neighbourhood {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::Neighbourhood;
+    /// use tetraloma_comm::Neighbourhood;
     ///
     /// let nb = Neighbourhood::empty();
     /// assert!(nb.destinations().is_empty());
@@ -834,5 +875,15 @@ mod tests {
     fn empty_neighbourhood_has_no_ranks() {
         let nb = Neighbourhood::empty();
         assert!(nb.sources().is_empty() && nb.destinations().is_empty());
+    }
+
+    #[test]
+    fn neighbourhood_holds_its_parent_communicator() {
+        assert!(Neighbourhood::empty().comm().is_none());
+        let nb = Neighbourhood::new(&crate::Serial, vec![], vec![]).unwrap();
+        let parent = nb
+            .comm()
+            .expect("Neighbourhood::new retains its parent communicator");
+        assert_eq!((parent.rank(), parent.size()), (0, 1));
     }
 }

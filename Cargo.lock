@@ -4406,6 +4406,7 @@ dependencies = [
  "mpi",
  "proptest",
  "serde_json",
+ "tetraloma-comm",
  "tetraloma-device",
  "tetraloma-dims",
  "tetraloma-geometry",
@@ -4438,6 +4439,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tetraloma-comm"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "mpi",
+ "proptest",
+]
+
+[[package]]
 name = "tetraloma-comm-testing"
 version = "0.1.0"
 dependencies = [
@@ -4453,6 +4463,7 @@ dependencies = [
  "libc",
  "num-complex 0.4.6",
  "proptest",
+ "tetraloma-comm",
  "tetraloma-testing",
  "toml",
 ]
@@ -4543,8 +4554,8 @@ name = "tetraloma-parallel"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
- "mpi",
  "proptest",
+ "tetraloma-comm",
  "tetraloma-device",
  "tetraloma-testing",
 ]

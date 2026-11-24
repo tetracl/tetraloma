@@ -1,7 +1,7 @@
 //! `Serial`: the one-rank communicator with no-op collectives.
 
 use crate::comm::{dtype_size, identity_bytes};
-use crate::{CommDyn, DType, GridError, Neighbourhood, ReduceOp, Result};
+use crate::{CommDyn, CommError, DType, Neighbourhood, ReduceOp, Result};
 
 /// The communicator of one process: one rank, whose collectives return at once.
 ///
@@ -29,7 +29,7 @@ use crate::{CommDyn, DType, GridError, Neighbourhood, ReduceOp, Result};
 /// # Example
 ///
 /// ```
-/// use tetraloma_parallel::{CommDyn, CommExt, DType, GridError, Serial};
+/// use tetraloma_comm::{CommDyn, CommExt, DType, CommError, Serial};
 ///
 /// let comm = Serial;
 /// assert_eq!(comm.sum(4_i64), 4);
@@ -40,7 +40,7 @@ use crate::{CommDyn, DType, GridError, Neighbourhood, ReduceOp, Result};
 /// assert_eq!(f64::from_ne_bytes(recv), 1.0);
 ///
 /// let err = comm.all_to_all_v_bytes(&send, &[1], &mut recv, &[2], DType::F64);
-/// assert!(matches!(err, Err(GridError::LengthMismatch { .. })));
+/// assert!(matches!(err, Err(CommError::LengthMismatch { .. })));
 /// ```
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Serial;
@@ -50,7 +50,7 @@ fn check_len(expected: usize, found: usize) -> Result<()> {
     if expected == found {
         Ok(())
     } else {
-        Err(GridError::LengthMismatch { expected, found })
+        Err(CommError::LengthMismatch { expected, found })
     }
 }
 
@@ -58,7 +58,7 @@ fn check_len(expected: usize, found: usize) -> Result<()> {
 fn byte_len(count: usize, dtype: DType) -> Result<usize> {
     count
         .checked_mul(dtype_size(dtype))
-        .ok_or(GridError::TooLarge)
+        .ok_or(CommError::TooLarge)
 }
 
 impl CommDyn for Serial {
@@ -232,7 +232,7 @@ mod tests {
         let mut recv = [0_u8; 8];
         let mismatch = |r: Result<()>, e: usize, f: usize| {
             assert!(
-                matches!(r, Err(GridError::LengthMismatch { expected, found }) if expected == e && found == f),
+                matches!(r, Err(CommError::LengthMismatch { expected, found }) if expected == e && found == f),
                 "{r:?}"
             )
         };
@@ -268,7 +268,7 @@ mod tests {
         );
         assert!(matches!(
             Serial.all_to_all_v_bytes(&send, &[usize::MAX], &mut recv, &[usize::MAX], DType::U64),
-            Err(GridError::TooLarge)
+            Err(CommError::TooLarge)
         ));
         assert_eq!(recv, [0; 8], "recv is untouched on error");
         Serial
@@ -285,7 +285,7 @@ mod tests {
             .neighbour_all_to_all_v_bytes(&nb, &[], &[], &mut empty, &[], DType::F64)
             .unwrap();
         let mut recv = [0_u8; 4];
-        let err = |r: Result<()>| matches!(r, Err(GridError::LengthMismatch { expected: 0, .. }));
+        let err = |r: Result<()>| matches!(r, Err(CommError::LengthMismatch { expected: 0, .. }));
         assert!(err(Serial.neighbour_all_to_all_v_bytes(
             &nb,
             &[],
@@ -328,7 +328,7 @@ mod tests {
                 &[1],
                 DType::I32
             ),
-            Err(GridError::LengthMismatch {
+            Err(CommError::LengthMismatch {
                 expected: 0,
                 found: 1
             })
@@ -362,14 +362,14 @@ mod tests {
         // One count per rank, adding up to the values sent.
         assert!(matches!(
             comm.all_to_all_v(&[1_u32], &[1, 0]),
-            Err(GridError::LengthMismatch {
+            Err(CommError::LengthMismatch {
                 expected: 1,
                 found: 2
             })
         ));
         assert!(matches!(
             comm.all_to_all_v(&[1_u32, 2], &[1]),
-            Err(GridError::LengthMismatch {
+            Err(CommError::LengthMismatch {
                 expected: 1,
                 found: 2
             })
@@ -384,7 +384,7 @@ mod tests {
         assert!(recv.is_empty() && counts.is_empty());
         assert!(matches!(
             comm.neighbour_all_to_all_v(&nb, &[1_i32], &[1]),
-            Err(GridError::LengthMismatch {
+            Err(CommError::LengthMismatch {
                 expected: 0,
                 found: 1
             })
@@ -399,7 +399,7 @@ mod tests {
         for (sources, destinations) in [(vec![0], vec![]), (vec![], vec![0]), (vec![], vec![1])] {
             assert!(matches!(
                 Neighbourhood::new(&Serial, sources, destinations),
-                Err(GridError::IndexOutOfRange { len: 1, .. })
+                Err(CommError::IndexOutOfRange { len: 1, .. })
             ));
         }
         let dup = Serial.duplicate();
@@ -408,10 +408,28 @@ mod tests {
 
     #[test]
     fn agreed_errors_on_one_rank() {
-        let ok: Result<u32> = crate::comm::agree(&Serial, Ok(3));
+        let ok: Result<u32> = crate::agree(&Serial, Ok(3));
         assert_eq!(ok.unwrap(), 3);
-        let err: Result<u32> = crate::comm::agree(&Serial, Err(GridError::DuplicateOriginId(7)));
-        assert!(matches!(err, Err(GridError::DuplicateOriginId(7))));
+        let err: Result<u32> = crate::agree(&Serial, Err(CommError::TooLarge));
+        assert!(matches!(err, Err(CommError::TooLarge)));
+        // Compile-time check of the generic `E: From<CommError>` bound used by callers outside
+        // `tetraloma-comm` (the multi-rank `RemoteFailure` `.into()` arm is exercised by
+        // `comm_checks::ring` and `index_map_basics`).
+        #[derive(Debug)]
+        struct Custom(CommError);
+        impl From<CommError> for Custom {
+            fn from(error: CommError) -> Self {
+                Custom(error)
+            }
+        }
+        let custom: core::result::Result<u32, Custom> = crate::agree(
+            &Serial,
+            Err(Custom(CommError::MessageTooLarge { count: 7 })),
+        );
+        assert!(matches!(
+            custom,
+            Err(Custom(CommError::MessageTooLarge { count: 7 }))
+        ));
     }
 
     proptest! {

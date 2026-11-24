@@ -1,9 +1,11 @@
-// Design: "Dependency rules" 5 (no MPI dependency without the feature `mpi`); milestones M2
-// (the communication core) and M6 (`Mpi`, `Scatterer`).
-//! Communicators, index maps and halo exchange: the parallel layer of tetraloma.
+// Design: "Dependency rules" 5 (no MPI dependency without the feature `mpi`); Listing S2c;
+// milestones M2 (the communication core), M6 (`Mpi`, `Scatterer`) and M18 (`tetraloma-comm`,
+// ADR-0074).
+//! Index maps, halo exchange and re-exported communicators: the parallel layer of tetraloma.
 //!
-//! - [`CommDyn`], [`Comm`] and [`CommExt`] are the interface of a communicator. [`Serial`] is
-//!   the communicator of one process; with the feature `mpi`, `Mpi` wraps an MPI communicator.
+//! - [`CommDyn`], [`Comm`] and [`CommExt`] are the interface of a communicator, defined in
+//!   `tetraloma-comm` and re-exported here. [`Serial`] is the communicator of one process; with
+//!   the feature `mpi`, `Mpi` wraps an MPI communicator.
 //! - [`IndexMap`] says which rank owns each index of a distributed set of entities, and which
 //!   indices each rank holds as ghosts.
 //! - [`Scatterer`] runs the halo exchange of an index map on device arrays: forward from the
@@ -16,30 +18,18 @@
 //! exchange](https://tetracl.github.io/tetraloma/tutorials/halo-exchange.html) show how to use
 //! it.
 
-mod comm;
-mod comm_error;
-mod counts;
 mod error;
-#[cfg(feature = "mpi")]
-mod graph;
-mod hash;
 mod index_map;
-mod local_gpu;
-#[cfg(feature = "mpi")]
-mod mpi;
 mod scatterer;
-mod serial;
 
-pub use comm::{Comm, CommDyn, CommExt, CommScalar, DType, Neighbourhood};
-#[doc(hidden)]
-pub use comm_error::CommError;
 #[doc(hidden)]
 pub use error::ParallelError;
-pub use hash::owner_hash;
 pub use index_map::IndexMap;
-pub use local_gpu::local_gpu_index;
-#[cfg(feature = "mpi")]
-pub use mpi::Mpi;
 pub use scatterer::{ReverseOp, ScatterNumeric, Scatterer, Transport};
-pub use serial::Serial;
-pub use tetraloma_device::{GridError, ReduceOp, Result};
+#[cfg(feature = "mpi")]
+pub use tetraloma_comm::Mpi;
+pub use tetraloma_comm::{
+    Comm, CommDyn, CommError, CommExt, CommScalar, DType, Neighbourhood, ReduceOp, Serial,
+    local_gpu_index, owner_hash,
+};
+pub use tetraloma_device::{GridError, Result};

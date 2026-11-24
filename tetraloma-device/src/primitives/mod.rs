@@ -74,30 +74,5 @@ impl DeviceScalar for f64 {}
 impl DeviceScalar for i32 {}
 impl DeviceScalar for u32 {}
 
-/// The operation of a reduction: the sum, the minimum or the maximum.
-///
-/// [`reduce`], [`segmented_reduce`] and the collectives of tetraloma-parallel take it. Sums of
-/// floating-point values are taken in a fixed order, so they give the same bits on every run on a
-/// device ([Precision](https://tetracl.github.io/tetraloma/concepts/precision.html#determinism)).
-///
-/// # Example
-///
-/// ```
-/// use tetraloma_device::{DeviceBuffer, ReduceOp, reduce};
-///
-/// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
-/// let x = DeviceBuffer::from_host(&client, &[3.0f32, -1.0, 2.0]).unwrap();
-/// assert_eq!(reduce(&x, ReduceOp::Sum).unwrap().to_host().unwrap(), vec![4.0]);
-/// assert_eq!(reduce(&x, ReduceOp::Min).unwrap().to_host().unwrap(), vec![-1.0]);
-/// assert_eq!(reduce(&x, ReduceOp::Max).unwrap().to_host().unwrap(), vec![3.0]);
-/// ```
-#[derive(Clone, Copy, Debug)]
-pub enum ReduceOp {
-    /// The sum, in a fixed order.
-    Sum,
-    /// The smallest value.
-    Min,
-    /// The largest value.
-    Max,
-}
+// Design: Listing S1b; ADR-0074.
+pub use tetraloma_comm::ReduceOp;

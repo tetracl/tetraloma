@@ -115,6 +115,11 @@ pub use mesh::{CurveMesh, Mesh, PlanarMesh, SurfaceMesh, VolumeMesh};
 pub use tags::{Codim, MeshTags, TagRegistry};
 pub use vtk::VtkWriter;
 
+#[cfg(feature = "mpi")]
+pub use tetraloma_comm::Mpi;
+pub use tetraloma_comm::{
+    Comm, CommDyn, CommError, CommExt, CommScalar, DType, Neighbourhood, Serial, local_gpu_index,
+};
 pub use tetraloma_device::{
     ConnKey, DeviceBuffer, DeviceCsr, DeviceStrided, GridError, Real, Result, VECTOR_PAD,
 };
@@ -128,12 +133,7 @@ pub use tetraloma_geometry::{
     facet_normals_block, jacobians_block, measure_block, normals_block, physical_points_block,
     pseudo_inverse_block, pull_back_block,
 };
-#[cfg(feature = "mpi")]
-pub use tetraloma_parallel::Mpi;
-pub use tetraloma_parallel::{
-    Comm, CommDyn, CommExt, CommScalar, DType, IndexMap, Neighbourhood, ReverseOp, ScatterNumeric,
-    Scatterer, Serial, Transport, local_gpu_index,
-};
+pub use tetraloma_parallel::{IndexMap, ReverseOp, ScatterNumeric, Scatterer, Transport};
 #[cfg(feature = "metis")]
 pub use tetraloma_partition::Metis;
 #[cfg(feature = "parmetis")]

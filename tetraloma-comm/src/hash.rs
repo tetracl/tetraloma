@@ -29,7 +29,7 @@ fn mix(mut z: u64) -> u64 {
 /// # Example
 ///
 /// ```
-/// use tetraloma_parallel::owner_hash;
+/// use tetraloma_comm::owner_hash;
 ///
 /// assert_eq!(owner_hash(&[]), 0x6772_6964_636C_0006);
 /// assert_eq!(owner_hash(&[1, 2, 3]), 0x2a25_edf4_f515_fb72);

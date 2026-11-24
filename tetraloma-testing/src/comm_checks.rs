@@ -2,7 +2,7 @@
 //! and the MPI target `comm` (docs/plans/M6.md, T2 and T3), so both assert the same values.
 //! Every function is collective: every rank of `comm` calls it.
 
-use tetraloma::{CommDyn, CommExt, DType, GridError, Neighbourhood, Serial};
+use tetraloma::{CommDyn, CommError, CommExt, DType, GridError, Neighbourhood, Serial};
 use tetraloma_device::ReduceOp;
 
 /// On one rank, every byte-level method agrees with `Serial`.
@@ -122,10 +122,10 @@ pub fn ring(comm: &dyn CommDyn) {
     // A self-loop and an out-of-range rank are agreed errors.
     let bad = Neighbourhood::new(comm, vec![], if r == 0 { vec![n] } else { vec![] });
     match bad {
-        Err(GridError::IndexOutOfRange { index, len }) if r == 0 => {
+        Err(CommError::IndexOutOfRange { index, len }) if r == 0 => {
             assert_eq!((index, len), (n, n))
         }
-        Err(GridError::RemoteFailure { rank: 0 }) if r > 0 => {}
+        Err(CommError::RemoteFailure { rank: 0 }) if r > 0 => {}
         Err(e) => panic!("rank {r}: unexpected {e}"),
         Ok(_) => panic!("rank {r}: an out-of-range neighbour was accepted"),
     }
@@ -138,13 +138,13 @@ pub fn wrong_counts(comm: &dyn CommDyn) {
     assert!(n >= 2, "wrong_counts needs two ranks");
     assert!(matches!(
         comm.all_to_all_v(&[1_i32], &[1]),
-        Err(GridError::LengthMismatch { expected, found: 1 }) if expected == n
+        Err(CommError::LengthMismatch { expected, found: 1 }) if expected == n
     ));
     let mut counts = vec![0; n];
     counts[0] = 1;
     assert!(matches!(
         comm.all_to_all_v(&[1_i32, 2], &counts),
-        Err(GridError::LengthMismatch {
+        Err(CommError::LengthMismatch {
             expected: 1,
             found: 2
         })
