@@ -284,7 +284,6 @@ fn dofs_on_entity_type(el: &Element, entity: CellType) -> usize {
 /// M11 acceptance A9: for p <= 6, the base transformations of Lagrange elements on intervals,
 /// triangles, quadrilaterals, tetrahedra and hexahedra equal ndelement's.
 #[test]
-#[ignore = "pending M11.T6"]
 fn lagrange_base_transformations_match_ndelement() {
     let data = fixture("base_transformations_ndelement.json");
     let cells = data.as_object().unwrap();

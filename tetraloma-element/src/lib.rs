@@ -1,7 +1,6 @@
 // Design: section 26 ("Finite elements"), Listing E1; ADR-0071, ADR-0072.
-// Remaining `#[doc(hidden)]` stubs (`TransformationKind`, `Generator`, `BaseTransformation`,
-// `Factor1d`, `TensorFactors` and the unimplemented `Element` methods) are not part of the
-// stable API yet; they lose `#[doc(hidden)]` in M11.T6–T7 (dependency rule 7).
+// Remaining `#[doc(hidden)]` stubs (`Factor1d`, `TensorFactors` and `Element::tensor_factors`)
+// are not part of the stable API yet; they lose `#[doc(hidden)]` in M11.T7 (dependency rule 7).
 //! Finite elements in Ciarlet's sense on the reference cells of tetraloma.
 //!
 //! This crate computes finite-element definitions on the host in `f64`, with no device
@@ -44,6 +43,7 @@ mod ciarlet;
 mod error;
 mod layout;
 mod tensor;
+mod transform;
 
 pub use error::ElementError;
 pub use tensor::{Factor1d, TensorFactors};
@@ -111,21 +111,41 @@ pub enum MapType {
     L2Piola,
 }
 
-// M11.T0 stub, implemented in M11.T6; not part of the stable API yet (dependency rule 7).
-#[doc(hidden)]
+// Design: section 26 ("Finite elements", "DOF transformations"), Listing E1.
+/// Classification of an element's sub-entity DOF transformations.
+///
+/// Returned by [`Element::transformation_kind`]. See [Classification] for how each finite-element
+/// family and degree is classified.
+///
+/// [Classification]: https://tetracl.github.io/tetraloma/fem/dof-transformations.html#classification
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TransformationKind {
+    /// Every sub-entity base transformation is the identity (or the element has no shared
+    /// sub-entity DOFs).
     Identity,
+    /// Every sub-entity base transformation is a signed permutation, and at least one is
+    /// non-trivial.
     SignedPermutation,
+    /// At least one sub-entity base transformation is a dense matrix block.
     Dense,
 }
 
-// M11.T0 stub, implemented in M11.T6; not part of the stable API yet (dependency rule 7).
-#[doc(hidden)]
+// Design: section 26 ("Finite elements", "DOF transformations"), Listing E1; Appendix A.6.
+/// A generator of a sub-entity's symmetry group.
+///
+/// Passed to [`Element::base_transformation`]: [`Generator::Reversal`] applies to intervals
+/// (edges), while [`Generator::Rotation`] and [`Generator::Reflection`] apply to triangles and
+/// quadrilaterals (faces). See [Base transformations].
+///
+/// [Base transformations]: https://tetracl.github.io/tetraloma/fem/dof-transformations.html#base-transformations
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Generator {
+    /// Reversal of an interval (`ξ ↦ 1 − ξ`).
     Reversal,
+    /// Cyclic rotation of a triangle (`(s, t) ↦ (t, 1 − s − t)`) or quadrilateral
+    /// (`(s, t) ↦ (t, 1 − s)`).
     Rotation,
+    /// Reflection of a triangle or quadrilateral (`(s, t) ↦ (t, s)`).
     Reflection,
 }
 
@@ -250,6 +270,7 @@ pub struct Element {
     coefficients: Vec<f64>,
     interpolation_points: Vec<f64>,
     interpolation_matrix: Vec<f64>,
+    transformations: transform::BaseTransformations,
 }
 
 impl fmt::Debug for Element {
@@ -306,6 +327,12 @@ impl Element {
             Family::Lagrange => {
                 let dofs = layout::build_lagrange_layout(key);
                 let data = ciarlet::build_lagrange_dense(key, dofs.dim)?;
+                let transformations = transform::build_lagrange_transformations(
+                    key,
+                    dofs.dim,
+                    &dofs.entity_dofs,
+                    &data.coefficients,
+                )?;
                 Ok(Self {
                     key,
                     map_type: MapType::Identity,
@@ -318,6 +345,7 @@ impl Element {
                     coefficients: data.coefficients,
                     interpolation_points: data.interpolation_points,
                     interpolation_matrix: data.interpolation_matrix,
+                    transformations,
                 })
             }
             Family::N1curl | Family::RaviartThomas => {
@@ -691,23 +719,97 @@ impl Element {
         &self.interpolation_matrix
     }
 
-    // M11.T0 stubs below, implemented in M11.T6–T7; not part of the stable API yet (dependency
-    // rule 7).
-
-    #[doc(hidden)]
+    // Design: section 26 ("Finite elements", "DOF transformations"), Listing E1.
+    /// The classification of this element's sub-entity DOF transformations.
+    ///
+    /// Returns [`TransformationKind::Identity`] when every base transformation is trivial (such as
+    /// Lagrange elements of degree at most 2, intervals, and discontinuous `Legendre` elements),
+    /// [`TransformationKind::SignedPermutation`] when every transformation is a signed permutation
+    /// and at least one is non-trivial, and [`TransformationKind::Dense`] when at least one
+    /// transformation is a dense block. See [Classification].
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetraloma_dims::CellType;
+    /// use tetraloma_element::{Element, ElementKey, Family, TransformationKind, Variant};
+    /// use tetraloma_refcell::NodeFamily;
+    ///
+    /// let p2 = Element::get(ElementKey {
+    ///     family: Family::Lagrange,
+    ///     cell: CellType::Triangle,
+    ///     degree: 2,
+    ///     variant: Variant::Nodal(NodeFamily::Gll),
+    /// })?;
+    /// let p3 = Element::get(ElementKey {
+    ///     family: Family::Lagrange,
+    ///     cell: CellType::Triangle,
+    ///     degree: 3,
+    ///     variant: Variant::Nodal(NodeFamily::Gll),
+    /// })?;
+    /// assert_eq!(p2.transformation_kind(), TransformationKind::Identity);
+    /// assert_eq!(p3.transformation_kind(), TransformationKind::SignedPermutation);
+    /// # Ok::<(), tetraloma_element::ElementError>(())
+    /// ```
+    ///
+    /// [Classification]: https://tetracl.github.io/tetraloma/fem/dof-transformations.html#classification
     pub fn transformation_kind(&self) -> TransformationKind {
-        unimplemented!("pending M11.T6")
+        self.transformations.kind
     }
 
-    #[doc(hidden)]
+    // Design: section 26 ("Finite elements", "DOF transformations"), Listing E1.
+    /// The base DOF transformation for sub-entities of type `entity` under `generator`, or `None`
+    /// if the cell has no lower-dimensional sub-entities of that type, the element places no
+    /// interior DOFs on them, or `generator` does not apply to `entity`.
+    ///
+    /// See [Base transformations] for the generator definitions and [Neighbouring cells] for how
+    /// they compose from a cell's orientation bits.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use tetraloma_dims::CellType;
+    /// use tetraloma_element::{
+    ///     BaseTransformation, Element, ElementKey, Family, Generator, Variant,
+    /// };
+    /// use tetraloma_refcell::NodeFamily;
+    ///
+    /// let el = Element::get(ElementKey {
+    ///     family: Family::Lagrange,
+    ///     cell: CellType::Tetrahedron,
+    ///     degree: 4,
+    ///     variant: Variant::Nodal(NodeFamily::Equispaced),
+    /// })?;
+    /// assert_eq!(
+    ///     el.base_transformation(CellType::Interval, Generator::Reversal),
+    ///     Some(&BaseTransformation::SignedPermutation {
+    ///         perm: vec![2, 1, 0],
+    ///         negate: vec![false, false, false],
+    ///     })
+    /// );
+    /// assert_eq!(
+    ///     el.base_transformation(CellType::Triangle, Generator::Rotation),
+    ///     Some(&BaseTransformation::SignedPermutation {
+    ///         perm: vec![2, 0, 1],
+    ///         negate: vec![false, false, false],
+    ///     })
+    /// );
+    /// assert!(el.base_transformation(CellType::Quadrilateral, Generator::Rotation).is_none());
+    /// # Ok::<(), tetraloma_element::ElementError>(())
+    /// ```
+    ///
+    /// [Base transformations]: https://tetracl.github.io/tetraloma/fem/dof-transformations.html#base-transformations
+    /// [Neighbouring cells]: https://tetracl.github.io/tetraloma/fem/dof-transformations.html#neighbouring-cells
     pub fn base_transformation(
         &self,
         entity: CellType,
         generator: Generator,
     ) -> Option<&BaseTransformation> {
-        let _ = (entity, generator);
-        unimplemented!("pending M11.T6")
+        self.transformations.get(entity, generator)
     }
+
+    // M11.T0 stub below, implemented in M11.T7; not part of the stable API yet (dependency
+    // rule 7).
 
     #[doc(hidden)]
     pub fn tensor_factors(&self) -> Option<&TensorFactors> {
@@ -755,11 +857,29 @@ pub struct ElementTabulation {
     pub values: Vec<f64>,
 }
 
-// M11.T0 stub, implemented in M11.T6; not part of the stable API yet (dependency rule 7).
-#[doc(hidden)]
+// Design: section 26 ("Finite elements", "DOF transformations"), Listing E1.
+/// A base DOF transformation acting on the interior DOFs of one sub-entity.
+///
+/// Returned by [`Element::base_transformation`]. Applying a transformation `M` to a sub-entity's
+/// canonical DOF vector `x` produces the cell-local vector `y = M x`. See [Base transformations].
+///
+/// [Base transformations]: https://tetracl.github.io/tetraloma/fem/dof-transformations.html#base-transformations
+#[derive(Clone, Debug, PartialEq)]
 pub enum BaseTransformation {
-    SignedPermutation { perm: Vec<u32>, negate: Vec<bool> },
-    Dense { n: usize, matrix: Vec<f64> },
+    /// A signed permutation matrix: `y[i] = −x[perm[i]]` if `negate[i]`, else `x[perm[i]]`.
+    SignedPermutation {
+        /// Source index in the canonical sub-entity DOF ordering for each local DOF `i`.
+        perm: Vec<u32>,
+        /// Whether entry `i` is negated (`false` everywhere for Lagrange elements).
+        negate: Vec<bool>,
+    },
+    /// A row-major `n × n` dense matrix block: `y[i] = Σ_j matrix[i * n + j] * x[j]`.
+    Dense {
+        /// Number of interior DOFs on the sub-entity.
+        n: usize,
+        /// Row-major `n × n` entries.
+        matrix: Vec<f64>,
+    },
 }
 
 #[cfg(test)]
