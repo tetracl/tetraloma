@@ -117,8 +117,9 @@ several devices in turn.
 Creating an `f64` mesh fails with `GridError::UnsupportedPrecision` on a device without 64-bit
 floating-point arithmetic. Metal never has it; Vulkan has it only if the adapter offers
 `shaderFloat64`, and wgpu only with `SHADER_F64`. A reverse halo exchange of `f64` values fails
-the same way. Use `f32` on these devices, and write your code generic over the scalar type so
-that it chooses `f64` where the device supports it ([f64 support](devices.md#f64-support)).
+with `ParallelError::UnsupportedPrecision` (which `?` converts into `GridError`). Use `f32` on
+these devices, and write your code generic over the scalar type so that it chooses `f64` where
+the device supports it ([f64 support](devices.md#f64-support)).
 
 ### `AllocationTooLarge`
 
@@ -148,16 +149,23 @@ Time a computation after a first run, not including it.
 
 ### Errors from the compute server
 
-`GridError::Server` (or `DeviceError::Server` from a device-layer call) passes on an error that the
-CubeCL runtime reported while it allocated memory, launched a kernel or copied data. Its message
-is CubeCL's and names the cause. Try the same program on the CPU runtime: if it runs there, the
-problem lies with the device or its driver, not with your input.
+`GridError::Server` (or `DeviceError::Server` from a device-layer call, or `ParallelError::Server`
+from a halo exchange) passes on an error that the CubeCL runtime reported while it allocated
+memory, launched a kernel or copied data. Its message is CubeCL's and names the cause. Try the
+same program on the CPU runtime: if it runs there, the problem lies with the device or its
+driver, not with your input.
 
 ## MPI problems
 
 Distributed programs add the MPI library, the launcher and the placement of ranks to what can go
 wrong. [Distributed meshes](tutorials/distributed.md) explains how a distributed mesh is built,
-and [One GPU per MPI rank](devices.md#one-gpu-per-mpi-rank) how ranks share a node.
+and [One GPU per MPI rank](devices.md#one-gpu-per-mpi-rank) how ranks share a node. Calling
+[`IndexMap`](api/tetraloma/struct.IndexMap.html) or
+[`Scatterer`](api/tetraloma/struct.Scatterer.html) directly returns
+[`ParallelError`](api/tetraloma/enum.ParallelError.html), and calling communicator methods directly
+returns [`CommError`](api/tetraloma/enum.CommError.html); their variants match the `GridError`
+variants of the same names and fields, and `?` converts either error into `GridError` in functions
+returning `tetraloma::Result`.
 
 ### Ranks that do not see each other
 

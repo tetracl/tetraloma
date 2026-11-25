@@ -45,14 +45,17 @@ entity blocks. The program takes the node index map of its surface mesh `scalp`:
 You can also make index maps for data of your own. `IndexMap::new(comm, n)` makes a map with `n`
 owned indices and no ghosts. `IndexMap::with_ghosts(comm, n, ghosts, owners)` adds ghosts, given
 by their global indices and owner ranks; the owners check that they own the indices asked for.
-Both are collective, and global indices are numbered rank by rank in the order of the ranks:
+Both are collective, return [`ParallelError`](../api/tetraloma/enum.ParallelError.html)
+(re-exported at the root of `tetraloma`, which `?` converts into
+[`GridError`](../api/tetraloma/enum.GridError.html) in functions that return `tetraloma::Result`),
+and number global indices rank by rank in the order of the ranks:
 
 ```rust
 # use tetraloma::prelude::*;
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// Each rank owns `n` indices; on more than one rank it also holds the first index of the next
 /// rank, round the ring, as a ghost.
-fn ring(comm: &dyn CommDyn, n: usize) -> tetraloma::Result<IndexMap> {
+fn ring(comm: &dyn CommDyn, n: usize) -> Result<IndexMap, tetraloma::ParallelError> {
     let (rank, size) = (comm.rank(), comm.size());
     if size == 1 {
         return IndexMap::new(comm, n); // no other rank to take a ghost from
@@ -142,8 +145,8 @@ the value of every ghost copy. A [`ReverseOp`](../api/tetraloma/enum.ReverseOp.h
 
 The ghost values themselves stay unchanged, so a reverse exchange is often followed by a forward
 one, which copies the combined values back to the ghosts. `reverse` works on f32, f64, i32 and u32
-arrays, and returns `GridError::UnsupportedPrecision` for a type the device does not support, such
-as f64 on Metal.
+arrays, and returns `ParallelError::UnsupportedPrecision` for a type the device does not support,
+such as f64 on Metal.
 
 The program sets every value to 1 and adds the ghosts to their owners:
 
