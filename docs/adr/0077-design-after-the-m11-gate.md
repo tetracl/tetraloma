@@ -1,6 +1,6 @@
 # ADR-0077: Sections 18, 23, 26 and A.10 after the M11 gate
 
-Status: Proposed
+Status: Accepted
 Date: 2026-11-24
 Decision issue: #119
 Raised by: the M11 gate, findings G1–G4, G9 and G10 (`docs/reviews/M11.md`)
@@ -117,4 +117,6 @@ Option 3 would add to this: the two A.10 oracle bullets keep "DOF layouts" and "
 
 ## Decision
 
-Pending.
+> Accept adr 77 with recommended option, 2026-11-25, said to the agent in a session.
+
+The recommended option is option 2, so the changes listed for option 2 apply as written.
