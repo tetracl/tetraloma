@@ -8,7 +8,9 @@
 
 use std::fmt::Debug;
 
-use tetraloma::{CommDyn, DeviceBuffer, GridError, IndexMap, ReverseOp, ScatterNumeric, Transport};
+use tetraloma::{
+    CommDyn, DeviceBuffer, IndexMap, ParallelError, ReverseOp, ScatterNumeric, Transport,
+};
 use tetraloma_device::Client;
 
 use crate::comm_checks::ghost_layout_sized;
@@ -173,7 +175,7 @@ pub fn check_all_types(comm: &dyn CommDyn, l: &Layout, block: usize) {
         s.forward(&mut x).unwrap();
         assert!(matches!(
             s.reverse(&mut x, ReverseOp::Add),
-            Err(GridError::UnsupportedPrecision { scalar: "f64", .. })
+            Err(ParallelError::UnsupportedPrecision { scalar: "f64", .. })
         ));
     }
 }

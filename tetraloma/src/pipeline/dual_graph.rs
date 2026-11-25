@@ -352,7 +352,6 @@ mod tests {
     /// `PartitionError` (through `partition_error`) converts into the exact `GridError` variant
     /// and fields produced before the milestone.
     #[test]
-    #[ignore = "pending M18.T5"]
     fn foundation_errors_convert_to_their_grid_error_variants() {
         use cubecl::server::{Collective, ServerError};
         use tetraloma_device::DeviceError;

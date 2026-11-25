@@ -2,7 +2,7 @@
 //! and the MPI target `comm` (docs/plans/M6.md, T2 and T3), so both assert the same values.
 //! Every function is collective: every rank of `comm` calls it.
 
-use tetraloma::{CommDyn, CommError, CommExt, DType, GridError, Neighbourhood, Serial};
+use tetraloma::{CommDyn, CommError, CommExt, DType, Neighbourhood, ParallelError, Serial};
 use tetraloma_device::ReduceOp;
 
 /// On one rank, every byte-level method agrees with `Serial`.
@@ -342,8 +342,8 @@ pub fn index_map_basics(comm: &dyn CommDyn) {
         (vec![], vec![])
     };
     match tetraloma::IndexMap::with_ghosts(comm, 1, ghosts, owners) {
-        Err(GridError::IndexOutOfRange { index: 1000, len }) if r == 1 => assert_eq!(len, n),
-        Err(GridError::RemoteFailure { rank: 1 }) if r != 1 => {}
+        Err(ParallelError::IndexOutOfRange { index: 1000, len }) if r == 1 => assert_eq!(len, n),
+        Err(ParallelError::RemoteFailure { rank: 1 }) if r != 1 => {}
         Err(e) => panic!("rank {r}: unexpected {e}"),
         Ok(_) => panic!("rank {r}: an unowned index was accepted"),
     }

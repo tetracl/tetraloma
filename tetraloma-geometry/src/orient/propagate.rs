@@ -389,7 +389,7 @@ pub(crate) fn propagate<TD: TopoDim>(
                 cell_blocks
                     .iter()
                     .map(|b| b.index_map.scatterer(client, SIDE))
-                    .collect::<Result<Vec<_>>>()?,
+                    .collect::<std::result::Result<Vec<_>, _>>()?,
             )
         } else {
             None

@@ -295,7 +295,7 @@ impl<'a> SideExchange<'a> {
                 blocks
                     .iter()
                     .map(|b| b.index_map.scatterer(client, 2 * w))
-                    .collect::<Result<Vec<_>>>()?,
+                    .collect::<std::result::Result<Vec<_>, _>>()?,
             )
         } else {
             None

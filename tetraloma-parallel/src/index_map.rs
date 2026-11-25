@@ -6,8 +6,9 @@ use std::rc::Rc;
 use tetraloma_comm::agree;
 use tetraloma_device::Client;
 
+use crate::error::Result;
 use crate::scatterer::SharedIndices;
-use crate::{CommDyn, CommExt, DType, GridError, Neighbourhood, ReduceOp, Result, Scatterer};
+use crate::{CommDyn, CommExt, DType, Neighbourhood, ParallelError, ReduceOp, Scatterer};
 
 /// The ownership of a set of indices distributed over the ranks, such as the vertices or cells
 /// of a mesh: which indices this rank owns, and which it holds as ghosts of other ranks.
@@ -34,7 +35,7 @@ use crate::{CommDyn, CommExt, DType, GridError, Neighbourhood, ReduceOp, Result,
 /// assert_eq!(map.size_global(), 10);
 /// assert_eq!((map.num_owned(), map.num_ghosts(), map.num_local()), (10, 0, 10));
 /// assert!(map.ghosts().is_empty() && map.ghost_owners().is_empty());
-/// # Ok::<(), tetraloma_parallel::GridError>(())
+/// # Ok::<(), tetraloma_parallel::ParallelError>(())
 /// ```
 pub struct IndexMap {
     owned_range: (i64, i64),
@@ -101,16 +102,16 @@ impl IndexMap {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{GridError, IndexMap, Serial};
+    /// use tetraloma_parallel::{ParallelError, IndexMap, Serial};
     ///
     /// let map = IndexMap::new(&Serial, 3)?;
     /// assert_eq!(map.owned_range(), (0, 3));
     ///
-    /// assert!(matches!(IndexMap::new(&Serial, usize::MAX), Err(GridError::TooLarge)));
-    /// # Ok::<(), GridError>(())
+    /// assert!(matches!(IndexMap::new(&Serial, usize::MAX), Err(ParallelError::TooLarge)));
+    /// # Ok::<(), ParallelError>(())
     /// ```
     pub fn new(comm: &dyn CommDyn, num_owned: usize) -> Result<IndexMap> {
-        let n = u64::try_from(num_owned).map_err(|_| GridError::TooLarge)?;
+        let n = u64::try_from(num_owned).map_err(|_| ParallelError::TooLarge)?;
         let mut total = halves(n);
         let mut before = halves(n);
         comm.all_reduce_bytes(
@@ -125,12 +126,12 @@ impl IndexMap {
         );
 
         // begin + n <= total, so all three fit in i64 once total does.
-        let size_global = i64::try_from(combine(total)).map_err(|_| GridError::TooLarge)?;
-        let begin = i64::try_from(combine(before)).map_err(|_| GridError::TooLarge)?;
+        let size_global = i64::try_from(combine(total)).map_err(|_| ParallelError::TooLarge)?;
+        let begin = i64::try_from(combine(before)).map_err(|_| ParallelError::TooLarge)?;
         let end = i64::try_from(n)
             .ok()
             .and_then(|n| begin.checked_add(n))
-            .ok_or(GridError::TooLarge)?;
+            .ok_or(ParallelError::TooLarge)?;
         Ok(IndexMap {
             owned_range: (begin, end),
             ghosts: Vec::new(),
@@ -165,11 +166,11 @@ impl IndexMap {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{CommDyn, IndexMap, Result};
+    /// use tetraloma_parallel::{CommDyn, IndexMap, ParallelError};
     ///
     /// /// Each rank owns three indices and holds the first index of the next rank, round the
     /// /// ring, as a ghost.
-    /// fn ring(comm: &dyn CommDyn) -> Result<IndexMap> {
+    /// fn ring(comm: &dyn CommDyn) -> std::result::Result<IndexMap, ParallelError> {
     ///     let next = (comm.rank() + 1) % comm.size();
     ///     IndexMap::with_ghosts(comm, 3, vec![3 * next as i64], vec![next as i32])
     /// }
@@ -189,13 +190,13 @@ impl IndexMap {
     /// On one rank there is no other rank to take ghosts from:
     ///
     /// ```
-    /// use tetraloma_parallel::{GridError, IndexMap, Serial};
+    /// use tetraloma_parallel::{ParallelError, IndexMap, Serial};
     ///
     /// let map = IndexMap::with_ghosts(&Serial, 4, vec![], vec![])?;
     /// assert_eq!((map.owned_range(), map.num_ghosts()), ((0, 4), 0));
     /// let err = IndexMap::with_ghosts(&Serial, 4, vec![2], vec![0]);
-    /// assert!(matches!(err, Err(GridError::IndexOutOfRange { index: 0, len: 1 })));
-    /// # Ok::<(), GridError>(())
+    /// assert!(matches!(err, Err(ParallelError::IndexOutOfRange { index: 0, len: 1 })));
+    /// # Ok::<(), ParallelError>(())
     /// ```
     pub fn with_ghosts(
         comm: &dyn CommDyn,
@@ -209,7 +210,7 @@ impl IndexMap {
         // Local checks, agreed before any exchange.
         let local = (|| {
             if ghost_owners.len() != ghosts.len() {
-                return Err(GridError::LengthMismatch {
+                return Err(ParallelError::LengthMismatch {
                     expected: ghosts.len(),
                     found: ghost_owners.len(),
                 });
@@ -218,15 +219,15 @@ impl IndexMap {
                 .iter()
                 .find(|&&o| usize::try_from(o).map_or(true, |o| o >= p || o == rank))
             {
-                return Err(GridError::IndexOutOfRange {
+                return Err(ParallelError::IndexOutOfRange {
                     index: usize::try_from(o).unwrap_or(usize::MAX),
                     len: p,
                 });
             }
             let local = num_owned
                 .checked_add(ghosts.len())
-                .ok_or(GridError::TooLarge)?;
-            u32::try_from(local).map_err(|_| GridError::TooLarge)?;
+                .ok_or(ParallelError::TooLarge)?;
+            u32::try_from(local).map_err(|_| ParallelError::TooLarge)?;
             Ok(())
         })();
         agree(comm, local)?;
@@ -244,7 +245,7 @@ impl IndexMap {
         // Owners range-check the requests.
         let (begin, end) = base.owned_range;
         let local = match requested.iter().find(|g| !(begin..end).contains(g)) {
-            Some(&g) => Err(GridError::IndexOutOfRange {
+            Some(&g) => Err(ParallelError::IndexOutOfRange {
                 index: usize::try_from(g).unwrap_or(usize::MAX),
                 len: usize::try_from(base.size_global).unwrap_or(usize::MAX),
             }),
@@ -292,7 +293,7 @@ impl IndexMap {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{GridError, IndexMap, Serial, Transport};
+    /// use tetraloma_parallel::{ParallelError, IndexMap, Serial, Transport};
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
     /// # let client = tetraloma_testing::test_client();
@@ -301,8 +302,8 @@ impl IndexMap {
     /// let scatterer = map.scatterer(&client, 3)?;
     /// assert_eq!(scatterer.transport(), Transport::HostStaged);
     /// // A block of no values is refused.
-    /// assert!(matches!(map.scatterer(&client, 0), Err(GridError::LengthMismatch { .. })));
-    /// # Ok::<(), GridError>(())
+    /// assert!(matches!(map.scatterer(&client, 0), Err(ParallelError::LengthMismatch { .. })));
+    /// # Ok::<(), ParallelError>(())
     /// ```
     pub fn scatterer(&self, client: &Client, block_size: usize) -> Result<Scatterer> {
         Scatterer::new(self, client, block_size)
@@ -579,11 +580,11 @@ mod tests {
         assert_eq!(map.num_owned(), max);
         assert!(matches!(
             IndexMap::new(&Serial, max + 1),
-            Err(GridError::TooLarge)
+            Err(ParallelError::TooLarge)
         ));
         assert!(matches!(
             IndexMap::new(&Serial, usize::MAX),
-            Err(GridError::TooLarge)
+            Err(ParallelError::TooLarge)
         ));
     }
 
@@ -610,12 +611,12 @@ mod tests {
         assert_eq!(last.size_global(), 3 << 61);
         for rank in 0..4 {
             let r = IndexMap::new(&Uniform { rank, size: 4 }, n);
-            assert!(matches!(r, Err(GridError::TooLarge)), "rank {rank}");
+            assert!(matches!(r, Err(ParallelError::TooLarge)), "rank {rank}");
         }
         // The sum of the halves does not wrap even when the total exceeds u64.
         for rank in 0..4 {
             let r = IndexMap::new(&Uniform { rank, size: 4 }, 1 << 62);
-            assert!(matches!(r, Err(GridError::TooLarge)), "rank {rank}");
+            assert!(matches!(r, Err(ParallelError::TooLarge)), "rank {rank}");
         }
     }
 
@@ -636,7 +637,7 @@ mod tests {
 
         #[test]
         fn prop_too_large_serial(n in (i64::MAX as usize + 1)..=usize::MAX) {
-            prop_assert!(matches!(IndexMap::new(&Serial, n), Err(GridError::TooLarge)));
+            prop_assert!(matches!(IndexMap::new(&Serial, n), Err(ParallelError::TooLarge)));
         }
     }
 

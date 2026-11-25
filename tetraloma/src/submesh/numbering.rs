@@ -79,7 +79,7 @@ pub(crate) fn cell_map(
 ) -> Result<IndexMap> {
     let n = parents.len();
     if comm.size() == 1 {
-        return IndexMap::new(comm, n);
+        return Ok(IndexMap::new(comm, n)?);
     }
     let client = parents.client();
     let begin = comm.exscan_sum(u64::try_from(num_owned).map_err(|_| GridError::TooLarge)?);
@@ -149,5 +149,5 @@ pub(crate) fn cell_map(
             owners.push(parent_owners[row[0] as usize - parent_owned]);
         }
     }
-    IndexMap::with_ghosts(comm, num_owned, ghosts, owners)
+    Ok(IndexMap::with_ghosts(comm, num_owned, ghosts, owners)?)
 }
