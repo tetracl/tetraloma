@@ -35,9 +35,9 @@ pub(crate) use loops::{
 };
 
 use cubecl::prelude::*;
-use tetraloma_device::{GridError, Result};
 use tetraloma_dims::CellType;
 use tetraloma_refcell::{LagrangeElement, NodeFamily, num_lagrange_nodes};
+use tetraloma_topology::{GridError, Result};
 
 use crate::names::element_error;
 

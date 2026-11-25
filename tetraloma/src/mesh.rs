@@ -2,7 +2,7 @@
 //! `Mesh`: the mesh type, its aliases and its methods.
 
 use cubecl::prelude::Client;
-use tetraloma_device::{ConnKey, DeviceBuffer, GridError, Real, Result};
+use tetraloma_device::{DeviceBuffer, Real};
 use tetraloma_dims::{Codim0, Codim1, D1, D2, D3, Dim, EmbeddedIn, TopoDim};
 use tetraloma_geometry::{
     BlockFields, DeviceGrid, EVector, FacetQuadRule, FieldShape, Geometry, GeometryBlock, JacShape,
@@ -11,7 +11,9 @@ use tetraloma_geometry::{
     normals_block, physical_points_block, pseudo_inverse_block,
 };
 use tetraloma_parallel::{Comm, CommDyn, CommExt, IndexMap, Serial};
-use tetraloma_topology::{CellBlock, Connectivity, EntityBlock, Topology};
+use tetraloma_topology::{
+    CellBlock, ConnKey, Connectivity, EntityBlock, GridError, Result, Topology,
+};
 
 use crate::{EntityMap, MeshTags, TagRegistry};
 

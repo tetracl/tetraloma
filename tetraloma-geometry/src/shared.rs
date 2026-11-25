@@ -17,8 +17,9 @@
 //! that of `loops` and `sumfact`, so the results are bitwise equal to theirs.
 
 use cubecl::prelude::*;
-use tetraloma_device::{KernelKind, LaunchPlan, Result, device_properties};
+use tetraloma_device::{KernelKind, LaunchPlan, device_properties};
 use tetraloma_dims::CellType;
+use tetraloma_topology::Result;
 
 use crate::GeomLayout;
 use crate::layout::Factor;
@@ -65,7 +66,7 @@ pub(crate) fn plan(
     len: usize,
 ) -> Result<(LaunchPlan, usize)> {
     let limit = device_properties(client).hardware.max_shared_memory_size;
-    let cap = capacity(len, elem_bytes, limit).ok_or(tetraloma_device::GridError::TooLarge)?;
+    let cap = capacity(len, elem_bytes, limit).ok_or(tetraloma_topology::GridError::TooLarge)?;
     let plan = LaunchPlan::per_group(
         client,
         kind,

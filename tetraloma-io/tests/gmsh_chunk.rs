@@ -9,13 +9,13 @@ use crate::common;
 use std::ops::Range;
 
 use common::{Fixture, manifest};
-use tetraloma_device::GridError;
 use tetraloma_dims::CellType;
 use tetraloma_io::gmsh::{
     self, BlockHeader, CellChunk, ElementBlock, ElementChunk, GmshMesh, GmshTagGroup, Layout,
     MshFile, MshIndex, NodeChunk,
 };
 use tetraloma_parallel::Serial;
+use tetraloma_topology::GridError;
 
 /// The even chunk r of P over n items.
 fn chunk(n: usize, r: usize, p: usize) -> Range<usize> {

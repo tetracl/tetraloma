@@ -19,13 +19,12 @@ mod topology;
 
 use cubecl::prelude::*;
 use tetraloma_device::{
-    DeviceBuffer, DeviceStrided, GridError, KernelKind, LaunchPlan, Real, Result,
-    debug_assert_bindings, histogram,
+    DeviceBuffer, DeviceStrided, KernelKind, LaunchPlan, Real, debug_assert_bindings, histogram,
 };
 use tetraloma_dims::{CellType, D3, Dim, EmbeddedIn, TopoDim};
 use tetraloma_geometry::{Geometry, NodeFamily};
 use tetraloma_parallel::{Comm, CommDyn, CommExt};
-use tetraloma_topology::{Topology, facet_cell_counts};
+use tetraloma_topology::{GridError, Result, Topology, facet_cell_counts};
 
 use crate::entity_map::EntityMapParts;
 use crate::{CurveMesh, EntityMap, Mesh, MeshTags};

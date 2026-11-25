@@ -13,7 +13,7 @@
 use std::io::Read;
 
 use flate2::read::ZlibDecoder;
-use tetraloma_device::{GridError, Result};
+use tetraloma_topology::{GridError, Result};
 
 use super::{DataArray, DataValues, FORMAT, VtuFile, base64};
 
@@ -881,7 +881,7 @@ fn cells_array<'e, 'a>(cells: &'e Element<'a>, name: &str) -> Result<&'e Element
 ///
 /// // Truncated files are rejected.
 /// assert!(parse_vtu(&bytes[..bytes.len() / 2]).is_err());
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [Writing VTU]: https://tetracl.github.io/tetraloma/tutorials/read-write.html#writing-vtu

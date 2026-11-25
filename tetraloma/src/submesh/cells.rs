@@ -4,9 +4,10 @@
 //! parent's element. A child cell keeps its parent's vertex row, dofmap row, origin id (item 7)
 //! and flags; its owner and ghost status are the parent's (item 6).
 
-use tetraloma_device::{DeviceBuffer, DeviceStrided, GridError, Real, Result};
+use tetraloma_device::{DeviceBuffer, DeviceStrided, Real};
 use tetraloma_dims::{Dim, EmbeddedIn, TopoDim};
 use tetraloma_parallel::{Comm, CommDyn};
+use tetraloma_topology::{GridError, Result};
 
 use super::select::{self, ParentBlock, Selected};
 use super::topology::{self, ChildTopology};

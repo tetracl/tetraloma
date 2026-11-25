@@ -23,9 +23,9 @@ pub(crate) mod prism;
 pub(crate) mod pull_back;
 pub(crate) mod tensor;
 
-use tetraloma_device::{GridError, Result};
 use tetraloma_dims::CellType;
 use tetraloma_refcell::{LagrangeElement, NodeFamily};
+use tetraloma_topology::{GridError, Result};
 
 use crate::names::element_error;
 

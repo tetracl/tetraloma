@@ -1,8 +1,8 @@
 //! Stage 4: the cells move to their destination ranks (docs/design.md, "Parallel creation
 //! pipeline").
 
-use tetraloma_device::Result;
 use tetraloma_parallel::CommDyn;
+use tetraloma_topology::Result;
 
 use super::Cells;
 use super::rendezvous::Outbox;

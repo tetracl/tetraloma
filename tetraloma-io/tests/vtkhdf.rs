@@ -9,11 +9,11 @@ use std::path::{Path, PathBuf};
 
 use hdf5_metno::File;
 use hdf5_metno::types::FixedAscii;
-use tetraloma_device::GridError;
 use tetraloma_io::vtk::{Binary, DataArray, DataValues, VtuFile, write_pvtu, write_vtkhdf};
 use tetraloma_parallel::{CommDyn, Serial};
 use tetraloma_testing::ThreadComm;
 use tetraloma_testing::oracle::Oracle;
+use tetraloma_topology::GridError;
 
 /// A directory for the files of `name`, new and empty, unique per process.
 fn temp_dir(name: &str) -> PathBuf {

@@ -3,12 +3,11 @@
 //! parent's origin, so that child coordinates are bitwise the parent's.
 
 use cubecl::prelude::*;
-use tetraloma_device::{
-    DeviceBuffer, DeviceStrided, GridError, Real, Result, debug_assert_bindings, gather,
-};
+use tetraloma_device::{DeviceBuffer, DeviceStrided, Real, debug_assert_bindings, gather};
 use tetraloma_dims::{CellType, Dim, EmbeddedIn, TopoDim};
 use tetraloma_geometry::{CoordinateElement, Geometry, GeometryBlock, NodeFamily};
 use tetraloma_parallel::{CommDyn, CommExt};
+use tetraloma_topology::{GridError, Result};
 
 use super::sharers::ChildItems;
 use super::{fit, plan};

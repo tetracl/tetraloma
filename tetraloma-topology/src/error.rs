@@ -1,9 +1,15 @@
-//! `GridError` and `Result`, re-exported by tetraloma-parallel and tetraloma (ADR-0009).
+// Design: "Device model and backends" (section 7), "Topology construction on the device"
+// (Listing T1); ADR-0009, ADR-0012, ADR-0074.
+//! `GridError`, `Result` and `ConnKey`, defined in `tetraloma-topology` and re-exported by
+//! `tetraloma`.
 
 use core::fmt;
 
 use cubecl::server::ServerError;
+use tetraloma_device::DeviceError;
+use tetraloma_parallel::{CommError, ParallelError};
 
+// Design: "Device model and backends" (section 7); ADR-0009, ADR-0074.
 /// The result type of tetraloma's mesh functions: `Ok(T)` or a [`GridError`].
 ///
 /// Mesh-level functions return it, and `?` converts errors from lower-level foundation calls
@@ -15,7 +21,7 @@ use cubecl::server::ServerError;
 /// # Example
 ///
 /// ```
-/// use tetraloma_device::{GridError, Result};
+/// use tetraloma_topology::{GridError, Result};
 ///
 /// fn half(n: usize) -> Result<usize> {
 ///     if n % 2 == 0 { Ok(n / 2) } else { Err(GridError::LengthMismatch { expected: n + 1, found: n }) }
@@ -25,8 +31,7 @@ use cubecl::server::ServerError;
 /// ```
 pub type Result<T, E = GridError> = core::result::Result<T, E>;
 
-// Listing T1; defined here so that `GridError::ConnectivityNotCreated` can carry it, and
-// re-exported by tetraloma-topology and tetraloma (ADR-0012).
+// Listing T1; defined here beside `GridError` and re-exported by tetraloma (ADR-0012, ADR-0074).
 /// The name of a connectivity, from the entities of dimension `from` to those of dimension
 /// `to`. In a mesh of triangles, `ConnKey { from: 2, to: 1 }` gives the edges of each cell, and
 /// `ConnKey { from: 1, to: 2 }` the cells that contain each edge.
@@ -38,7 +43,7 @@ pub type Result<T, E = GridError> = core::result::Result<T, E>;
 /// # Example
 ///
 /// ```
-/// use tetraloma_device::{ConnKey, GridError};
+/// use tetraloma_topology::{ConnKey, GridError};
 ///
 /// let key = ConnKey { from: 2, to: 0 };
 /// assert_eq!(key.to_string(), "2 -> 0");
@@ -59,6 +64,7 @@ impl fmt::Display for ConnKey {
     }
 }
 
+// Design: "Device model and backends" (section 7); ADR-0009, ADR-0074.
 /// The errors of tetraloma.
 ///
 /// Each variant names one kind of failure, and its `Display` text says what went wrong. The
@@ -71,7 +77,7 @@ impl fmt::Display for ConnKey {
 /// # Example
 ///
 /// ```
-/// use tetraloma_device::GridError;
+/// use tetraloma_topology::GridError;
 ///
 /// let e = GridError::AllocationTooLarge { bytes: 2048, max: 1024 };
 /// assert_eq!(e.to_string(), "an allocation of 2048 bytes exceeds the device's max_page_size of 1024 bytes");
@@ -351,21 +357,17 @@ impl From<ServerError> for GridError {
     }
 }
 
-// Design: section 7; ADR-0074. Moves to tetraloma-topology with `GridError` in M18.T6.
-impl From<tetraloma_comm::CommError> for GridError {
-    fn from(error: tetraloma_comm::CommError) -> Self {
+// Design: section 7; ADR-0074.
+impl From<CommError> for GridError {
+    fn from(error: CommError) -> Self {
         match error {
-            tetraloma_comm::CommError::TooLarge => GridError::TooLarge,
-            tetraloma_comm::CommError::LengthMismatch { expected, found } => {
+            CommError::TooLarge => GridError::TooLarge,
+            CommError::LengthMismatch { expected, found } => {
                 GridError::LengthMismatch { expected, found }
             }
-            tetraloma_comm::CommError::IndexOutOfRange { index, len } => {
-                GridError::IndexOutOfRange { index, len }
-            }
-            tetraloma_comm::CommError::MessageTooLarge { count } => {
-                GridError::MessageTooLarge { count }
-            }
-            tetraloma_comm::CommError::RemoteFailure { rank } => GridError::RemoteFailure { rank },
+            CommError::IndexOutOfRange { index, len } => GridError::IndexOutOfRange { index, len },
+            CommError::MessageTooLarge { count } => GridError::MessageTooLarge { count },
+            CommError::RemoteFailure { rank } => GridError::RemoteFailure { rank },
             // Required by `#[non_exhaustive]` across crates; adding a variant breaks
             // `tetraloma_comm::error::tests::comm_error_variant_list_is_exhaustive` in
             // `tetraloma-comm`'s test build (it does not break this library build).
@@ -374,21 +376,53 @@ impl From<tetraloma_comm::CommError> for GridError {
     }
 }
 
-// Design: section 7; ADR-0074. Moves to tetraloma-topology with `GridError` in M18.T6.
-impl From<crate::DeviceError> for GridError {
-    fn from(error: crate::DeviceError) -> Self {
+// Design: section 7; ADR-0074.
+impl From<DeviceError> for GridError {
+    fn from(error: DeviceError) -> Self {
         match error {
-            crate::DeviceError::TooLarge => GridError::TooLarge,
-            crate::DeviceError::AllocationTooLarge { bytes, max } => {
+            DeviceError::TooLarge => GridError::TooLarge,
+            DeviceError::AllocationTooLarge { bytes, max } => {
                 GridError::AllocationTooLarge { bytes, max }
             }
-            crate::DeviceError::UnsupportedPrecision { scalar, device } => {
+            DeviceError::UnsupportedPrecision { scalar, device } => {
                 GridError::UnsupportedPrecision { scalar, device }
             }
-            crate::DeviceError::LengthMismatch { expected, found } => {
+            DeviceError::LengthMismatch { expected, found } => {
                 GridError::LengthMismatch { expected, found }
             }
-            crate::DeviceError::Server(error) => GridError::Server(error),
+            DeviceError::Server(error) => GridError::Server(error),
+            // Required by `#[non_exhaustive]` across crates; adding a variant breaks
+            // `tetraloma_device::device_error::tests::device_error_variant_list_is_exhaustive` in
+            // `tetraloma-device`'s test build (it does not break this library build).
+            _ => unreachable!("non-exhaustive DeviceError variant"),
+        }
+    }
+}
+
+// Design: section 7; ADR-0074.
+impl From<ParallelError> for GridError {
+    fn from(error: ParallelError) -> Self {
+        match error {
+            ParallelError::TooLarge => GridError::TooLarge,
+            ParallelError::AllocationTooLarge { bytes, max } => {
+                GridError::AllocationTooLarge { bytes, max }
+            }
+            ParallelError::UnsupportedPrecision { scalar, device } => {
+                GridError::UnsupportedPrecision { scalar, device }
+            }
+            ParallelError::LengthMismatch { expected, found } => {
+                GridError::LengthMismatch { expected, found }
+            }
+            ParallelError::Server(error) => GridError::Server(error),
+            ParallelError::IndexOutOfRange { index, len } => {
+                GridError::IndexOutOfRange { index, len }
+            }
+            ParallelError::MessageTooLarge { count } => GridError::MessageTooLarge { count },
+            ParallelError::RemoteFailure { rank } => GridError::RemoteFailure { rank },
+            // Required by `#[non_exhaustive]` across crates; adding a variant breaks
+            // `tetraloma_parallel::error::tests::parallel_error_variant_list_is_exhaustive` in
+            // `tetraloma-parallel`'s test build (it does not break this library build).
+            _ => unreachable!("non-exhaustive ParallelError variant"),
         }
     }
 }
@@ -489,7 +523,7 @@ mod tests {
 
     #[test]
     fn comm_error_converts_to_matching_grid_error() {
-        use tetraloma_comm::CommError;
+        use tetraloma_parallel::CommError;
 
         assert!(matches!(
             GridError::from(CommError::TooLarge),
@@ -521,8 +555,8 @@ mod tests {
 
     #[test]
     fn device_error_converts_to_matching_grid_error() {
-        use crate::DeviceError;
         use cubecl::server::{Collective, ServerError};
+        use tetraloma_device::DeviceError;
 
         let check_display = |e: &DeviceError, g: &GridError| {
             assert_eq!(e.to_string(), g.to_string());
@@ -579,5 +613,32 @@ mod tests {
             })
         ));
         check_display(&e, &g);
+    }
+
+    #[test]
+    fn parallel_error_converts_to_matching_grid_error() {
+        use cubecl::server::ServerError;
+        use tetraloma_parallel::ParallelError;
+
+        let cases = [
+            ParallelError::TooLarge,
+            ParallelError::AllocationTooLarge { bytes: 31, max: 32 },
+            ParallelError::UnsupportedPrecision {
+                scalar: "f64",
+                device: "device-b",
+            },
+            ParallelError::LengthMismatch {
+                expected: 33,
+                found: 34,
+            },
+            ParallelError::Server(ServerError::TornDown),
+            ParallelError::IndexOutOfRange { index: 35, len: 36 },
+            ParallelError::MessageTooLarge { count: 37 },
+            ParallelError::RemoteFailure { rank: 38 },
+        ];
+        for e in cases {
+            let g = GridError::from(e.clone());
+            assert_eq!(g.to_string(), e.to_string());
+        }
     }
 }

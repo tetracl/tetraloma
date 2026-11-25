@@ -1,10 +1,10 @@
 //! `DeviceGrid` (Listing B7; tetraloma-geometry, re-exported by tetraloma; ADR-0012).
 
 use cubecl::prelude::Client;
-use tetraloma_device::{ConnKey, DeviceBuffer, Real, Result};
+use tetraloma_device::{DeviceBuffer, Real};
 use tetraloma_dims::{Dim, EmbeddedIn, TopoDim};
 use tetraloma_parallel::{CommDyn, IndexMap};
-use tetraloma_topology::{CellBlock, Connectivity, EntityBlock};
+use tetraloma_topology::{CellBlock, ConnKey, Connectivity, EntityBlock, Result};
 
 use crate::{EVector, GeometryBlock};
 

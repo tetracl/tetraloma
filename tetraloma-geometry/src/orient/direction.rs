@@ -22,13 +22,12 @@ use std::collections::BTreeMap;
 
 use cubecl::prelude::*;
 use tetraloma_device::{
-    DeviceBuffer, GridError, Real, ReduceOp, Result, SortKeys, debug_assert_bindings, gather,
-    pad_len, radix_sort, segmented_reduce, unique_by_key_runs,
+    DeviceBuffer, Real, ReduceOp, SortKeys, debug_assert_bindings, gather, pad_len, radix_sort,
+    segmented_reduce, unique_by_key_runs,
 };
 use tetraloma_dims::{Codim1, Dim, TopoDim};
 use tetraloma_parallel::{CommDyn, CommExt, owner_hash};
-use tetraloma_topology::CellBlock;
-use tetraloma_topology::decode_origin_ids;
+use tetraloma_topology::{CellBlock, GridError, Result, decode_origin_ids};
 
 use super::OrientationRule;
 use super::parity::{NONE, Neighbours, fit, plan};

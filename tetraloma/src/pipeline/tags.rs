@@ -5,10 +5,10 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use cubecl::prelude::Client;
-use tetraloma_device::{DeviceBuffer, GridError, Result, SortKeys};
+use tetraloma_device::{DeviceBuffer, SortKeys};
 use tetraloma_dims::TopoDim;
 use tetraloma_parallel::{CommDyn, CommExt};
-use tetraloma_topology::Topology;
+use tetraloma_topology::{GridError, Result, Topology};
 
 use super::input::{LowerTags, TagKind};
 use super::number::NumberedBlock;

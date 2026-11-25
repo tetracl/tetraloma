@@ -5,12 +5,13 @@
 use std::collections::HashMap;
 
 use cubecl::prelude::Client;
-use tetraloma_device::{GridError, Real, Result, check_precision};
+use tetraloma_device::{Real, check_precision};
 use tetraloma_dims::{CellType, Dim, EmbeddedIn, TopoDim};
 use tetraloma_geometry::{CoordinateElement, NodeFamily};
 use tetraloma_parallel::{Comm, CommDyn, CommExt, Serial};
 use tetraloma_partition::{Block, DistGraph, Partitioner};
 use tetraloma_refcell::RefCellError;
+use tetraloma_topology::{GridError, Result};
 
 use crate::Mesh;
 use crate::pipeline::dual_graph::{check_destinations, dual_graph, partition, vertices_only};

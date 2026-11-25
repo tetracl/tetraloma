@@ -19,12 +19,10 @@
 use std::collections::HashMap;
 
 use cubecl::prelude::*;
-use tetraloma_device::{
-    DeviceBuffer, DeviceStrided, GridError, Result, debug_assert_bindings, exclusive_scan,
-};
+use tetraloma_device::{DeviceBuffer, DeviceStrided, debug_assert_bindings, exclusive_scan};
 use tetraloma_dims::TopoDim;
 use tetraloma_parallel::{CommDyn, CommExt, IndexMap, Neighbourhood, ReverseOp, owner_hash};
-use tetraloma_topology::{Topology, VertexSharers, decode_origin_ids};
+use tetraloma_topology::{GridError, Result, Topology, VertexSharers, decode_origin_ids};
 
 use super::{fit, plan};
 

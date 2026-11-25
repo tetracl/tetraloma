@@ -3,9 +3,9 @@
 
 use std::collections::{HashMap, HashSet};
 
-use tetraloma_device::{GridError, Result};
 use tetraloma_dims::CellType;
 use tetraloma_parallel::{CommDyn, CommExt};
+use tetraloma_topology::{GridError, Result};
 
 use super::rendezvous::{Outbox, rendezvous_rank};
 use super::{BlockSpec, Cells, agree};

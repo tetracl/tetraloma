@@ -11,7 +11,7 @@ use std::path::Path;
 
 pub(super) use binary::Binary;
 
-use tetraloma_device::{GridError, Result};
+use tetraloma_topology::{GridError, Result};
 
 use super::{
     ElementBlock, Entities, Entity, FORMAT, MshFile, NodeBlock, PartitionedEntities,
@@ -563,7 +563,7 @@ pub(super) fn small_section(
 /// assert_eq!(file.node_blocks[0].tags, [1, 2, 3]);
 /// assert_eq!(file.node_blocks[0].coords[1], [1.0, 0.0, 0.0]);
 /// assert_eq!((file.element_blocks[0].element_type, &file.element_blocks[0].nodes[..]), (2, &[1, 2, 3][..]));
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [Reading Gmsh]: https://tetracl.github.io/tetraloma/tutorials/read-write.html#reading-gmsh
@@ -610,7 +610,7 @@ pub fn parse(bytes: &[u8]) -> Result<MshFile> {
 /// # Example
 ///
 /// ```
-/// use tetraloma_device::GridError;
+/// use tetraloma_topology::GridError;
 /// use tetraloma_io::gmsh::read_file;
 ///
 /// let missing = std::path::Path::new("no-such-file.msh");

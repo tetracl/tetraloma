@@ -6,8 +6,9 @@
 //! because child numbers grow with parent numbers on every owner.
 
 use cubecl::prelude::*;
-use tetraloma_device::{DeviceBuffer, GridError, Result, debug_assert_bindings};
+use tetraloma_device::{DeviceBuffer, debug_assert_bindings};
 use tetraloma_parallel::{CommDyn, CommExt, IndexMap};
+use tetraloma_topology::{GridError, Result};
 
 use super::{fit, plan};
 

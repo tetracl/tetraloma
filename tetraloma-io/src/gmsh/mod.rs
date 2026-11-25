@@ -37,7 +37,7 @@
 //! let file = from_gmsh_mesh(&mesh)?;
 //! assert_eq!(file.node_blocks[0].tags, [1, 2, 3, 4]);
 //! assert_eq!(file.element_blocks[0].nodes, [1, 2, 3, 1, 3, 4]);
-//! # Ok::<(), tetraloma_device::GridError>(())
+//! # Ok::<(), tetraloma_topology::GridError>(())
 //! ```
 //!
 //! [Reading and writing files]: https://tetracl.github.io/tetraloma/tutorials/read-write.html#reading-gmsh

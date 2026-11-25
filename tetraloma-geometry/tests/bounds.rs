@@ -5,10 +5,11 @@
 //! a unit test of `evector.rs`.
 
 use cubecl::prelude::Client;
-use tetraloma_device::{DeviceBuffer, DeviceStrided, GridError, Real};
+use tetraloma_device::{DeviceBuffer, DeviceStrided, Real};
 use tetraloma_dims::{Cell2, D2, D3};
 use tetraloma_geometry::{CoordinateElement, Geometry, GeometryBlock, NodeFamily};
 use tetraloma_parallel::{IndexMap, Serial};
+use tetraloma_topology::GridError;
 
 const TRI: CoordinateElement<D2> = CoordinateElement {
     cell: Cell2::Triangle,

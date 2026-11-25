@@ -3,13 +3,14 @@
 
 use cubecl::prelude::Client;
 use tetraloma::DeviceGrid;
-use tetraloma_device::{DeviceScalar, GridError, Real};
+use tetraloma_device::{DeviceScalar, Real};
 use tetraloma_dims::{Cell1, Cell2, Cell3, CellType, D1, D2, D3, TopoDim};
 use tetraloma_geometry::{CoordinateElement, FacetQuadRule, NodeFamily, QuadRule};
 use tetraloma_refcell::{
     LagrangeElement, facet_points_to_cell, gauss_rule, reference_facet_normals, sub_entity_types,
 };
 use tetraloma_testing::{TOL_F32, TOL_F64, supports, test_client};
+use tetraloma_topology::GridError;
 
 /// The relative tolerance of `F`.
 fn tol<F: Real>() -> f64 {

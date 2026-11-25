@@ -22,13 +22,13 @@
 
 use cubecl::prelude::*;
 use tetraloma_device::{
-    ConnKey, DeviceBuffer, DeviceCsr, DeviceStrided, GridError, KernelKind, LaunchPlan, ReduceOp,
-    Result, debug_assert_bindings, fill, reduce,
+    DeviceBuffer, DeviceCsr, DeviceStrided, KernelKind, LaunchPlan, ReduceOp,
+    debug_assert_bindings, fill, reduce,
 };
 use tetraloma_dims::{CellType, TopoDim};
 use tetraloma_parallel::{CommDyn, CommExt, ReverseOp, Scatterer};
 use tetraloma_refcell::sub_entities;
-use tetraloma_topology::{CellBlock, Connectivity, EntityBlock};
+use tetraloma_topology::{CellBlock, ConnKey, Connectivity, EntityBlock, GridError, Result};
 
 /// No record: an empty side, or a facet without a neighbour.
 pub(crate) const NONE: u32 = u32::MAX;

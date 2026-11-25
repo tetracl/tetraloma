@@ -1,13 +1,36 @@
 // Design: "Device model and backends", Listing S1; ADR-0074.
-//! `DeviceError` and the crate-private `Result` alias of `tetraloma-device`.
+//! `DeviceError` and `Result` of `tetraloma-device`.
 
 use core::fmt;
 
 use cubecl::server::ServerError;
 
-/// Crate-private result alias for `tetraloma-device` functions while `tetraloma_device::Result`
-/// remains an alias of `GridError` until M18.T6.
-pub(crate) type Result<T, E = DeviceError> = core::result::Result<T, E>;
+// Design: "Device model and backends", Listing S1; ADR-0074.
+/// The result type of `tetraloma-device`: `Ok(T)` or a [`DeviceError`].
+///
+/// Every fallible device-layer operation returns it, and a [`DeviceError`] converts into
+/// `Box<dyn std::error::Error>` as well as `tetraloma`'s `GridError`. See [Device
+/// problems](https://tetracl.github.io/tetraloma/troubleshooting.html#device-problems).
+///
+/// # Example
+///
+/// ```
+/// use tetraloma_device::{DeviceError, Result};
+///
+/// fn check_even(n: usize) -> Result<usize> {
+///     if n % 2 == 0 {
+///         Ok(n / 2)
+///     } else {
+///         Err(DeviceError::LengthMismatch { expected: n + 1, found: n })
+///     }
+/// }
+/// assert_eq!(check_even(4).unwrap(), 2);
+/// assert!(matches!(
+///     check_even(3),
+///     Err(DeviceError::LengthMismatch { expected: 4, found: 3 })
+/// ));
+/// ```
+pub type Result<T, E = DeviceError> = core::result::Result<T, E>;
 
 // Design: "Device model and backends", Listing S1; ADR-0074.
 /// Errors of the device layer.
@@ -99,9 +122,8 @@ mod tests {
     use cubecl::server::{Collective, ServerError};
 
     // M18 A4: exhaustive match without a wildcard arm. Adding a variant to `DeviceError`
-    // breaks this test and points to `From<DeviceError> for GridError` (in `tetraloma-device`
-    // until M18.T6, then `tetraloma-topology`), `From<DeviceError> for ParallelError` (in
-    // `tetraloma-parallel`), and to
+    // breaks this test and points to `From<DeviceError> for GridError` (in `tetraloma-topology`),
+    // `From<DeviceError> for ParallelError` (in `tetraloma-parallel`), and to
     // `tetraloma::pipeline::dual_graph::tests::foundation_errors_convert_to_their_grid_error_variants`.
     fn variant_index(error: &DeviceError) -> usize {
         match error {

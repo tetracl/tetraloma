@@ -11,10 +11,11 @@
 //! sign(λ); this is the sign of the dot product of rule 8, without its rounding.
 
 use cubecl::prelude::*;
-use tetraloma_device::{DeviceBuffer, Real, Result, debug_assert_bindings};
+use tetraloma_device::{DeviceBuffer, Real, debug_assert_bindings};
 use tetraloma_dims::{CellType, Dim, EmbeddedIn, TopoDim};
 use tetraloma_geometry::{FacetQuadRule, detj_block};
 use tetraloma_parallel::Comm;
+use tetraloma_topology::Result;
 
 use super::topology::ChildTopology;
 use super::{fit, plan};

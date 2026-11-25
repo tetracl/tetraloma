@@ -13,11 +13,12 @@
 
 use cubecl::prelude::*;
 use tetraloma_device::{
-    DeviceBuffer, GridError, KernelKind, LaunchPlan, Result, SortKeys, debug_assert_bindings,
-    radix_sort, unique_by_key,
+    DeviceBuffer, KernelKind, LaunchPlan, SortKeys, debug_assert_bindings, radix_sort,
+    unique_by_key,
 };
 use tetraloma_dims::{CellType, Dim};
 use tetraloma_refcell::{NodeFamily, lagrange_points};
+use tetraloma_topology::{GridError, Result};
 
 use crate::layout::{Factor, launch_factor};
 use crate::names::element_error;

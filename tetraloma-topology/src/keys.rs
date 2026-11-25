@@ -3,9 +3,10 @@
 //! index, and padding positions write an all-ones sentinel key. Above vector size 1 the lanes
 //! read the cell-fastest copy of the connectivity (`transpose`), at size 1 the cell-major rows.
 
+use crate::{GridError, Result};
 use cubecl::prelude::*;
 use tetraloma_device::{
-    DeviceBuffer, DeviceStrided, GridError, KernelKind, LaunchPlan, Result, SortKeys, VECTOR_PAD,
+    DeviceBuffer, DeviceStrided, KernelKind, LaunchPlan, SortKeys, VECTOR_PAD,
     debug_assert_bindings, pad_len,
 };
 use tetraloma_dims::CellType;

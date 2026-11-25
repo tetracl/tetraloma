@@ -19,13 +19,14 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use tetraloma_device::{DeviceBuffer, GridError, Real, Result};
+use tetraloma_device::{DeviceBuffer, Real};
 use tetraloma_dims::{CellType, Dim, EmbeddedIn, TopoDim};
 use tetraloma_geometry::DeviceGrid;
 use tetraloma_io::vtk::{
     Binary, DataArray, DataValues, VtkCellBlock, VtkMesh, VtuFile, to_vtu, write_pvtu,
 };
 use tetraloma_parallel::{Comm, CommExt, CommScalar};
+use tetraloma_topology::{GridError, Result};
 
 use crate::io_download::{self, Download, DownloadBlock, agree_write};
 use crate::pipeline::agree;

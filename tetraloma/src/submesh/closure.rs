@@ -7,9 +7,9 @@
 //! (tensor products on tensor cells and prisms, Isaac's restriction property on simplices), so
 //! the match is exact up to rounding.
 
-use tetraloma_device::{GridError, Result};
 use tetraloma_dims::CellType;
 use tetraloma_geometry::NodeFamily;
+use tetraloma_topology::{GridError, Result};
 
 use crate::builder::cell_name;
 

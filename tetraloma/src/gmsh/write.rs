@@ -5,13 +5,14 @@ use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use tetraloma_device::{GridError, Real, Result};
+use tetraloma_device::Real;
 use tetraloma_dims::{Dim, EmbeddedIn, TopoDim};
 use tetraloma_geometry::DeviceGrid;
 use tetraloma_io::gmsh::{
     Encoding, FileNumbering, GmshCellBlock, GmshMesh, PhysicalName, from_numbered_gmsh_mesh,
 };
 use tetraloma_parallel::Comm;
+use tetraloma_topology::{GridError, Result};
 
 use crate::io_download::{self, GmshNumbering, agree_write};
 use crate::{AnyMeshRef, Mesh, MeshTags};

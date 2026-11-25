@@ -3,7 +3,8 @@
 //! lanes of a vector are aligned consecutive cells. Padding positions (c ≥ n_b) hold sentinel
 //! keys. The padded total must stay below 2^32, because payloads are u32 emission indices.
 
-use tetraloma_device::{GridError, Result, VECTOR_PAD};
+use crate::{GridError, Result};
+use tetraloma_device::VECTOR_PAD;
 use tetraloma_dims::CellType;
 use tetraloma_refcell::{sub_entities, sub_entity_types};
 

@@ -1,9 +1,10 @@
 // Design: "API walkthrough", Listing B6.
 //! The erased layer: `AnyMesh`, `AnyMeshRef`, `with_mesh!` and the `TryFrom` impls.
 
-use tetraloma_device::{GridError, Real, Result};
+use tetraloma_device::Real;
 use tetraloma_dims::{D1, D2, D3, Dim};
 use tetraloma_parallel::{Comm, Serial};
+use tetraloma_topology::{GridError, Result};
 
 use crate::Mesh;
 

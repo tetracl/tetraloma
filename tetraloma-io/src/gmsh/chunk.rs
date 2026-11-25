@@ -19,9 +19,9 @@
 use std::collections::HashMap;
 use std::ops::Range;
 
-use tetraloma_device::{GridError, Result};
 use tetraloma_dims::CellType;
 use tetraloma_parallel::{CommDyn, CommExt};
+use tetraloma_topology::{GridError, Result};
 
 use super::convert::{GmshTagGroup, check_len, content_error, index_u32};
 use super::element_type::cell_name;

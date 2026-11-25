@@ -4,11 +4,12 @@
 use cubecl::prelude::*;
 use tetraloma_device::testing::{record_plans, with_vector_size};
 use tetraloma_device::{
-    DeviceBuffer, GridError, KernelKind, LaunchPlan, Real, VECTOR_PAD, VectorSizeOverride,
+    DeviceBuffer, KernelKind, LaunchPlan, Real, VECTOR_PAD, VectorSizeOverride,
     debug_assert_bindings,
 };
 use tetraloma_dims::CellType::{self, *};
 use tetraloma_refcell::{LagrangeElement, NodeFamily, num_lagrange_nodes, tdim, vertices};
+use tetraloma_topology::GridError;
 
 use super::{
     broadcast_rows, device_coefficients, expansion, expansion_loops, loops_capacity, normalisation,

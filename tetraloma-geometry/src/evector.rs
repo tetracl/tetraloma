@@ -4,9 +4,9 @@ use core::cell::OnceCell;
 
 use cubecl::prelude::*;
 use tetraloma_device::{
-    DeviceBuffer, GridError, KernelKind, LaunchPlan, Real, Result, VECTOR_PAD,
-    debug_assert_bindings,
+    DeviceBuffer, KernelKind, LaunchPlan, Real, VECTOR_PAD, debug_assert_bindings,
 };
+use tetraloma_topology::{GridError, Result};
 
 use tetraloma_dims::CellType;
 use tetraloma_refcell::NodeFamily;

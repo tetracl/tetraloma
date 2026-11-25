@@ -12,7 +12,7 @@
 ///     $PhysicalNames\n1\n2 7 \"domain\"\n$EndPhysicalNames\n")?;
 /// let name = &file.physical_names[0];
 /// assert_eq!((name.dim, name.tag, name.name.as_str()), (2, 7, "domain"));
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [Physical groups]: https://tetracl.github.io/tetraloma/tutorials/tags-submeshes.html#physical-groups
@@ -41,7 +41,7 @@ pub struct PhysicalName {
 /// let curve = &file.entities.unwrap().curves[0];
 /// assert_eq!((curve.tag, curve.min, curve.max), (1, [0.0; 3], [1.0, 0.0, 0.0]));
 /// assert_eq!((&curve.physical_tags[..], &curve.boundary[..]), (&[3][..], &[1, -2][..]));
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [the Gmsh format]: https://tetracl.github.io/tetraloma/elements/file-formats.html#gmsh
@@ -71,7 +71,7 @@ pub struct Entity {
 /// let e = file.entities.unwrap();
 /// assert_eq!((e.points.len(), e.curves.len(), e.surfaces.len()), (2, 1, 0));
 /// assert_eq!(e.points[1].min, [1.0, 0.0, 0.0]);
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [the Gmsh format]: https://tetracl.github.io/tetraloma/elements/file-formats.html#gmsh
@@ -100,7 +100,7 @@ pub struct Entities {
 /// // Point 7 of partition 1 is point 1 of the unpartitioned model.
 /// assert_eq!((point.entity.tag, point.parent_dim, point.parent_tag), (7, 0, 1));
 /// assert_eq!(point.partitions, [1]);
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [Reading Gmsh in parallel]: https://tetracl.github.io/tetraloma/tutorials/parallel-io.html#reading-gmsh-in-parallel
@@ -128,7 +128,7 @@ pub struct PartitionedEntity {
 /// let p = read_file(path.as_ref())?.partitioned_entities.unwrap();
 /// assert_eq!((p.num_partitions, p.ghost_entities.len()), (2, 0));
 /// assert!(!p.surfaces.is_empty());
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [Reading Gmsh in parallel]: https://tetracl.github.io/tetraloma/tutorials/parallel-io.html#reading-gmsh-in-parallel
@@ -162,7 +162,7 @@ pub struct PartitionedEntities {
 /// let block = &file.node_blocks[0];
 /// assert_eq!((block.dim, block.entity_tag, &block.tags[..]), (2, 1, &[1, 2, 3][..]));
 /// assert_eq!(block.coords[1], [1.0, 0.0, 0.0]);
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [the Gmsh format]: https://tetracl.github.io/tetraloma/elements/file-formats.html#gmsh
@@ -193,7 +193,7 @@ pub struct NodeBlock {
 /// // One 3-node triangle (type 2), element tag 1.
 /// assert_eq!((block.dim, block.element_type, &block.tags[..]), (2, 2, &[1][..]));
 /// assert_eq!(block.nodes, [1, 2, 3]);
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [the Gmsh format]: https://tetracl.github.io/tetraloma/elements/file-formats.html#gmsh
@@ -224,7 +224,7 @@ pub struct ElementBlock {
 /// // Point 2 is the image of point 1 under a 4 × 4 affine map.
 /// assert_eq!((link.dim, link.tag, link.master_tag), (0, 2, 1));
 /// assert_eq!((link.affine.len(), &link.nodes[..]), (16, &[(2, 1)][..]));
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [the Gmsh format]: https://tetracl.github.io/tetraloma/elements/file-formats.html#gmsh
@@ -257,7 +257,7 @@ pub struct Periodic {
 ///     $Elements\n1 1 1 1\n2 1 2 1\n1 1 2 3\n$EndElements\n")?;
 /// assert_eq!((file.node_blocks.len(), file.element_blocks.len()), (1, 1));
 /// assert!(file.entities.is_none() && file.physical_names.is_empty());
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [Reading and writing files]: https://tetracl.github.io/tetraloma/tutorials/read-write.html#reading-gmsh

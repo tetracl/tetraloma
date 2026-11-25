@@ -3,8 +3,8 @@
 
 use std::collections::{HashMap, HashSet};
 
-use tetraloma_device::Result;
 use tetraloma_parallel::CommDyn;
+use tetraloma_topology::Result;
 
 use super::rendezvous::{Outbox, rendezvous_rank};
 use super::{BlockSpec, Cells, facet_keys};

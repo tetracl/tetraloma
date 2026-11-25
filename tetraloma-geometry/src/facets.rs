@@ -1,7 +1,8 @@
 //! Facet normals (codimension 0) and normals (codimension 1).
 
-use tetraloma_device::{Real, Result};
+use tetraloma_device::Real;
 use tetraloma_dims::{Codim0, Codim1, Dim, TopoDim};
+use tetraloma_topology::Result;
 
 use crate::layout::{Factor, launch_factor};
 use crate::{DeviceGrid, FacetPointSet, PointSet, QuadField, VecShape};

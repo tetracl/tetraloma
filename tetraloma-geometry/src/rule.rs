@@ -1,9 +1,10 @@
 //! `QuadRule` (Listing B4b).
 
 use cubecl::prelude::Client;
-use tetraloma_device::{GridError, Real, Result, check_precision};
+use tetraloma_device::{Real, check_precision};
 use tetraloma_dims::{CellType, TopoDim};
 use tetraloma_refcell::gauss_rule;
+use tetraloma_topology::{GridError, Result};
 
 use crate::names::cell_name;
 use crate::sumfact::TensorFactors;
@@ -145,7 +146,7 @@ impl<F: Real, TD: TopoDim> QuadRule<F, TD> {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_device::GridError;
+    /// use tetraloma_topology::GridError;
     /// use tetraloma_dims::{Cell3, D3};
     /// use tetraloma_geometry::QuadRule;
     ///

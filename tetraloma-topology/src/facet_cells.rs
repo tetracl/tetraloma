@@ -9,10 +9,10 @@
 //! the facet (as an owned or a ghost cell), so its local cell and local facet index are found
 //! by a scatter from the local cells without conflicts.
 
+use crate::{ConnKey, GridError, Result};
 use cubecl::prelude::*;
 use tetraloma_device::{
-    ConnKey, DeviceBuffer, DeviceStrided, GridError, KernelKind, LaunchPlan, Result,
-    debug_assert_bindings, histogram,
+    DeviceBuffer, DeviceStrided, KernelKind, LaunchPlan, debug_assert_bindings, histogram,
 };
 use tetraloma_dims::TopoDim;
 use tetraloma_parallel::{CommDyn, ReverseOp};

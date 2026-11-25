@@ -4,12 +4,11 @@
 
 use cubecl::prelude::*;
 use tetraloma_device::{
-    DeviceBuffer, DeviceStrided, GridError, Result, SortKeys, debug_assert_bindings, gather,
-    radix_sort,
+    DeviceBuffer, DeviceStrided, SortKeys, debug_assert_bindings, gather, radix_sort,
 };
 use tetraloma_dims::TopoDim;
 use tetraloma_parallel::CommDyn;
-use tetraloma_topology::{CellBlock, Topology};
+use tetraloma_topology::{CellBlock, GridError, Result, Topology};
 
 use super::numbering::cell_map;
 use super::select::Selected;

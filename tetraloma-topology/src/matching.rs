@@ -2,10 +2,11 @@
 //! entity keys are rebuilt from `EntityBlock::vertices`, put before the given keys, sorted
 //! together (stable), grouped, and each given key takes the entity of its group, if any.
 
+use crate::{GridError, Result};
 use cubecl::prelude::*;
 use tetraloma_device::{
-    DeviceBuffer, GridError, KernelKind, LaunchPlan, Result, SortKeys, debug_assert_bindings, fill,
-    pad_len, radix_sort_owned, unique_by_key,
+    DeviceBuffer, KernelKind, LaunchPlan, SortKeys, debug_assert_bindings, fill, pad_len,
+    radix_sort_owned, unique_by_key,
 };
 use tetraloma_dims::{CellType, TopoDim};
 

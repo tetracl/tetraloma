@@ -3,7 +3,8 @@
 use core::marker::PhantomData;
 
 use cubecl::prelude::Client;
-use tetraloma_device::{DeviceBuffer, GridError, Real, Result, VECTOR_PAD, device_properties};
+use tetraloma_device::{DeviceBuffer, Real, VECTOR_PAD, device_properties};
+use tetraloma_topology::{GridError, Result};
 
 use crate::{EVector, FieldShape};
 

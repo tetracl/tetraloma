@@ -286,7 +286,7 @@ fn binary_truncated_files() {
             let result = gmsh::parse(&bytes[..len]);
             if (nodes + 7..end).contains(&len) && len != between && len != between + 1 {
                 assert!(
-                    matches!(result, Err(tetraloma_device::GridError::Parse { .. })),
+                    matches!(result, Err(tetraloma_topology::GridError::Parse { .. })),
                     "prefix of {len} bytes (big-endian {big_endian})"
                 );
             }

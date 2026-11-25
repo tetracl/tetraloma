@@ -120,10 +120,7 @@ pub use tetraloma_comm::Mpi;
 pub use tetraloma_comm::{
     Comm, CommDyn, CommError, CommExt, CommScalar, DType, Neighbourhood, Serial, local_gpu_index,
 };
-pub use tetraloma_device::{
-    ConnKey, DeviceBuffer, DeviceCsr, DeviceError, DeviceStrided, GridError, Real, Result,
-    VECTOR_PAD,
-};
+pub use tetraloma_device::{DeviceBuffer, DeviceCsr, DeviceError, DeviceStrided, Real, VECTOR_PAD};
 pub use tetraloma_dims::{
     Cell1, Cell2, Cell3, CellType, Codim0, Codim1, D0, D1, D2, D3, Dim, EmbeddedIn, TopoDim,
 };
@@ -146,4 +143,4 @@ pub use tetraloma_partition::PtScotch;
 #[cfg(feature = "scotch")]
 pub use tetraloma_partition::Scotch;
 pub use tetraloma_partition::{Block, DistGraph, PartitionError, Partitioner};
-pub use tetraloma_topology::{CellBlock, Connectivity, EntityBlock};
+pub use tetraloma_topology::{CellBlock, ConnKey, Connectivity, EntityBlock, GridError, Result};

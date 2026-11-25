@@ -9,12 +9,12 @@
 
 use cubecl::prelude::*;
 use tetraloma_device::{
-    DeviceBuffer, DeviceStrided, GridError, ReduceOp, Result, debug_assert_bindings,
-    exclusive_scan, gather, histogram, reduce,
+    DeviceBuffer, DeviceStrided, ReduceOp, debug_assert_bindings, exclusive_scan, gather,
+    histogram, reduce,
 };
 use tetraloma_dims::{CellType, TopoDim};
 use tetraloma_parallel::{CommDyn, CommExt, IndexMap};
-use tetraloma_topology::{FacetCells, Topology};
+use tetraloma_topology::{FacetCells, GridError, Result, Topology};
 
 use super::{fit, plan};
 use crate::MeshTags;

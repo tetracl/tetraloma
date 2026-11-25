@@ -5,9 +5,9 @@ use std::collections::HashMap;
 
 use cubecl::prelude::*;
 use tetraloma_device::{
-    DeviceBuffer, GridError, KernelKind, LaunchPlan, Result, debug_assert_bindings, exclusive_scan,
-    fill,
+    DeviceBuffer, KernelKind, LaunchPlan, debug_assert_bindings, exclusive_scan, fill,
 };
+use tetraloma_topology::{GridError, Result};
 
 // Design: "Tags, regions and submeshes"; ADR-0022, item 3.
 /// Tags of the entities of one dimension, on the device: pairs of an entity index and a tag
