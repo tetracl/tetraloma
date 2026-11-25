@@ -11,6 +11,7 @@
 //! - [`Scatterer`] runs the halo exchange of an index map on device arrays: forward from the
 //!   owners to the ghosts, and reverse from the ghosts to their owners.
 //! - [`Neighbourhood`] lists the ranks a rank exchanges data with.
+//! - [`ParallelError`] is the error type of this crate and converts into [`GridError`].
 //!
 //! Without the feature `mpi` the crate does not depend on MPI. The facade crate `tetraloma`
 //! re-exports all of it. The tutorials [Distributed
@@ -22,7 +23,6 @@ mod error;
 mod index_map;
 mod scatterer;
 
-#[doc(hidden)]
 pub use error::ParallelError;
 pub use index_map::IndexMap;
 pub use scatterer::{ReverseOp, ScatterNumeric, Scatterer, Transport};

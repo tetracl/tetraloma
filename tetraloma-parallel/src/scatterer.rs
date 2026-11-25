@@ -11,8 +11,9 @@ use tetraloma_device::{
     gather, pack, segmented_reduce, unpack,
 };
 
+use crate::error::Result;
 use crate::index_map::Exchange;
-use crate::{DType, GridError, IndexMap, Neighbourhood, Result};
+use crate::{DType, IndexMap, Neighbourhood, ParallelError};
 
 /// The device copies of an [`IndexMap`]'s index lists that do not depend on the block size,
 /// in block indices. Cached by the map for the first client it is asked for (ADR-0026, item 14).
@@ -58,7 +59,7 @@ fn sync(client: &Client) -> Result<()> {
     let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
     loop {
         if let std::task::Poll::Ready(r) = done.as_mut().poll(&mut cx) {
-            return r.map_err(GridError::from);
+            return r.map_err(ParallelError::from);
         }
         std::thread::yield_now();
     }
@@ -85,11 +86,14 @@ fn same_device(a: &Client, b: &Client) -> bool {
 ///
 /// ```
 /// use tetraloma_device::{Client, DeviceBuffer};
-/// use tetraloma_parallel::{CommDyn, IndexMap, ReverseOp, Result};
+/// use tetraloma_parallel::{CommDyn, IndexMap, ParallelError, ReverseOp};
 ///
 /// /// Each rank owns two indices and holds the first index of the next rank, round the ring,
 /// /// as a ghost. Returns the values after the forward and after the reverse exchange.
-/// fn ring(comm: &dyn CommDyn, client: &Client) -> Result<(Vec<f32>, Vec<f32>)> {
+/// fn ring(
+///     comm: &dyn CommDyn,
+///     client: &Client,
+/// ) -> std::result::Result<(Vec<f32>, Vec<f32>), ParallelError> {
 ///     let next = (comm.rank() + 1) % comm.size();
 ///     let map = IndexMap::with_ghosts(comm, 2, vec![2 * next as i64], vec![next as i32])?;
 ///     let scatterer = map.scatterer(client, 1)?;
@@ -155,15 +159,15 @@ impl Scatterer {
     /// The scatterer of `map` for `block` values per index on `client` (`IndexMap::scatterer`).
     pub(crate) fn new(map: &IndexMap, client: &Client, block: usize) -> Result<Scatterer> {
         if block == 0 {
-            return Err(GridError::LengthMismatch {
+            return Err(ParallelError::LengthMismatch {
                 expected: 1,
                 found: 0,
             });
         }
         let e = map.exchange_rc();
         let words = |n: usize| -> Result<usize> {
-            let w = n.checked_mul(block).ok_or(GridError::TooLarge)?;
-            u32::try_from(w).map_err(|_| GridError::TooLarge)?;
+            let w = n.checked_mul(block).ok_or(ParallelError::TooLarge)?;
+            u32::try_from(w).map_err(|_| ParallelError::TooLarge)?;
             Ok(w)
         };
         let len = words(map.num_local())?;
@@ -183,7 +187,7 @@ impl Scatterer {
         // The reverse buffer holds the T target blocks, then the R received blocks.
         let t = targets.len();
         let r = e.send_idx.len();
-        words(t.checked_add(r).ok_or(GridError::TooLarge)?)?;
+        words(t.checked_add(r).ok_or(ParallelError::TooLarge)?)?;
         let mut contributions: Vec<Vec<usize>> = vec![Vec::new(); t];
         for (j, s) in e.send_idx.iter().enumerate() {
             let k = targets
@@ -272,10 +276,10 @@ impl Scatterer {
     ///
     /// ```
     /// use tetraloma_device::{Client, DeviceBuffer};
-    /// use tetraloma_parallel::{CommDyn, IndexMap, Result};
+    /// use tetraloma_parallel::{CommDyn, IndexMap, ParallelError};
     ///
     /// /// Each rank owns one index, with two values, and holds the other rank's as a ghost.
-    /// fn swap(comm: &dyn CommDyn, client: &Client) -> Result<Vec<u32>> {
+    /// fn swap(comm: &dyn CommDyn, client: &Client) -> std::result::Result<Vec<u32>, ParallelError> {
     ///     let (rank, other) = (comm.rank(), 1 - comm.rank());
     ///     let map = IndexMap::with_ghosts(comm, 1, vec![other as i64], vec![other as i32])?;
     ///     let scatterer = map.scatterer(client, 2)?;
@@ -346,11 +350,14 @@ impl Scatterer {
     ///
     /// ```
     /// use tetraloma_device::{Client, DeviceBuffer};
-    /// use tetraloma_parallel::{CommDyn, IndexMap, Result, ReverseOp};
+    /// use tetraloma_parallel::{CommDyn, IndexMap, ParallelError, ReverseOp};
     ///
     /// /// Each rank owns one index and holds the other rank's as a ghost; every value is its
     /// /// rank plus 1. Returns the values after a reverse maximum.
-    /// fn largest(comm: &dyn CommDyn, client: &Client) -> Result<Vec<i32>> {
+    /// fn largest(
+    ///     comm: &dyn CommDyn,
+    ///     client: &Client,
+    /// ) -> std::result::Result<Vec<i32>, ParallelError> {
     ///     let other = 1 - comm.rank();
     ///     let map = IndexMap::with_ghosts(comm, 1, vec![other as i64], vec![other as i32])?;
     ///     let scatterer = map.scatterer(client, 1)?;
@@ -371,7 +378,7 @@ impl Scatterer {
     pub fn reverse<T: ScatterNumeric>(&self, x: &mut DeviceBuffer<T>, op: ReverseOp) -> Result<()> {
         let client = x.client().clone();
         if !device_properties(&client).supports_type(T::cube_type()) {
-            return Err(GridError::UnsupportedPrecision {
+            return Err(ParallelError::UnsupportedPrecision {
                 scalar: T::type_name(),
                 device: client.name(),
             });
@@ -458,13 +465,13 @@ impl Scatterer {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{GridError, IndexMap, Serial, Transport};
+    /// use tetraloma_parallel::{IndexMap, ParallelError, Serial, Transport};
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
     /// # let client = tetraloma_testing::test_client();
     /// let scatterer = IndexMap::new(&Serial, 5)?.scatterer(&client, 1)?;
     /// assert_eq!(scatterer.transport(), Transport::HostStaged);
-    /// # Ok::<(), GridError>(())
+    /// # Ok::<(), ParallelError>(())
     /// ```
     pub fn transport(&self) -> Transport {
         self.transport
@@ -472,7 +479,7 @@ impl Scatterer {
 
     fn check_len(&self, found: usize) -> Result<()> {
         if found != self.len {
-            return Err(GridError::LengthMismatch {
+            return Err(ParallelError::LengthMismatch {
                 expected: self.len,
                 found,
             });
@@ -505,11 +512,11 @@ impl Scatterer {
         let per_block = self
             .block
             .checked_mul(size_of::<T>() / 4)
-            .ok_or(GridError::TooLarge)?;
+            .ok_or(ParallelError::TooLarge)?;
         let words = |counts: &[usize]| -> Result<Vec<usize>> {
             counts
                 .iter()
-                .map(|&c| c.checked_mul(per_block).ok_or(GridError::TooLarge))
+                .map(|&c| c.checked_mul(per_block).ok_or(ParallelError::TooLarge))
                 .collect()
         };
         comm.neighbour_all_to_all_v_bytes(

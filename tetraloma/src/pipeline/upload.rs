@@ -15,7 +15,12 @@ use crate::builder::cell_name;
 
 /// The `IndexMap` of `m`. Collective.
 fn index_map(comm: &dyn CommDyn, m: &MapInput) -> Result<IndexMap> {
-    IndexMap::with_ghosts(comm, m.num_owned, m.ghosts.clone(), m.ghost_owners.clone())
+    Ok(IndexMap::with_ghosts(
+        comm,
+        m.num_owned,
+        m.ghosts.clone(),
+        m.ghost_owners.clone(),
+    )?)
 }
 
 /// A u32 of `n`.

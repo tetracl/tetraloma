@@ -3,7 +3,7 @@
 //! property, and bitwise repeatability.
 
 use proptest::prelude::*;
-use tetraloma::{CommDyn, DeviceBuffer, GridError, IndexMap, ReverseOp};
+use tetraloma::{CommDyn, DeviceBuffer, IndexMap, ParallelError, ReverseOp};
 use tetraloma_testing::ThreadComm;
 use tetraloma_testing::scatter_checks::{self, Layout, input};
 
@@ -36,14 +36,14 @@ fn maps_without_ghosts_and_bad_inputs() {
             let mut short = DeviceBuffer::from_host(&client, &host[..5]).unwrap();
             assert!(matches!(
                 s.forward(&mut short),
-                Err(GridError::LengthMismatch {
+                Err(ParallelError::LengthMismatch {
                     expected: 6,
                     found: 5
                 })
             ));
             assert!(matches!(
                 map.scatterer(&client, 0),
-                Err(GridError::LengthMismatch { .. })
+                Err(ParallelError::LengthMismatch { .. })
             ));
         }
     });
