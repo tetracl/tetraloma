@@ -14,6 +14,11 @@
 //! only that setting). The references are
 //! computed once per mesh and precision; each run uses a copy of the mesh with an empty E-vector
 //! cache, so the E-vector is built under the run's strategy too. One test per degree ([`degree_tests!`]); p ≥ 5 runs in release builds only.
+//!
+//! [`gll_simplices_and_prisms`] adds targeted release-only checks at p = 5–8 for GLL triangles
+//! (2D and on a 3D sphere), tetrahedra and prisms without widening [`node_families`], covering the
+//! degree policy (rather than every forced strategy) and the prism `sumfact` path on the CPU
+//! runtime, Metal and CUDA (M11 gate G6); under `TETRALOMA_GEOM_STRATEGY` only that setting runs.
 
 use crate::common;
 
@@ -356,6 +361,201 @@ fn open_ended<F: Real>(client: &Client, p: u32) {
             let h = cube_box(cell, 1, p).with_node_family(f);
             volume::<F, D3>(client, &named(&format!("{cell:?} box"), f), &h);
         }
+    }
+}
+
+/// Checks physical points, Jacobians, det J, pseudo-inverses, pull-back and codimension-specific
+/// normals for a single-block GLL mesh against the f64 host reference with the degree-scaled
+/// tolerances of section 16 (matching [`Factors`] and [`PullBacks`]). When
+/// `TETRALOMA_GEOM_STRATEGY` is set, only [`StrategyRun::Environment`] runs. Otherwise each mesh
+/// runs under the degree policy, and when `require_sumfact` is true (prisms) a second pass runs
+/// `Fixed(SumFactorised)` if the policy did not already run `SumFactorised` for every factor and
+/// pull-back family, asserting all four families executed `SumFactorised`.
+fn check_gll_mesh<F, TD, GD>(
+    mesh: &Mesh<F, TD, GD>,
+    what: &str,
+    h: &HostMesh,
+    require_sumfact: bool,
+    extra: impl Fn(&Mesh<F, TD, GD>, &QuadRule<F, TD>, &str),
+) where
+    F: Real,
+    TD: TopoDim + EmbeddedIn<GD>,
+    GD: Dim,
+{
+    assert_eq!(mesh.cell_blocks().len(), 1, "{what}: single block");
+    assert_eq!(
+        mesh.geometry_block(0).element.family,
+        NodeFamily::Gll,
+        "{what}: expected GLL coordinate element"
+    );
+    let degree = rule_degree(h);
+    let rule = QuadRule::for_grid(mesh, degree).expect("rule");
+    let block = &mesh.cell_blocks()[0];
+    let pts = rule.get(block.cell).expect("point set");
+    let p_ref = pts.points();
+    let nq = pts.len();
+    let td = TD::N;
+
+    let sx = block_scale(h, gauss(degree), Amplification::Values);
+    let sj = reference::jacobian_scale(mesh, 0, p_ref).expect("J scale");
+    let sk = reference::pinv_scale(mesh, 0, p_ref).expect("K scale");
+    let spb = reference::pull_back_scale(mesh, 0, p_ref).expect("pull-back scale");
+    let x_ref = reference::points(mesh, 0, p_ref).expect("X");
+    let j_ref = reference::jacobians(mesh, 0, p_ref).expect("J");
+    let d_ref = reference::detj(mesh, 0, p_ref).expect("det J");
+    let k_ref = reference::pseudo_inverses(mesh, 0, p_ref).expect("K");
+    let xi_ref: Vec<f64> = (0..block.index_map.num_local() * nq)
+        .flat_map(|i| p_ref[(i % nq) * td..(i % nq + 1) * td].to_vec())
+        .collect();
+
+    let run_once = |run: StrategyRun| {
+        let (_, ran) = under_strategy_recorded(run, || {
+            let mesh = fresh(mesh);
+            let at = format!("{what}, under {run}");
+            let x_field = mesh.physical_points(&rule).expect("X");
+            let x = field_f64(&x_field.blocks[0]).unwrap();
+            assert_scaled::<F>(&x, &x_ref, sx, &format!("X of {at}"));
+            let j = field_f64(&jacobians_block(&mesh, 0, pts).expect("J")).unwrap();
+            assert_scaled::<F>(&j, &j_ref, sj, &format!("J of {at}"));
+            let d = field_f64(&detj_block(&mesh, 0, pts).expect("det J")).unwrap();
+            assert_scaled::<F>(&d, &d_ref, sj, &format!("det J of {at}"));
+            let k = field_f64(&pseudo_inverse_block(&mesh, 0, pts).expect("K")).unwrap();
+            assert_scaled::<F>(&k, &k_ref, sk, &format!("K of {at}"));
+            extra(&mesh, &rule, &at);
+            let pb = mesh
+                .pull_back(&x_field, &PullBackOptions::default())
+                .unwrap_or_else(|e| panic!("pull-back of {at}: {e}"));
+            let xi = field_f64(&pb.reference.blocks[0]).unwrap();
+            assert_scaled::<F>(&xi, &xi_ref, spb, &format!("ξ of {at}"));
+        });
+        ran
+    };
+
+    let first = if std::env::var_os(GEOM_STRATEGY_VAR).is_some() {
+        StrategyRun::Environment
+    } else {
+        StrategyRun::Hook(StrategyOverride::Policy)
+    };
+    let mut ran = run_once(first);
+    if require_sumfact && first != StrategyRun::Environment {
+        let sumfact_families = [
+            StrategyFamily::Points,
+            StrategyFamily::Jacobian,
+            StrategyFamily::FacetNormals,
+            StrategyFamily::PullBack,
+        ];
+        let all_sumfact = |launches: &[(StrategyFamily, Strategy)]| {
+            sumfact_families
+                .iter()
+                .all(|&fam| launches.contains(&(fam, Strategy::SumFactorised)))
+        };
+        if !all_sumfact(&ran) {
+            ran.extend(run_once(StrategyRun::Hook(StrategyOverride::Fixed(
+                Strategy::SumFactorised,
+            ))));
+        }
+        assert!(
+            all_sumfact(&ran),
+            "{what} ({}): expected SumFactorised for every prism factor and pull-back family, ran {ran:?}",
+            name::<F>()
+        );
+    }
+}
+
+/// Codimension-0 GLL mesh check (including facet normals against the f64 host reference).
+fn check_gll_volume<F: Real, TD: TopoDim + Codim0<TD>>(
+    client: &Client,
+    what: &str,
+    h: &HostMesh,
+    require_sumfact: bool,
+) {
+    let mesh = build::<F, TD, TD>(h, client);
+    let degree = rule_degree(h);
+    let frule = FacetQuadRule::for_grid(&mesh, degree).expect("facet rule");
+    let cell = mesh.cell_blocks()[0].cell;
+    let fps = frule.get(cell).expect("facet points");
+    let want = reference::facet_normals(&mesh, 0, fps).expect("facet normals");
+    let scale =
+        reference::jacobian_scale(&mesh, 0, fps.points().points()).expect("facet normal scale");
+    check_gll_mesh(&mesh, what, h, require_sumfact, |mesh, _, at| {
+        let n = field_f64(&facet_normals_block(mesh, 0, fps).expect("facet normals")).unwrap();
+        assert_scaled::<F>(&n, &want, scale, &format!("facet normals of {at}"));
+    });
+}
+
+/// Codimension-1 GLL mesh check (including cell normals against the f64 host reference).
+fn check_gll_surface<F, TD, GD>(client: &Client, what: &str, h: &HostMesh)
+where
+    F: Real,
+    TD: TopoDim + Codim1<GD> + EmbeddedIn<GD>,
+    GD: Dim,
+{
+    let mesh = build::<F, TD, GD>(h, client);
+    let degree = rule_degree(h);
+    let rule = QuadRule::for_grid(&mesh, degree).expect("rule");
+    let cell = mesh.cell_blocks()[0].cell;
+    let pts = rule.get(cell).expect("point set");
+    let want = reference::normals(&mesh, 0, pts.points()).expect("normals");
+    let scale = reference::jacobian_scale(&mesh, 0, pts.points()).expect("normal scale");
+    check_gll_mesh(&mesh, what, h, false, |mesh, rule, at| {
+        let pts = rule.get(cell).expect("point set");
+        let n = field_f64(&normals_block(mesh, 0, pts).expect("normals")).unwrap();
+        assert_scaled::<F>(&n, &want, scale, &format!("normals of {at}"));
+    });
+}
+
+/// Device geometry at degree `p` (5–8) for GLL triangles (2D and 3D sphere), tetrahedra and
+/// prisms against the f64 host reference at precision `F`.
+fn gll_simplices_and_prisms_at<F: Real>(client: &Client, p: u32) {
+    use tetraloma_testing::{cube_box, sphere, square_box};
+
+    let tri = square_box(Cell2::Triangle, 2, p)
+        .perturbed(0.05)
+        .with_node_family(NodeFamily::Gll);
+    check_gll_volume::<F, D2>(client, &format!("Triangle box p={p} Gll"), &tri, false);
+
+    let sph = sphere(0, p).with_node_family(NodeFamily::Gll);
+    check_gll_surface::<F, D2, D3>(client, &format!("sphere p={p} Gll"), &sph);
+
+    let tet = cube_box(Cell3::Tetrahedron, 1, p)
+        .perturbed(0.05)
+        .with_node_family(NodeFamily::Gll);
+    check_gll_volume::<F, D3>(client, &format!("Tetrahedron box p={p} Gll"), &tet, false);
+
+    let prism = cube_box(Cell3::Prism, 1, p)
+        .perturbed(0.05)
+        .with_node_family(NodeFamily::Gll);
+    check_gll_volume::<F, D3>(client, &format!("Prism box p={p} Gll"), &prism, true);
+}
+
+/// Release-only device geometry tests at p = 5–8 for GLL triangles, tetrahedra and prisms
+/// (M11 gate G6): in shards `h5`–`h8` of `scripts/ci-tetraloma-shard.sh`, which hosted CI does
+/// not run; run on the CPU runtime, Metal and CUDA without widening [`node_families`].
+mod gll_simplices_and_prisms {
+    use super::*;
+
+    #[test]
+    #[cfg_attr(debug_assertions, ignore = "p ≥ 5 runs in release builds only")]
+    fn p5() {
+        for_each_precision!(client(), gll_simplices_and_prisms_at, 5);
+    }
+
+    #[test]
+    #[cfg_attr(debug_assertions, ignore = "p ≥ 5 runs in release builds only")]
+    fn p6() {
+        for_each_precision!(client(), gll_simplices_and_prisms_at, 6);
+    }
+
+    #[test]
+    #[cfg_attr(debug_assertions, ignore = "p ≥ 5 runs in release builds only")]
+    fn p7() {
+        for_each_precision!(client(), gll_simplices_and_prisms_at, 7);
+    }
+
+    #[test]
+    #[cfg_attr(debug_assertions, ignore = "p ≥ 5 runs in release builds only")]
+    fn p8() {
+        for_each_precision!(client(), gll_simplices_and_prisms_at, 8);
     }
 }
 
