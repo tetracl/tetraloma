@@ -20,8 +20,19 @@ pub(crate) struct CiarletData {
     pub(crate) interpolation_matrix: Vec<f64>,
 }
 
+/// Builds the row-major `n × n` identity matrix.
+pub(crate) fn identity(n: usize) -> Vec<f64> {
+    let mut id = vec![0.0; n * n];
+    for i in 0..n {
+        id[i * n + i] = 1.0;
+    }
+    id
+}
+
 /// Transposes a row-major `rows × cols` block into `cols × rows` in `dst`.
-fn transpose_block(src: &[f64], rows: usize, cols: usize, dst: &mut [f64]) {
+pub(crate) fn transpose_block(src: &[f64], rows: usize, cols: usize, dst: &mut [f64]) {
+    debug_assert_eq!(src.len(), rows * cols);
+    debug_assert_eq!(dst.len(), rows * cols);
     for r in 0..rows {
         for (c, &v) in src[r * cols..(r + 1) * cols].iter().enumerate() {
             dst[c * rows + r] = v;
@@ -58,7 +69,7 @@ pub(crate) fn lagrange_interpolation_points(
 }
 
 /// Builds `(interpolation_points, interpolation_matrix)` for a validated Lagrange element key.
-fn lagrange_interpolation(
+pub(crate) fn lagrange_interpolation(
     cell: CellType,
     degree: u32,
     variant: Variant,
@@ -67,16 +78,13 @@ fn lagrange_interpolation(
     match variant {
         Variant::Nodal(_) => {
             let points = lagrange_interpolation_points(cell, degree, variant)?;
-            let mut matrix = vec![0.0; dim * dim];
-            for i in 0..dim {
-                matrix[i * dim + i] = 1.0;
-            }
-            Ok((points, matrix))
+            Ok((points, identity(dim)))
         }
         Variant::Legendre => {
             let rule = gauss_rule(cell, 2 * degree);
             let m = rule.weights.len();
             let phi = polyset::tabulate(cell, degree, &rule.points, 0);
+            debug_assert_eq!(phi.len(), dim * m);
             let mut matrix = vec![0.0; dim * m];
             for (m_row, phi_row) in matrix.chunks_exact_mut(m).zip(phi.chunks_exact(m)) {
                 for ((dst, &p), &w) in m_row.iter_mut().zip(phi_row).zip(&rule.weights) {
@@ -141,10 +149,7 @@ pub(crate) fn solve_ciarlet_coefficients(
     drop((poly, poly_t));
 
     let lu = DenseLu::factor(dual, dim)?;
-    let mut inv = vec![0.0; dim * dim];
-    for i in 0..dim {
-        inv[i * dim + i] = 1.0;
-    }
+    let mut inv = identity(dim);
     lu.solve(&mut inv, dim);
 
     let mut coefficients = vec![0.0; dim * dim];
@@ -458,5 +463,24 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(err, ElementError::RefCell(RefCellError::Singular));
+    }
+
+    #[test]
+    fn identity_and_transpose_block_helpers() {
+        assert_eq!(identity(0), Vec::<f64>::new());
+        assert_eq!(identity(1), vec![1.0]);
+        assert_eq!(
+            identity(3),
+            vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+        );
+
+        let src = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
+        let mut dst = [0.0; 6];
+        transpose_block(&src, 2, 3, &mut dst);
+        assert_eq!(dst, [1.0, 4.0, 2.0, 5.0, 3.0, 6.0]);
+
+        let mut empty = [];
+        transpose_block(&[], 0, 3, &mut empty);
+        transpose_block(&[], 3, 0, &mut empty);
     }
 }
