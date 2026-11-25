@@ -14,11 +14,13 @@ pub(crate) type Result<T, E = ParallelError> = core::result::Result<T, E>;
 /// Errors of index maps and halo exchanges.
 ///
 /// Each variant names one kind of failure, and its `Display` text says what went wrong. The enum
-/// is `#[non_exhaustive]`, so a `match` on it needs a `_` arm. Collective operations agree on
-/// their errors: the rank that failed returns its own error, and the other ranks return
-/// [`RemoteFailure`](ParallelError::RemoteFailure). Every `ParallelError` converts into
-/// `tetraloma`'s `GridError` through `From`, so `?` passes it through functions returning
-/// `tetraloma::Result`. See [Halo
+/// is `#[non_exhaustive]`, so a `match` on it needs a `_` arm. [`IndexMap::with_ghosts`](crate::IndexMap::with_ghosts)
+/// agrees on its errors across ranks: the rank that failed returns its own error, and the other
+/// ranks return [`RemoteFailure`](ParallelError::RemoteFailure). [`Scatterer::forward`](crate::Scatterer::forward)
+/// and [`Scatterer::reverse`](crate::Scatterer::reverse) check their arguments on each rank before
+/// exchanging, so a rank that returns an error early leaves the others waiting. Every
+/// `ParallelError` converts into `tetraloma`'s `GridError` through `From`, so `?` passes it
+/// through functions returning `tetraloma::Result`. See [Halo
 /// exchange](https://tetracl.github.io/tetraloma/tutorials/halo-exchange.html).
 ///
 /// # Example

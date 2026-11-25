@@ -45,10 +45,10 @@ entity blocks. The program takes the node index map of its surface mesh `scalp`:
 You can also make index maps for data of your own. `IndexMap::new(comm, n)` makes a map with `n`
 owned indices and no ghosts. `IndexMap::with_ghosts(comm, n, ghosts, owners)` adds ghosts, given
 by their global indices and owner ranks; the owners check that they own the indices asked for.
-Both are collective, return [`ParallelError`](../api/tetraloma/enum.ParallelError.html)
-(re-exported at the root of `tetraloma`, which `?` converts into
-[`GridError`](../api/tetraloma/enum.GridError.html) in functions that return `tetraloma::Result`),
-and number global indices rank by rank in the order of the ranks:
+Both are collective and return [`ParallelError`](../api/tetraloma/enum.ParallelError.html),
+re-exported at the root of `tetraloma`; `?` converts it into
+[`GridError`](../api/tetraloma/enum.GridError.html) in functions that return `tetraloma::Result`.
+Global indices are numbered rank by rank in the order of the ranks:
 
 ```rust
 # use tetraloma::prelude::*;

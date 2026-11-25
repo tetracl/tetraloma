@@ -102,7 +102,7 @@ impl IndexMap {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{ParallelError, IndexMap, Serial};
+    /// use tetraloma_parallel::{IndexMap, ParallelError, Serial};
     ///
     /// let map = IndexMap::new(&Serial, 3)?;
     /// assert_eq!(map.owned_range(), (0, 3));
@@ -190,7 +190,7 @@ impl IndexMap {
     /// On one rank there is no other rank to take ghosts from:
     ///
     /// ```
-    /// use tetraloma_parallel::{ParallelError, IndexMap, Serial};
+    /// use tetraloma_parallel::{IndexMap, ParallelError, Serial};
     ///
     /// let map = IndexMap::with_ghosts(&Serial, 4, vec![], vec![])?;
     /// assert_eq!((map.owned_range(), map.num_ghosts()), ((0, 4), 0));
@@ -293,7 +293,7 @@ impl IndexMap {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{ParallelError, IndexMap, Serial, Transport};
+    /// use tetraloma_parallel::{IndexMap, ParallelError, Serial, Transport};
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
     /// # let client = tetraloma_testing::test_client();

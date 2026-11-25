@@ -100,7 +100,8 @@ mod tests {
 
     // M18 A4: exhaustive match without a wildcard arm. Adding a variant to `DeviceError`
     // breaks this test and points to `From<DeviceError> for GridError` (in `tetraloma-device`
-    // until M18.T6, then `tetraloma-topology`) and to
+    // until M18.T6, then `tetraloma-topology`), `From<DeviceError> for ParallelError` (in
+    // `tetraloma-parallel`), and to
     // `tetraloma::pipeline::dual_graph::tests::foundation_errors_convert_to_their_grid_error_variants`.
     fn variant_index(error: &DeviceError) -> usize {
         match error {

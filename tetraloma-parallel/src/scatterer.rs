@@ -465,7 +465,7 @@ impl Scatterer {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{ParallelError, IndexMap, Serial, Transport};
+    /// use tetraloma_parallel::{IndexMap, ParallelError, Serial, Transport};
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
     /// # let client = tetraloma_testing::test_client();
