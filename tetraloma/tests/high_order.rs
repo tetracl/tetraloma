@@ -17,7 +17,8 @@
 //!
 //! [`gll_simplices_and_prisms`] adds targeted release-only checks at p = 5–8 for GLL triangles
 //! (2D and on a 3D sphere), tetrahedra and prisms without widening [`node_families`], covering the
-//! degree policy and the prism `sumfact` path on the CPU runtime, Metal and CUDA (M11 gate G6).
+//! degree policy (rather than every forced strategy) and the prism `sumfact` path on the CPU
+//! runtime, Metal and CUDA (M11 gate G6); under `TETRALOMA_GEOM_STRATEGY` only that setting runs.
 
 use crate::common;
 
@@ -365,9 +366,11 @@ fn open_ended<F: Real>(client: &Client, p: u32) {
 
 /// Checks physical points, Jacobians, det J, pseudo-inverses, pull-back and codimension-specific
 /// normals for a single-block GLL mesh against the f64 host reference with the degree-scaled
-/// tolerances of section 16, under the degree policy. When `require_sumfact` is true (prisms),
-/// also runs `Fixed(SumFactorised)` if the policy did not already run `SumFactorised` for every
-/// factor and pull-back family, and asserts all four families executed `SumFactorised`.
+/// tolerances of section 16 (matching [`Factors`] and [`PullBacks`]). When
+/// `TETRALOMA_GEOM_STRATEGY` is set, only [`StrategyRun::Environment`] runs. Otherwise each mesh
+/// runs under the degree policy, and when `require_sumfact` is true (prisms) a second pass runs
+/// `Fixed(SumFactorised)` if the policy did not already run `SumFactorised` for every factor and
+/// pull-back family, asserting all four families executed `SumFactorised`.
 fn check_gll_mesh<F, TD, GD>(
     mesh: &Mesh<F, TD, GD>,
     what: &str,
@@ -428,8 +431,13 @@ fn check_gll_mesh<F, TD, GD>(
         ran
     };
 
-    let mut ran = run_once(StrategyRun::Hook(StrategyOverride::Policy));
-    if require_sumfact {
+    let first = if std::env::var_os(GEOM_STRATEGY_VAR).is_some() {
+        StrategyRun::Environment
+    } else {
+        StrategyRun::Hook(StrategyOverride::Policy)
+    };
+    let mut ran = run_once(first);
+    if require_sumfact && first != StrategyRun::Environment {
         let sumfact_families = [
             StrategyFamily::Points,
             StrategyFamily::Jacobian,
@@ -497,7 +505,7 @@ where
 }
 
 /// Device geometry at degree `p` (5–8) for GLL triangles (2D and 3D sphere), tetrahedra and
-/// prisms against the f64 host reference, in f32 and (where supported) f64.
+/// prisms against the f64 host reference at precision `F`.
 fn gll_simplices_and_prisms_at<F: Real>(client: &Client, p: u32) {
     use tetraloma_testing::{cube_box, sphere, square_box};
 
@@ -521,8 +529,8 @@ fn gll_simplices_and_prisms_at<F: Real>(client: &Client, p: u32) {
 }
 
 /// Release-only device geometry tests at p = 5–8 for GLL triangles, tetrahedra and prisms
-/// (M11 gate G6): outside the hosted CI shards (`h5`–`h8` in `scripts/ci-tetraloma-shard.sh`),
-/// run on the CPU runtime, Metal and CUDA without widening [`node_families`].
+/// (M11 gate G6): in shards `h5`–`h8` of `scripts/ci-tetraloma-shard.sh`, which hosted CI does
+/// not run; run on the CPU runtime, Metal and CUDA without widening [`node_families`].
 mod gll_simplices_and_prisms {
     use super::*;
 
