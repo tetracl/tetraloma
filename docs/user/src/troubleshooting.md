@@ -159,8 +159,8 @@ driver, not with your input.
 
 Distributed programs add the MPI library, the launcher and the placement of ranks to what can go
 wrong. [Distributed meshes](tutorials/distributed.md) explains how a distributed mesh is built,
-and [One GPU per MPI rank](devices.md#one-gpu-per-mpi-rank) how ranks share a node. Calling
-[`IndexMap`](api/tetraloma/struct.IndexMap.html) or
+and [One GPU per MPI rank](devices.md#one-gpu-per-mpi-rank) how ranks share a node. Calling the
+methods of [`IndexMap`](api/tetraloma/struct.IndexMap.html) or
 [`Scatterer`](api/tetraloma/struct.Scatterer.html) directly returns
 [`ParallelError`](api/tetraloma/enum.ParallelError.html), and calling fallible communicator
 methods directly returns [`CommError`](api/tetraloma/enum.CommError.html); their variants match
@@ -205,11 +205,13 @@ several ranks only with one GPU each, or one CPU rank per machine.
 
 Collective functions, such as `build_on`, `measure`, `orient`, the halo exchanges, the readers and
 the writers, must be called by every rank of the communicator, in the same order. A rank that
-skips one leaves the others waiting for ever. When a collective fails on one rank, the others
-return `RemoteFailure` (`GridError::RemoteFailure`, or `ParallelError::RemoteFailure` or
-`CommError::RemoteFailure` when `IndexMap` or a communicator is called directly) with the lowest
+skips one leaves the others waiting for ever. When an agreed collective fails on one rank, the
+others return `RemoteFailure` (`GridError::RemoteFailure`, or `ParallelError::RemoteFailure` from
+`IndexMap::with_ghosts`, or `CommError::RemoteFailure` from `Neighbourhood::new`) with the lowest
 failing rank: look for that rank's own error, which names the cause ([Building on a
-communicator](tutorials/distributed.md#building-on-a-communicator)).
+communicator](tutorials/distributed.md#building-on-a-communicator)). Direct communicator exchanges
+and `Scatterer::forward` / `Scatterer::reverse` instead check their arguments on each rank before
+exchanging, so a rank that returns an error early leaves the others waiting.
 
 ### Partitioner errors
 
