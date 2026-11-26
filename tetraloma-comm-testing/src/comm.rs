@@ -13,8 +13,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 use std::rc::Rc;
 use std::sync::{Arc, Condvar, LazyLock, Mutex, MutexGuard};
 
-use tetraloma::{CommDyn, CommError, DType, Neighbourhood};
-use tetraloma_device::ReduceOp;
+use tetraloma_comm::{CommDyn, CommError, DType, Neighbourhood, ReduceOp};
 
 type Result<T> = core::result::Result<T, CommError>;
 
@@ -116,13 +115,19 @@ impl RankBudget {
     }
 }
 
+/// Environment variable naming the test device, read here to pick the default rank budget
+/// without depending on the device test-support crate.
+const TEST_DEVICE_VAR: &str = "TETRALOMA_TEST_DEVICE";
+
+/// Whether `TETRALOMA_TEST_DEVICE` selects the CPU runtime (unset, empty or `"cpu"`).
+fn is_cpu_backend(device_env: Option<&str>) -> bool {
+    matches!(device_env, None | Some("") | Some("cpu"))
+}
+
 static RANK_BUDGET: LazyLock<RankBudget> = LazyLock::new(|| {
     let cores = std::thread::available_parallelism().map_or(4, |n| n.get());
-    let device_env = std::env::var(crate::TEST_DEVICE_VAR).ok();
-    let cpu_backend = matches!(
-        crate::TestBackend::parse(device_env.as_deref()),
-        Ok(crate::TestBackend::Cpu)
-    );
+    let device_env = std::env::var(TEST_DEVICE_VAR).ok();
+    let cpu_backend = is_cpu_backend(device_env.as_deref());
     let override_val = std::env::var(THREAD_COMM_BUDGET_VAR).ok();
     RankBudget::new(parse_budget(override_val.as_deref(), cores, cpu_backend))
 });
@@ -157,8 +162,8 @@ impl Drop for RankPermit {
 /// # Example
 ///
 /// ```
-/// use tetraloma::{CommDyn, CommExt};
-/// use tetraloma_testing::ThreadComm;
+/// use tetraloma_comm::{CommDyn, CommExt};
+/// use tetraloma_comm_testing::ThreadComm;
 ///
 /// let sums = ThreadComm::run(3, |comm| comm.sum(comm.rank() as u64));
 /// assert_eq!(sums, [3, 3, 3]);
@@ -537,6 +542,24 @@ mod tests {
         #[test]
         fn neighbour_exchange_on_random_graphs(n in 1..=5_usize, seed in any::<u64>()) {
             ThreadComm::run(n, |comm| comm_checks::neighbour_exchange(&comm, seed));
+        }
+    }
+
+    #[test]
+    fn cpu_backend_detection_matches_unset_empty_and_cpu() {
+        assert!(is_cpu_backend(None));
+        assert!(is_cpu_backend(Some("")));
+        assert!(is_cpu_backend(Some("cpu")));
+        for non_cpu in [
+            "cuda",
+            "metal",
+            "vulkan",
+            "hip",
+            "wgpu",
+            "metal-native",
+            "unknown",
+        ] {
+            assert!(!is_cpu_backend(Some(non_cpu)), "{non_cpu}");
         }
     }
 

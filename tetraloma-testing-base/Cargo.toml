@@ -13,16 +13,20 @@ workspace = true
 
 [features]
 default = ["cpu"]
-# Runtime features forwarded to tetraloma-testing until M18.T7 reverses the dependency.
-cpu = ["tetraloma-testing/cpu"]
-cuda = ["tetraloma-testing/cuda"]
-hip = ["tetraloma-testing/hip"]
-vulkan = ["tetraloma-testing/vulkan"]
-metal = ["tetraloma-testing/metal"]
-metal-native = ["tetraloma-testing/metal-native"]
-wgpu = ["tetraloma-testing/wgpu"]
-mpi = ["tetraloma-testing/mpi"]
+# Runtime features, each the cubecl feature of the same name (docs/design.md, "Cargo features").
+cpu = ["cubecl/cpu"]
+cuda = ["cubecl/cuda"]
+hip = ["cubecl/hip"]
+vulkan = ["cubecl/vulkan"]
+metal = ["cubecl/metal"]
+metal-native = ["cubecl/metal-native"]
+wgpu = ["cubecl/wgpu"]
+# ThreadComm implements `CommDyn::raw`, which exists only under tetraloma-comm's `mpi`: turn
+# this on whenever MPI is enabled alongside tetraloma-testing-base.
+mpi = ["tetraloma-comm-testing/mpi", "tetraloma-parallel/mpi"]
 
 [dependencies]
-# Shim until M18.T7 moves the base test support here and drops this dependency.
-tetraloma-testing = { path = "../tetraloma-testing", default-features = false }
+cubecl.workspace = true
+tetraloma-comm-testing = { path = "../tetraloma-comm-testing" }
+tetraloma-device = { path = "../tetraloma-device", features = ["testing"] }
+tetraloma-parallel = { path = "../tetraloma-parallel" }

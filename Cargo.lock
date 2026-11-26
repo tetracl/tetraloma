@@ -4451,7 +4451,9 @@ dependencies = [
 name = "tetraloma-comm-testing"
 version = "0.1.0"
 dependencies = [
- "tetraloma-testing",
+ "mpi",
+ "proptest",
+ "tetraloma-comm",
 ]
 
 [[package]]
@@ -4587,7 +4589,6 @@ name = "tetraloma-testing"
 version = "0.1.0"
 dependencies = [
  "cubecl",
- "mpi",
  "proptest",
  "serde_json",
  "tetraloma",
@@ -4595,13 +4596,17 @@ dependencies = [
  "tetraloma-dims",
  "tetraloma-geometry",
  "tetraloma-refcell",
+ "tetraloma-testing-base",
 ]
 
 [[package]]
 name = "tetraloma-testing-base"
 version = "0.1.0"
 dependencies = [
- "tetraloma-testing",
+ "cubecl",
+ "tetraloma-comm-testing",
+ "tetraloma-device",
+ "tetraloma-parallel",
 ]
 
 [[package]]
