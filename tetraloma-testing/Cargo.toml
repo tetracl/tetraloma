@@ -24,10 +24,11 @@ metal-native = ["cubecl/metal-native", "tetraloma-testing-base/metal-native"]
 wgpu = ["cubecl/wgpu", "tetraloma-testing-base/wgpu"]
 # ThreadComm implements `CommDyn::raw`, which exists only under tetraloma-comm's `mpi`: turn
 # this on whenever tetraloma's `mpi` is on (tetraloma-mpi-tests does).
-mpi = ["tetraloma/mpi", "tetraloma-testing-base/mpi"]
+mpi = ["tetraloma/mpi", "tetraloma-testing-base/mpi", "dep:mpi"]
 
 [dependencies]
 cubecl.workspace = true
+mpi = { workspace = true, optional = true }
 tetraloma = { path = "../tetraloma" }
 tetraloma-testing-base = { path = "../tetraloma-testing-base", default-features = false }
 tetraloma-device = { path = "../tetraloma-device", features = ["testing"] }
