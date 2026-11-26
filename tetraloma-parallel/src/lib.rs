@@ -14,7 +14,8 @@
 //! - [`ParallelError`] and [`Result`] report errors of index maps and halo exchanges.
 //!
 //! Without the feature `mpi` the crate does not depend on MPI. The facade crate `tetraloma`
-//! re-exports all of it. The tutorials [Distributed
+//! re-exports its types and communicators; `tetraloma::Result` is the alias of `GridError`, not
+//! of [`ParallelError`]. The tutorials [Distributed
 //! meshes](https://tetracl.github.io/tetraloma/tutorials/distributed.html) and [Halo
 //! exchange](https://tetracl.github.io/tetraloma/tutorials/halo-exchange.html) show how to use
 //! it.

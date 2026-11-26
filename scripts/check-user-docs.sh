@@ -9,7 +9,8 @@
 #   --audit-only CRATE  only the API checks (c), (d) and (e), for CRATE's items
 #   --parmetis          the second audit: tetraloma-partition with `parmetis` instead of `metis`
 #                       (metis and parmetis exclude each other); builds its API and doctest list
-#                       into target/user-docs/parmetis and runs (c), (d) and (e) on it
+#                       into target/user-docs/parmetis and runs (c), (d), (e) and
+#                       scripts/check-foundation-names.sh on it
 #   --verbose           print every failure (they are always in target/user-docs/report.txt)
 #
 # Checks (scripts/doc_audit.py): (a) the site builds without warnings; (b) links and anchors

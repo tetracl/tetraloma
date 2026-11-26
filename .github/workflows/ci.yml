@@ -368,9 +368,9 @@ jobs:
           ln -sfn /usr/include/hdf5/openmpi "$root/include"
           ln -sfn "$(dirname "$so")" "$root/lib"
           echo "HDF5_DIR=$root" >> "$GITHUB_ENV"
-      # Checks (a)-(h). The steps after it run even if it fails, so one push reports them all.
+      # Checks (a)-(h) and the foundation public-name check (M18 A3). The steps after it run even if it fails, so one push reports them all.
       - run: scripts/check-user-docs.sh --verbose
-      # tetraloma-partition's API with parmetis instead of metis (ADR-0033): checks (c)-(e).
+      # tetraloma-partition's API with parmetis instead of metis (ADR-0033): checks (c)-(e) and the foundation public-name check (M18 A3).
       - if: ${{ !cancelled() }}
         run: scripts/check-user-docs.sh --parmetis --verbose
       # The book's Rust blocks (tetraloma-examples' doctest harness) on the CPU runtime.

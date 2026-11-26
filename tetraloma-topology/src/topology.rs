@@ -101,10 +101,9 @@ impl<TD: TopoDim> Topology<TD> {
     ///
     /// ```
     /// use tetraloma_device::{DeviceBuffer, DeviceStrided};
-    /// use tetraloma_topology::GridError;
     /// use tetraloma_dims::{Cell2, D2};
     /// use tetraloma_parallel::{IndexMap, Serial};
-    /// use tetraloma_topology::{CellBlock, Topology, encode_origin_ids};
+    /// use tetraloma_topology::{CellBlock, GridError, Topology, encode_origin_ids};
     ///
     /// // client: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
     /// # let client = tetraloma_testing::test_client();
@@ -574,10 +573,9 @@ impl<TD: TopoDim> Topology<TD> {
     ///
     /// ```
     /// use tetraloma_device::{DeviceBuffer, DeviceStrided};
-    /// use tetraloma_topology::GridError;
     /// use tetraloma_dims::{Cell1, D1};
     /// use tetraloma_parallel::{IndexMap, Serial};
-    /// use tetraloma_topology::{CellBlock, Topology, VertexSharers, encode_origin_ids};
+    /// use tetraloma_topology::{CellBlock, GridError, Topology, VertexSharers, encode_origin_ids};
     ///
     /// // client: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
     /// # let client = tetraloma_testing::test_client();
