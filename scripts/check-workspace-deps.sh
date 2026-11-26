@@ -6,18 +6,24 @@
 #   dependencies (rules 8 and 9; M11 A13, M18 A2);
 # - any crate in the --no-mesh list depends on a mesh crate of rule 9 across normal and build
 #   dependencies (M18 A1);
+# - any crate in the --element-only list depends in its normal or build dependencies on any
+#   crate outside {tetraloma-dims, tetraloma-refcell} (rule 8; M11 G11);
 # - any crate in the --foundation-only list depends in its normal dependencies on a workspace
 #   crate outside {tetraloma-comm, tetraloma-device, tetraloma-parallel, tetraloma-comm-testing,
 #   tetraloma-testing-base} (M18 A6).
 #
 # Usage: scripts/check-workspace-deps.sh [--no-cubecl CRATE]... [--no-mesh CRATE]...
-#                                        [--foundation-only CRATE]... [CARGO-TREE-ARGS...]
+#                                        [--element-only CRATE]... [--foundation-only CRATE]...
+#                                        [CARGO-TREE-ARGS...]
 #   --no-cubecl CRATE        add CRATE to the cubecl-free list (repeatable; default:
 #                            tetraloma-element, tetraloma-comm, tetraloma-partition); e.g.
 #                            `--no-cubecl tetraloma-geometry` must fail.
 #   --no-mesh CRATE          add CRATE to the mesh-free list (repeatable; default:
 #                            tetraloma-comm, tetraloma-device, tetraloma-parallel,
 #                            tetraloma-partition); e.g. `--no-mesh tetraloma-topology` must fail.
+#   --element-only CRATE     add CRATE to the rule-8 allowlist check (repeatable; default:
+#                            tetraloma-element); e.g. `--element-only tetraloma-topology` and
+#                            `--element-only tetraloma-comm` must fail.
 #   --foundation-only CRATE  add CRATE to the foundation-only list (repeatable; default: none).
 #   Extra arguments go to the workspace `cargo tree`; e.g. `--features tetraloma-mpi-tests/mpi`
 #   must fail.
@@ -31,6 +37,7 @@ cd "$(dirname "$script_path")/.."
 # Default lists; enabling tasks add their crates here.
 no_cubecl_crates=("tetraloma-element" "tetraloma-comm" "tetraloma-partition")
 no_mesh_crates=("tetraloma-comm" "tetraloma-device" "tetraloma-parallel" "tetraloma-partition") # widened to dev in M18.T7
+element_only_crates=("tetraloma-element")
 foundation_only_crates=() # pending M18.T7 (tetraloma-foundation-tests)
 tree_args=()
 
@@ -54,23 +61,24 @@ add_opt() {
     case "$opt" in
         --no-cubecl) has_item "$val" ${no_cubecl_crates[@]+"${no_cubecl_crates[@]}"} || no_cubecl_crates+=("$val") ;;
         --no-mesh) has_item "$val" ${no_mesh_crates[@]+"${no_mesh_crates[@]}"} || no_mesh_crates+=("$val") ;;
+        --element-only) has_item "$val" ${element_only_crates[@]+"${element_only_crates[@]}"} || element_only_crates+=("$val") ;;
         --foundation-only) has_item "$val" ${foundation_only_crates[@]+"${foundation_only_crates[@]}"} || foundation_only_crates+=("$val") ;;
     esac
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --no-cubecl | --no-mesh | --foundation-only)
+        --no-cubecl | --no-mesh | --element-only | --foundation-only)
             [[ $# -ge 2 ]] || add_opt "$1" ""
             add_opt "$1" "$2"
             shift 2
             ;;
-        --no-cubecl=* | --no-mesh=* | --foundation-only=*)
+        --no-cubecl=* | --no-mesh=* | --element-only=* | --foundation-only=*)
             add_opt "${1%%=*}" "${1#*=}"
             shift
             ;;
         -h | --help)
-            sed -n '2,23p' "$script_path" | sed 's/^# \{0,1\}//'
+            awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$script_path"
             exit 0
             ;;
         *)
@@ -107,6 +115,14 @@ for crate in ${no_mesh_crates[@]+"${no_mesh_crates[@]}"}; do
     report_hits "$crate depends on mesh crates (rule 9)" "$(grep -E "$mesh_re" <<<"$deps" || true)"
 done
 
+element_allowed_re='^tetraloma-(dims|refcell)$'
+for crate in ${element_only_crates[@]+"${element_only_crates[@]}"}; do
+    deps=$(cargo tree -p "$crate" --all-features --target all -e normal,build --prefix none --format '{p}' |
+        awk -v self="$crate" 'NF && $1 != self { print $1 }' | sort -u)
+    report_hits "$crate has disallowed normal/build dependencies (rule 8)" \
+        "$(grep -Ev "$element_allowed_re" <<<"$deps" | grep . || true)"
+done
+
 foundation_allowed_re='^tetraloma-(comm|device|parallel|comm-testing|testing-base)$'
 if [[ ${#foundation_only_crates[@]} -gt 0 ]]; then
     ws_crates=$(cargo tree --workspace --depth 0 --prefix none --format '{p}' | awk 'NF { print $1 }' | sort -u)
@@ -122,4 +138,4 @@ fi
 
 [[ "$failed" -eq 0 ]] || exit 3
 
-echo "check-workspace-deps: ok ($(wc -l <<<"$crates" | tr -d ' ') crates, none forbidden; free of cubecl: $(fmt_list ${no_cubecl_crates[@]+"${no_cubecl_crates[@]}"}); free of mesh: $(fmt_list ${no_mesh_crates[@]+"${no_mesh_crates[@]}"}); foundation-only: $(fmt_list ${foundation_only_crates[@]+"${foundation_only_crates[@]}"}))"
+echo "check-workspace-deps: ok ($(wc -l <<<"$crates" | tr -d ' ') crates, none forbidden; free of cubecl: $(fmt_list ${no_cubecl_crates[@]+"${no_cubecl_crates[@]}"}); free of mesh: $(fmt_list ${no_mesh_crates[@]+"${no_mesh_crates[@]}"}); element-only: $(fmt_list ${element_only_crates[@]+"${element_only_crates[@]}"}); foundation-only: $(fmt_list ${foundation_only_crates[@]+"${foundation_only_crates[@]}"}))"
