@@ -2,9 +2,7 @@
 //! Tensor-product factorisation of finite elements on quadrilaterals and hexahedra.
 
 use tetraloma_dims::CellType;
-use tetraloma_refcell::{
-    NodeFamily, gauss_rule, polyset, sub_entities, sub_entity_types, tdim, vertices,
-};
+use tetraloma_refcell::{NodeFamily, polyset, sub_entities, sub_entity_types, tdim, vertices};
 
 use crate::{Element, ElementError, ElementKey, ElementTabulation, Family, Variant, ciarlet};
 
@@ -146,17 +144,12 @@ impl TensorFactors {
 
         match kind {
             Factor1d::NodalH1(family) => {
-                let el = Element::get(ElementKey {
-                    family: Family::Lagrange,
-                    cell: CellType::Interval,
-                    degree,
-                    variant: Variant::Nodal(family),
-                })
-                .unwrap_or_else(|e| {
-                    panic!(
-                        "TensorFactors::tabulate_1d: unsupported 1D factor ({kind:?}, {degree}): {e}"
-                    )
-                });
+                let el = Element::get(interval_factor_key(degree, Variant::Nodal(family)))
+                    .unwrap_or_else(|e| {
+                        panic!(
+                            "TensorFactors::tabulate_1d: unsupported 1D factor ({kind:?}, {degree}): {e}"
+                        )
+                    });
                 let _ = num_derivs
                     .checked_mul(npts)
                     .and_then(|v| v.checked_mul(el.dim()))
@@ -166,17 +159,12 @@ impl TensorFactors {
                     .values
             }
             Factor1d::LegendreL2 => {
-                crate::layout::validate_key(ElementKey {
-                    family: Family::Lagrange,
-                    cell: CellType::Interval,
-                    degree,
-                    variant: Variant::Legendre,
-                })
-                .unwrap_or_else(|e| {
-                    panic!(
-                        "TensorFactors::tabulate_1d: unsupported 1D factor ({kind:?}, {degree}): {e}"
-                    )
-                });
+                crate::layout::validate_key(interval_factor_key(degree, Variant::Legendre))
+                    .unwrap_or_else(|e| {
+                        panic!(
+                            "TensorFactors::tabulate_1d: unsupported 1D factor ({kind:?}, {degree}): {e}"
+                        )
+                    });
                 let nb = polyset::dim(CellType::Interval, degree);
                 let len = num_derivs
                     .checked_mul(npts)
@@ -190,11 +178,7 @@ impl TensorFactors {
                 for d in 0..num_derivs {
                     let src = &poly[d * nb * npts..(d + 1) * nb * npts];
                     let dst = &mut out[d * npts * nb..(d + 1) * npts * nb];
-                    for b in 0..nb {
-                        for q in 0..npts {
-                            dst[q * nb + b] = src[b * npts + q];
-                        }
-                    }
+                    ciarlet::transpose_block(src, nb, npts, dst);
                 }
                 out
             }
@@ -204,6 +188,16 @@ impl TensorFactors {
                 )
             }
         }
+    }
+}
+
+/// The 1D interval Lagrange `ElementKey` backing a tensor factor of `degree` and `variant`.
+fn interval_factor_key(degree: u32, variant: Variant) -> ElementKey {
+    ElementKey {
+        family: Family::Lagrange,
+        cell: CellType::Interval,
+        degree,
+        variant,
     }
 }
 
@@ -276,12 +270,7 @@ pub(crate) fn build_lagrange_tensor_factors(
     let td = tdim(key.cell);
     let (factor1d, lexicographic) = match key.variant {
         Variant::Nodal(family) => {
-            let _ = Element::get(ElementKey {
-                family: Family::Lagrange,
-                cell: CellType::Interval,
-                degree: key.degree,
-                variant: Variant::Nodal(family),
-            })?;
+            let _ = Element::get(interval_factor_key(key.degree, key.variant))?;
             (
                 Factor1d::NodalH1(family),
                 nodal_lexicographic(key.cell, key.degree),
@@ -376,14 +365,6 @@ pub(crate) fn tabulate_lagrange(
     })
 }
 
-fn identity_matrix(dim: usize) -> Vec<f64> {
-    let mut id = vec![0.0; dim * dim];
-    for i in 0..dim {
-        id[i * dim + i] = 1.0;
-    }
-    id
-}
-
 /// Kronecker product `outer ⊗ inner` (row-major square matrices of sizes `n_out` and `n_in`),
 /// optionally permuting output rows via `row_map[lex] -> dof`.
 fn kronecker(
@@ -430,15 +411,10 @@ pub(crate) fn assemble_lagrange_coefficients(key: ElementKey, tf: &TensorFactors
     let td = tdim(key.cell);
     let n = key.degree as usize + 1;
     match key.variant {
-        Variant::Legendre => identity_matrix(n.pow(td as u32)),
-        Variant::Nodal(family) => {
-            let el_1d = Element::get(ElementKey {
-                family: Family::Lagrange,
-                cell: CellType::Interval,
-                degree: key.degree,
-                variant: Variant::Nodal(family),
-            })
-            .expect("1D interval element already validated");
+        Variant::Legendre => ciarlet::identity(n.pow(td as u32)),
+        Variant::Nodal(_) => {
+            let el_1d = Element::get(interval_factor_key(key.degree, key.variant))
+                .expect("1D interval element already validated");
             kronecker_power(el_1d.coefficients(), n, td, Some(&tf.lexicographic[0]))
         }
     }
@@ -448,23 +424,24 @@ pub(crate) fn assemble_lagrange_coefficients(key: ElementKey, tf: &TensorFactors
 /// element from its 1D factors.
 pub(crate) fn assemble_lagrange_interpolation_matrix(key: ElementKey, dim: usize) -> Vec<f64> {
     match key.variant {
-        Variant::Nodal(_) => identity_matrix(dim),
+        Variant::Nodal(_) => ciarlet::identity(dim),
         Variant::Legendre => {
             let td = tdim(key.cell);
-            let rule = gauss_rule(CellType::Interval, 2 * key.degree);
             let n = key.degree as usize + 1;
-            let m = rule.weights.len();
-            assert_eq!(
-                m,
+            let (pts, m1) = ciarlet::lagrange_interpolation(
+                CellType::Interval,
+                key.degree,
+                Variant::Legendre,
                 n,
-                "1D Gauss rule for degree {} must have {n} points, got {m}",
-                2 * key.degree
+            )
+            .expect("1D Legendre interpolation cannot fail");
+            assert_eq!(
+                pts.len(),
+                n,
+                "1D Gauss rule for degree {} must have {n} points, got {}",
+                2 * key.degree,
+                pts.len()
             );
-            let phi = polyset::tabulate(CellType::Interval, key.degree, &rule.points, 0);
-            let m1: Vec<f64> = phi
-                .chunks_exact(m)
-                .flat_map(|row| row.iter().zip(&rule.weights).map(|(&p, &w)| w * p))
-                .collect();
             kronecker_power(&m1, n, td, None)
         }
     }
@@ -810,5 +787,17 @@ mod tests {
     fn tabulate_1d_panics_on_bad_direction() {
         let el = Element::get(lagrange(CellType::Quadrilateral, 1, Variant::Legendre)).unwrap();
         let _ = el.tensor_factors().unwrap().tabulate_1d(0, 2, &[0.5], 0);
+    }
+
+    #[test]
+    fn interval_factor_key_builds_interval_lagrange_keys() {
+        assert_eq!(
+            interval_factor_key(3, Variant::Nodal(NodeFamily::Gll)),
+            lagrange(CellType::Interval, 3, Variant::Nodal(NodeFamily::Gll))
+        );
+        assert_eq!(
+            interval_factor_key(2, Variant::Legendre),
+            lagrange(CellType::Interval, 2, Variant::Legendre)
+        );
     }
 }
