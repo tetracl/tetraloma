@@ -111,8 +111,8 @@ fn same_device(a: &Client, b: &Client) -> bool {
 /// // `results`: `ring` called on each of two ranks, run as two threads of this process by a
 /// // test communicator, each with its own `client`. Under MPI, each process calls `ring` with
 /// // its `Mpi`.
-/// # let results = tetraloma_testing::ThreadComm::run(2, |comm| {
-/// #     ring(&comm, &tetraloma_testing::test_client()).unwrap()
+/// # let results = tetraloma_testing_base::ThreadComm::run(2, |comm| {
+/// #     ring(&comm, &tetraloma_testing_base::test_client()).unwrap()
 /// # });
 /// // Rank 0 owns global indices 0 and 1 and ghosts index 2; rank 1 owns 2 and 3 and ghosts 0.
 /// assert_eq!(results[0], (vec![1.0, 2.0, 3.0], vec![2.0, 2.0, 3.0]));
@@ -291,8 +291,8 @@ impl Scatterer {
     ///
     /// // `results`: `swap` called on each of two ranks, run as two threads of this process
     /// // by a test communicator. Under MPI, each process calls `swap` with its `Mpi`.
-    /// # let results = tetraloma_testing::ThreadComm::run(2, |comm| {
-    /// #     swap(&comm, &tetraloma_testing::test_client()).unwrap()
+    /// # let results = tetraloma_testing_base::ThreadComm::run(2, |comm| {
+    /// #     swap(&comm, &tetraloma_testing_base::test_client()).unwrap()
     /// # });
     /// assert_eq!(results, [vec![0u32, 1, 10, 11], vec![10, 11, 0, 1]]);
     /// ```
@@ -369,8 +369,8 @@ impl Scatterer {
     ///
     /// // `results`: `largest` called on each of two ranks, run as two threads of this process
     /// // by a test communicator. Under MPI, each process calls `largest` with its `Mpi`.
-    /// # let results = tetraloma_testing::ThreadComm::run(2, |comm| {
-    /// #     largest(&comm, &tetraloma_testing::test_client()).unwrap()
+    /// # let results = tetraloma_testing_base::ThreadComm::run(2, |comm| {
+    /// #     largest(&comm, &tetraloma_testing_base::test_client()).unwrap()
     /// # });
     /// // Each owner takes the larger of its value and its ghost's; ghosts are unchanged.
     /// assert_eq!(results, [vec![2, 1], vec![2, 2]]);
@@ -468,7 +468,7 @@ impl Scatterer {
     /// use tetraloma_parallel::{IndexMap, ParallelError, Serial, Transport};
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let scatterer = IndexMap::new(&Serial, 5)?.scatterer(&client, 1)?;
     /// assert_eq!(scatterer.transport(), Transport::HostStaged);
     /// # Ok::<(), ParallelError>(())

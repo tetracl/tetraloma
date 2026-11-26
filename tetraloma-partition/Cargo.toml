@@ -32,3 +32,5 @@ scotch-sys-bindgen = { workspace = true, optional = true }
 
 [dev-dependencies]
 proptest.workspace = true
+# With `ptscotch` or `parmetis` on, ThreadComm needs `tetraloma-comm-testing/mpi` too.
+tetraloma-comm-testing = { path = "../tetraloma-comm-testing" }

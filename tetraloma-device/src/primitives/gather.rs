@@ -80,7 +80,7 @@ fn scatter_kernel<T: Numeric>(
 /// use tetraloma_device::{DeviceBuffer, gather};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let src = DeviceBuffer::from_host(&client, &[10.0f32, 20.0, 30.0]).unwrap();
 /// let idx = DeviceBuffer::from_host(&client, &[2u32, 0, 0, 1]).unwrap();
 /// assert_eq!(gather(&src, &idx).unwrap().to_host().unwrap(), vec![30.0, 10.0, 10.0, 20.0]);
@@ -162,7 +162,7 @@ pub fn gather<T: DeviceScalar>(
 /// use tetraloma_device::{DeviceBuffer, scatter};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let src = DeviceBuffer::from_host(&client, &[1i32, 2, 3]).unwrap();
 /// let idx = DeviceBuffer::from_host(&client, &[3u32, 0, 7]).unwrap();
 /// let mut dst = DeviceBuffer::from_host(&client, &[0i32; 4]).unwrap();

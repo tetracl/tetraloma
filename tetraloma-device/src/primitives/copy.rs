@@ -41,7 +41,7 @@ fn copy_kernel<N: Size>(
 /// use tetraloma_device::{DeviceBuffer, copy};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let src = DeviceBuffer::from_host(&client, &[1.0f64, 2.0, 3.0]).unwrap();
 /// let mut dst = DeviceBuffer::<f64>::uninit(&client, 3).unwrap();
 /// copy(&src, &mut dst).unwrap();

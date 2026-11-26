@@ -177,7 +177,7 @@ impl IndexMap {
     ///
     /// // `maps`: `ring` called on each of two ranks, run as two threads of this process by a
     /// // test communicator. Under MPI, each process calls `ring` with its `Mpi`.
-    /// # let maps = tetraloma_testing::ThreadComm::run(2, |comm| {
+    /// # let maps = tetraloma_testing_base::ThreadComm::run(2, |comm| {
     /// #     let map = ring(&comm).unwrap();
     /// #     (map.owned_range(), map.ghosts().to_vec(), map.ghost_owners().to_vec(), map.size_global())
     /// # });
@@ -296,7 +296,7 @@ impl IndexMap {
     /// use tetraloma_parallel::{IndexMap, ParallelError, Serial, Transport};
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let map = IndexMap::new(&Serial, 4)?;
     /// // Three values per index: arrays of 3 · 4 values.
     /// let scatterer = map.scatterer(&client, 3)?;

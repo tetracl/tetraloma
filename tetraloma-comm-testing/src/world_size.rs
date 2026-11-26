@@ -20,8 +20,8 @@ pub const EXPECT_RANKS_VAR: &str = "TETRALOMA_EXPECT_RANKS";
 ///
 /// ```
 /// // Without TETRALOMA_EXPECT_RANKS any world size passes.
-/// # if std::env::var_os(tetraloma_testing::EXPECT_RANKS_VAR).is_none() {
-/// assert!(tetraloma_testing::check_world_size(3).is_ok());
+/// # if std::env::var_os(tetraloma_comm_testing::EXPECT_RANKS_VAR).is_none() {
+/// assert!(tetraloma_comm_testing::check_world_size(3).is_ok());
 /// # }
 /// ```
 pub fn check_world_size(size: usize) -> Result<(), String> {
@@ -41,7 +41,7 @@ pub fn check_world_size(size: usize) -> Result<(), String> {
 /// # Example
 ///
 /// ```
-/// use tetraloma_testing::check_world_size_against;
+/// use tetraloma_comm_testing::check_world_size_against;
 ///
 /// assert!(check_world_size_against(2, Some("2")).is_ok());
 /// assert!(check_world_size_against(1, None).is_ok());

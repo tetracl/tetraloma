@@ -63,7 +63,7 @@ mod sealed {
 /// }
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// assert_eq!(total(&DeviceBuffer::from_host(&client, &[1i32, 2, 3]).unwrap()), vec![6]);
 /// assert_eq!(total(&DeviceBuffer::from_host(&client, &[1u32, 2, 3]).unwrap()), vec![6]);
 /// ```

@@ -1,6 +1,6 @@
-//! Shared checks of [`Scatterer::forward`](tetraloma::Scatterer::forward) and
-//! [`Scatterer::reverse`](tetraloma::Scatterer::reverse) against a host reference on random ghost
-//! layouts (docs/plans/M18.md, T1; ADR-0075).
+//! Shared checks of [`Scatterer::forward`](tetraloma_parallel::Scatterer::forward) and
+//! [`Scatterer::reverse`](tetraloma_parallel::Scatterer::reverse) against a host reference on
+//! random ghost layouts (docs/plans/M18.md, T1; ADR-0075).
 //!
 //! `tetraloma/tests/scatter_threads.rs` and `tetraloma-foundation-tests` call these checks on
 //! [`ThreadComm`](crate::ThreadComm), and the `foundation_scatter` target of `tetraloma-mpi-tests`
@@ -8,10 +8,8 @@
 
 use std::fmt::Debug;
 
-use tetraloma::{
-    CommDyn, DeviceBuffer, IndexMap, ParallelError, ReverseOp, ScatterNumeric, Transport,
-};
-use tetraloma_device::Client;
+use tetraloma_device::{Client, DeviceBuffer};
+use tetraloma_parallel::{CommDyn, IndexMap, ParallelError, ReverseOp, ScatterNumeric, Transport};
 
 use crate::comm_checks::ghost_layout_sized;
 

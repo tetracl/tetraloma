@@ -1,6 +1,6 @@
 //! Shared proptest, vector-size and length helpers of the tetraloma-device acceptance tests.
 //!
-//! Host references and primitive checks live in `tetraloma_testing::primitive_checks` (M18 T1).
+//! Host references and primitive checks live in `tetraloma_testing_base::primitive_checks` (M18 T1).
 //! Every integration test file includes this module; not every file uses every helper.
 #![allow(dead_code, unused_macros, unused_imports)]
 
@@ -31,7 +31,7 @@ pub fn prop_len() -> impl proptest::strategy::Strategy<Value = usize> {
     prop_oneof![0usize..=64, 0usize..=PROP_MAX_LEN]
 }
 
-pub(crate) use tetraloma_testing::each_scalar;
+pub(crate) use tetraloma_testing_base::each_scalar;
 
 /// The vector sizes of the invariance tests: 1 plus every power of two from 2 to 16 no wider
 /// than the device's widest IO-optimized size for `elem_bytes`.

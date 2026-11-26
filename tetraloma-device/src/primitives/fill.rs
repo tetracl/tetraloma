@@ -36,7 +36,7 @@ fn fill_kernel<T: Numeric + LaunchArg<RuntimeArg = T>, N: Size>(
 /// use tetraloma_device::{DeviceBuffer, fill};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let mut x = DeviceBuffer::<i32>::uninit(&client, 5).unwrap();
 /// fill(&mut x, -3).unwrap();
 /// assert_eq!(x.to_host().unwrap(), vec![-3; 5]);

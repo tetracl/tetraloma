@@ -49,7 +49,9 @@ If the user named a target, use it.
 
 - The command from the task's plan section, the plan's acceptance table or Verification set, or
   the check tier of `AGENTS.md` that asks for the run. The job sets `TETRALOMA_TEST_DEVICE=cuda`;
-  add `--features tetraloma-testing/cuda` (docs/dev-environment.md, "Test commands").
+  add `--features tetraloma-testing/cuda` (or `--features tetraloma-testing-base/cuda` when
+  running foundation crates alone: `tetraloma-device`, `tetraloma-parallel`,
+  `tetraloma-foundation-tests`; docs/dev-environment.md, "Test commands").
   `tools/env-check/` runs with `cargo run --release --manifest-path tools/env-check/Cargo.toml --features cuda`.
   On `myriad-cpu` (and `kathleen`) the job sets `TETRALOMA_TEST_DEVICE=cpu`; add no CUDA feature.
 - `myriad-cpu`: always `--cores 36`. The CPU runtime's threads follow the job's slots, so a

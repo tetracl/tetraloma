@@ -56,7 +56,7 @@ fn segmented_kernel<T: Numeric>(
 /// use tetraloma_device::{DeviceBuffer, ReduceOp, segmented_reduce};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let values = DeviceBuffer::from_host(&client, &[1u32, 2, 3, 4, 5]).unwrap();
 /// let offsets = DeviceBuffer::from_host(&client, &[0u32, 2, 2, 5]).unwrap();
 /// let sums = segmented_reduce(&values, &offsets, ReduceOp::Sum).unwrap();

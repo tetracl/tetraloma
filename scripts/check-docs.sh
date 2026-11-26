@@ -6,8 +6,9 @@
 #   default    cargo doc at default features (CI: cpu job)
 #   libraries  with tetraloma/mpi,tetraloma/hdf5,tetraloma/scotch,tetraloma/ptscotch,tetraloma/metis (CI: the
 #              ptscotch job; needs MPI, a parallel HDF5, Scotch and PT-Scotch), and
-#              tetraloma-testing/mpi: with tetraloma/mpi, tetraloma-testing's ThreadComm builds only with
-#              it (CommDyn::raw)
+#              tetraloma-testing/mpi (which forwards to tetraloma-testing-base/mpi and
+#              tetraloma-comm-testing/mpi): with tetraloma/mpi, ThreadComm builds only with it
+#              (CommDyn::raw)
 #   (none)     both
 #
 # Exit status: 0 if every run passes, cargo's status otherwise.

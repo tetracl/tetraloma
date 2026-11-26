@@ -4445,13 +4445,16 @@ dependencies = [
  "bytemuck",
  "mpi",
  "proptest",
+ "tetraloma-comm-testing",
 ]
 
 [[package]]
 name = "tetraloma-comm-testing"
 version = "0.1.0"
 dependencies = [
- "tetraloma-testing",
+ "mpi",
+ "proptest",
+ "tetraloma-comm",
 ]
 
 [[package]]
@@ -4464,7 +4467,7 @@ dependencies = [
  "num-complex 0.4.6",
  "proptest",
  "tetraloma-comm",
- "tetraloma-testing",
+ "tetraloma-testing-base",
  "toml",
 ]
 
@@ -4556,7 +4559,7 @@ dependencies = [
  "proptest",
  "tetraloma-comm",
  "tetraloma-device",
- "tetraloma-testing",
+ "tetraloma-testing-base",
 ]
 
 [[package]]
@@ -4571,6 +4574,7 @@ dependencies = [
  "scotch",
  "scotch-sys",
  "tetraloma-comm",
+ "tetraloma-comm-testing",
 ]
 
 [[package]]
@@ -4595,13 +4599,18 @@ dependencies = [
  "tetraloma-dims",
  "tetraloma-geometry",
  "tetraloma-refcell",
+ "tetraloma-testing-base",
 ]
 
 [[package]]
 name = "tetraloma-testing-base"
 version = "0.1.0"
 dependencies = [
- "tetraloma-testing",
+ "cubecl",
+ "mpi",
+ "tetraloma-comm-testing",
+ "tetraloma-device",
+ "tetraloma-parallel",
 ]
 
 [[package]]

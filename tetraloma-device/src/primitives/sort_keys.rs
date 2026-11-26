@@ -21,7 +21,7 @@ use crate::device_error::{DeviceError, Result};
 /// use tetraloma_device::SortKeys;
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// // Two keys of two words, key-major: (1, 2) and (3, 4).
 /// let keys = SortKeys::from_host(&client, &[1, 2, 3, 4], 2).unwrap();
 /// assert_eq!((keys.len(), keys.num_words()), (2, 2));
@@ -57,7 +57,7 @@ impl SortKeys {
     /// use tetraloma_device::{SortKeys, VECTOR_PAD};
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let keys = SortKeys::uninit(&client, 5, 3).unwrap();
     /// assert_eq!(keys.words().len(), 3 * VECTOR_PAD);
     /// ```
@@ -88,7 +88,7 @@ impl SortKeys {
     /// use tetraloma_device::SortKeys;
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let keys = SortKeys::from_host(&client, &[7, 3, 5], 1).unwrap();
     /// assert_eq!(keys.to_host().unwrap(), vec![7, 3, 5]);
     /// ```
@@ -127,7 +127,7 @@ impl SortKeys {
     /// use tetraloma_device::SortKeys;
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let keys = SortKeys::from_host(&client, &[1, 0, 0, 9], 2).unwrap();
     /// assert_eq!(keys.to_host().unwrap(), vec![1, 0, 0, 9]);
     /// ```
@@ -150,7 +150,7 @@ impl SortKeys {
     /// use tetraloma_device::SortKeys;
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// // Three two-word keys, key-major on the host.
     /// assert_eq!(SortKeys::from_host(&client, &[1, 2, 3, 4, 5, 6], 2).unwrap().len(), 3);
     /// ```
@@ -167,7 +167,7 @@ impl SortKeys {
     /// use tetraloma_device::SortKeys;
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// assert_eq!(SortKeys::from_host(&client, &[1, 2, 3, 4, 5, 6], 2).unwrap().num_words(), 2);
     /// ```
     pub fn num_words(&self) -> usize {
@@ -184,7 +184,7 @@ impl SortKeys {
     /// use tetraloma_device::{SortKeys, VECTOR_PAD};
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// // Keys [1, 2] and [3, 4]: word 0 of every key comes first, then word 1.
     /// let keys = SortKeys::from_host(&client, &[1, 2, 3, 4], 2).unwrap();
     /// let planar = keys.words().to_host().unwrap();
@@ -205,7 +205,7 @@ impl SortKeys {
     /// use tetraloma_device::{SortKeys, fill};
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let mut keys = SortKeys::from_host(&client, &[5, 6, 7], 1).unwrap();
     /// fill(keys.words_mut(), 0u32).unwrap();
     /// assert_eq!(keys.to_host().unwrap(), vec![0, 0, 0]);

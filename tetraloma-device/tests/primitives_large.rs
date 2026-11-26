@@ -3,8 +3,8 @@
 use crate::common::LARGE_LENS;
 
 use tetraloma_device::*;
-use tetraloma_testing::primitive_checks::*;
-use tetraloma_testing::test_client;
+use tetraloma_testing_base::primitive_checks::*;
+use tetraloma_testing_base::test_client;
 
 #[test]
 fn fill_large() {

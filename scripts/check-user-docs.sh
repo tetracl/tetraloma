@@ -33,8 +33,9 @@ cd "$(dirname "$0")/.."
 # The features of the site (ADR-0067, rule 2), and of the parmetis audit.
 SITE_FEATURES="tetraloma/mpi,tetraloma/hdf5,tetraloma/scotch,tetraloma/ptscotch,tetraloma/metis"
 PARMETIS_FEATURES="tetraloma/mpi,tetraloma/hdf5,tetraloma/scotch,tetraloma/ptscotch,tetraloma/parmetis"
-# The doctests also build the dev-dependency tetraloma-testing, whose test communicator needs its
-# own `mpi` feature with tetraloma/mpi.
+# The doctests also build the test-support dev-dependencies, whose ThreadComm needs its `mpi`
+# feature with tetraloma/mpi; tetraloma-testing/mpi forwards to tetraloma-testing-base/mpi and
+# tetraloma-comm-testing/mpi when tetraloma is selected.
 DOCTEST_EXTRA="tetraloma-testing/mpi"
 
 SITE=${TETRALOMA_SITE_DIR:-site}
@@ -112,7 +113,7 @@ if [[ -n $parmetis ]]; then
         TETRALOMA_USER_DOCS_LOCKED=1 scripts/build-site.sh --api-only --out "$pwork/api" \
             --features "$PARMETIS_FEATURES" --crates tetraloma-partition --logs "$pwork/logs" || true
         list_doctests tetraloma-partition \
-            "tetraloma-partition/parmetis,tetraloma-partition/scotch,tetraloma-partition/ptscotch" \
+            "tetraloma-partition/parmetis,tetraloma-partition/scotch,tetraloma-partition/ptscotch,tetraloma-comm-testing/mpi" \
             "$pwork/doctests"
     fi
     rc=0

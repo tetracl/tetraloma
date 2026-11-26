@@ -1,6 +1,6 @@
 [package]
 name = "tetraloma-comm-testing"
-description = "Host-only test support below the mesh: threaded communicator and rank-count guard"
+description = "Host-only test support below the mesh: threaded communicator, communicator checks and rank-count guard"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,9 +12,13 @@ publish = false
 workspace = true
 
 [features]
-# Forwards tetraloma-testing's `mpi` feature for `CommDyn::raw` on `ThreadComm` until M18.T7.
-mpi = ["tetraloma-testing/mpi"]
+# ThreadComm implements `CommDyn::raw`, which exists only under tetraloma-comm's `mpi`: turn
+# this on whenever tetraloma-comm's `mpi` is on.
+mpi = ["tetraloma-comm/mpi", "dep:mpi"]
 
 [dependencies]
-# Shim until M18.T7 moves ThreadComm and the rank-count guard here and drops this dependency.
-tetraloma-testing = { path = "../tetraloma-testing", default-features = false }
+tetraloma-comm = { path = "../tetraloma-comm" }
+mpi = { workspace = true, optional = true }
+
+[dev-dependencies]
+proptest.workspace = true

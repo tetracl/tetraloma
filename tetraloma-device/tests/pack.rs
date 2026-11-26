@@ -7,8 +7,8 @@ use common::*;
 use cubecl::prelude::*;
 use proptest::prelude::*;
 use tetraloma_device::*;
-use tetraloma_testing::primitive_checks::*;
-use tetraloma_testing::test_client;
+use tetraloma_testing_base::primitive_checks::*;
+use tetraloma_testing_base::test_client;
 
 /// `n` distinct indices below `m` (n <= m), in random order.
 fn distinct(n: usize, m: usize, rng: &mut SplitMix) -> Vec<u32> {

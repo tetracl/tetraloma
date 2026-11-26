@@ -36,7 +36,7 @@ const MAX_KERNEL_BUFFERS: u32 = 6;
 /// use tetraloma_device::{KernelKind, LaunchPlan};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let plan = LaunchPlan::elementwise(&client, KernelKind::Fill, 1_000_000, 4, 16, 1).unwrap();
 /// let cubes = match plan.cube_count {
 ///     cubecl::prelude::CubeCount::Static(x, y, z) => (x * y * z) as u64,
@@ -100,7 +100,7 @@ impl LaunchPlan {
     /// use tetraloma_device::{KernelKind, LaunchPlan, VECTOR_PAD};
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// // 100 items pad to 112 = 7 · VECTOR_PAD scalars, whatever the vector size.
     /// let plan = LaunchPlan::elementwise(&client, KernelKind::Copy, 100, 4, VECTOR_PAD, 2).unwrap();
     /// assert_eq!(plan.num_vectors as usize * plan.vector_size, 7 * VECTOR_PAD);
@@ -182,7 +182,7 @@ impl LaunchPlan {
     /// use tetraloma_device::{KernelKind, LaunchPlan};
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// // 1000 cells, up to 48 units per cell, 1 KiB of shared memory per cube.
     /// let plan = LaunchPlan::per_group(&client, KernelKind::GeomFactors, 1000, 48, 4, 16, 2, 1024)
     ///     .unwrap();
@@ -503,7 +503,7 @@ fn spread_cubes(cubes: usize, max: (u32, u32, u32)) -> Result<(u32, u32, u32)> {
 /// use tetraloma_device::debug_assert_bindings;
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// debug_assert_bindings(&client, 4);
 /// ```
 pub fn debug_assert_bindings(client: &Client, n: u32) {
@@ -521,7 +521,7 @@ mod tests {
     use super::*;
 
     fn props() -> DeviceProperties {
-        tetraloma_testing::test_client().properties().clone()
+        tetraloma_testing_base::test_client().properties().clone()
     }
 
     #[test]
@@ -631,7 +631,7 @@ mod tests {
         }
         let plan = testing::with_kind_vector_size(KernelKind::Scalar, Fixed(4), || {
             LaunchPlan::elementwise(
-                &tetraloma_testing::test_client(),
+                &tetraloma_testing_base::test_client(),
                 KernelKind::Scalar,
                 1000,
                 4,

@@ -10,12 +10,12 @@ use cubecl::prelude::*;
 use proptest::prelude::*;
 use tetraloma_device::copy;
 use tetraloma_device::*;
-use tetraloma_testing::primitive_checks::{
+use tetraloma_testing_base::primitive_checks::{
     OPS, SplitMix, TestScalar, any_vec, assert_bits, assert_scan, assert_value, bounded_vec,
     random_keys, random_offsets, reduce_input, reference_inclusive_scan, reference_reduce,
     reference_runs, reference_segmented, reference_sort, run_keys, upload, upload_keys,
 };
-use tetraloma_testing::test_client;
+use tetraloma_testing_base::test_client;
 
 fn check_fill<T: TestScalar>(client: &Client, len: usize, seed: u64) {
     let mut rng = SplitMix::new(seed);

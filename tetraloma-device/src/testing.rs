@@ -1,5 +1,6 @@
 //! Test hooks (ADR-0009). Only with the Cargo feature `testing`, which is off by default and not
-//! part of the stable API; tetraloma-testing turns it on for every workspace test.
+//! part of the stable API; tetraloma-testing-base and tetraloma-testing turn it on for every
+//! workspace test.
 //!
 //! The overrides are scoped and thread-local, because tetraloma runs one host thread per mesh.
 //! Precedence: the scoped per-kind override, then the scoped override, then the environment
@@ -50,7 +51,7 @@ thread_local! {
 /// use tetraloma_device::device_properties;
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let props = device_properties(&client);
 /// assert_eq!(props.memory.max_page_size, client.properties().memory.max_page_size);
 /// ```
@@ -174,7 +175,7 @@ fn scoped<T: 'static, R>(
 /// use tetraloma_device::testing::with_properties;
 /// use tetraloma_device::{DeviceBuffer, DeviceError};
 ///
-/// let client = tetraloma_testing::test_client();
+/// let client = tetraloma_testing_base::test_client();
 /// let mut props = client.properties().clone();
 /// props.memory.max_page_size = 1024;
 /// with_properties(props, || {
@@ -200,7 +201,7 @@ pub fn with_properties<R>(props: DeviceProperties, f: impl FnOnce() -> R) -> R {
 /// use tetraloma_device::testing::with_vector_size;
 /// use tetraloma_device::{KernelKind, LaunchPlan, VectorSizeOverride};
 ///
-/// let client = tetraloma_testing::test_client();
+/// let client = tetraloma_testing_base::test_client();
 /// let plan = with_vector_size(VectorSizeOverride::Fixed(2), || {
 ///     LaunchPlan::elementwise(&client, KernelKind::Copy, 100, 4, 16, 1)
 /// })
@@ -226,7 +227,7 @@ pub fn with_vector_size<R>(v: VectorSizeOverride, f: impl FnOnce() -> R) -> R {
 /// use tetraloma_device::VectorPolicy;
 /// use tetraloma_device::testing::with_quad_tile;
 ///
-/// let client = tetraloma_testing::test_client();
+/// let client = tetraloma_testing_base::test_client();
 /// assert_eq!(with_quad_tile(4, || VectorPolicy::for_client(&client).quad_tile(8)), 4);
 /// ```
 #[cfg(feature = "testing")]
@@ -249,7 +250,7 @@ pub fn with_quad_tile<R>(tile: usize, f: impl FnOnce() -> R) -> R {
 /// use tetraloma_device::testing::{with_kind_vector_size, with_vector_size};
 /// use tetraloma_device::{KernelKind, LaunchPlan, VectorSizeOverride};
 ///
-/// let client = tetraloma_testing::test_client();
+/// let client = tetraloma_testing_base::test_client();
 /// let plan = |kind| LaunchPlan::elementwise(&client, kind, 100, 4, 16, 1).unwrap().vector_size;
 /// let (sort, scan) = with_vector_size(VectorSizeOverride::Fixed(2), || {
 ///     with_kind_vector_size(KernelKind::SortDigits, VectorSizeOverride::Scalar, || {
@@ -290,7 +291,7 @@ pub fn with_kind_vector_size<R>(
 /// use tetraloma_device::testing::with_cpu_block_bytes;
 /// use tetraloma_device::{DeviceClass, KernelKind, VectorPolicy};
 ///
-/// let client = tetraloma_testing::test_client();
+/// let client = tetraloma_testing_base::test_client();
 /// let block = with_cpu_block_bytes(64 << 10, || {
 ///     VectorPolicy::for_client(&client).cpu_block_bytes(KernelKind::Gather, 8)
 /// });
@@ -317,7 +318,7 @@ pub fn with_cpu_block_bytes<R>(bytes: usize, f: impl FnOnce() -> R) -> R {
 /// use tetraloma_device::testing::{with_cpu_units, with_performance_cores};
 /// use tetraloma_device::{CpuUnits, DeviceClass, KernelKind, LaunchPlan};
 ///
-/// let client = tetraloma_testing::test_client();
+/// let client = tetraloma_testing_base::test_client();
 /// let all = LaunchPlan::elementwise(&client, KernelKind::Reduce, 1 << 20, 4, 16, 1).unwrap();
 /// let plan = with_performance_cores(Some(1), || {
 ///     with_cpu_units(CpuUnits::Performance, || {
@@ -343,7 +344,7 @@ pub fn with_cpu_units<R>(units: CpuUnits, f: impl FnOnce() -> R) -> R {
 /// use tetraloma_device::testing::{with_cpu_units, with_performance_cores};
 /// use tetraloma_device::{CpuUnits, KernelKind, LaunchPlan};
 ///
-/// let client = tetraloma_testing::test_client();
+/// let client = tetraloma_testing_base::test_client();
 /// let units = |cores| {
 ///     with_performance_cores(cores, || {
 ///         with_cpu_units(CpuUnits::Performance, || {
@@ -375,7 +376,7 @@ pub fn with_performance_cores<R>(cores: Option<u32>, f: impl FnOnce() -> R) -> R
 /// use tetraloma_device::testing::record_plans;
 /// use tetraloma_device::{KernelKind, LaunchPlan};
 ///
-/// let client = tetraloma_testing::test_client();
+/// let client = tetraloma_testing_base::test_client();
 /// let (_, plans) = record_plans(|| LaunchPlan::elementwise(&client, KernelKind::Reduce, 64, 4, 16, 2));
 /// assert_eq!(plans.len(), 1);
 /// assert_eq!(plans[0].0, KernelKind::Reduce);

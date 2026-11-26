@@ -4,8 +4,8 @@
 #   (docs/design.md, "Dependency rules" 5 and 6; M0 acceptance);
 # - any crate in the --no-cubecl list depends on any cubecl crate across normal, build and dev
 #   dependencies (rules 8 and 9; M11 A13, M18 A2);
-# - any crate in the --no-mesh list depends on a mesh crate of rule 9 across normal and build
-#   dependencies (M18 A1);
+# - any crate in the --no-mesh list depends on a mesh crate of rule 9 across normal, build and dev
+#   dependencies (M18 A1, T7);
 # - any crate in the --element-only list depends anywhere in its normal or build dependency tree
 #   on any crate outside {tetraloma-dims, tetraloma-refcell} (rule 8; M11 G11);
 # - any crate in the --foundation-only list depends in its normal dependencies on a workspace
@@ -24,7 +24,9 @@
 #   --element-only CRATE     add CRATE to the rule-8 allowlist check (repeatable; default:
 #                            tetraloma-element); e.g. `--element-only tetraloma-topology` and
 #                            `--element-only tetraloma-comm` must fail.
-#   --foundation-only CRATE  add CRATE to the foundation-only list (repeatable; default: none).
+#   --foundation-only CRATE  add CRATE to the foundation-only list (repeatable; default:
+#                            tetraloma-foundation-tests); e.g. `--foundation-only tetraloma-testing`
+#                            must fail.
 #   Extra arguments go to the workspace `cargo tree`; e.g. `--features tetraloma-mpi-tests/mpi`
 #   must fail.
 #
@@ -36,9 +38,9 @@ cd "$(dirname "$script_path")/.."
 
 # Default lists; enabling tasks add their crates here.
 no_cubecl_crates=("tetraloma-element" "tetraloma-comm" "tetraloma-partition")
-no_mesh_crates=("tetraloma-comm" "tetraloma-device" "tetraloma-parallel" "tetraloma-partition") # widened to dev in M18.T7
+no_mesh_crates=("tetraloma-comm" "tetraloma-device" "tetraloma-parallel" "tetraloma-partition")
 element_only_crates=("tetraloma-element")
-foundation_only_crates=() # pending M18.T7 (tetraloma-foundation-tests)
+foundation_only_crates=("tetraloma-foundation-tests")
 tree_args=()
 
 has_item() {
@@ -110,7 +112,7 @@ done
 
 mesh_re='^(tetraloma|tetraloma-(dims|refcell|topology|geometry|io|element|function))$'
 for crate in ${no_mesh_crates[@]+"${no_mesh_crates[@]}"}; do
-    deps=$(cargo tree -p "$crate" --all-features --target all -e normal,build --prefix none --format '{p}' |
+    deps=$(cargo tree -p "$crate" --all-features --target all -e normal,build,dev --prefix none --format '{p}' |
         awk -v self="$crate" 'NF && $1 != self { print $1 }' | sort -u)
     report_hits "$crate depends on mesh crates (rule 9)" "$(grep -E "$mesh_re" <<<"$deps" || true)"
 done

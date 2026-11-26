@@ -400,7 +400,7 @@ enum Scheme {
 /// use tetraloma_device::{DeviceBuffer, SortKeys, radix_sort};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// // Keys of two words, key-major: (1, 5), (0, 9), (1, 2), (0, 9).
 /// let keys = SortKeys::from_host(&client, &[1, 5, 0, 9, 1, 2, 0, 9], 2).unwrap();
 /// let payload = DeviceBuffer::from_host(&client, &[0u32, 1, 2, 3]).unwrap();
@@ -431,7 +431,7 @@ pub fn radix_sort(
 /// use tetraloma_device::{DeviceBuffer, SortKeys, radix_sort_owned};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let keys = SortKeys::from_host(&client, &[1, 5, 0, 9, 1, 2, 0, 9], 2).unwrap();
 /// let payload = DeviceBuffer::from_host(&client, &[0u32, 1, 2, 3]).unwrap();
 /// let (sorted, perm) = radix_sort_owned(keys, payload).unwrap();
