@@ -2,10 +2,11 @@
 //! them, then the ghosts by (owner rank, global index), applied to entity → vertex and
 //! cell → entity.
 
+use crate::{GridError, Result};
 use cubecl::prelude::*;
 use tetraloma_device::{
-    DeviceBuffer, GridError, KernelKind, LaunchPlan, ReduceOp, Result, SortKeys,
-    debug_assert_bindings, fill, gather, radix_sort, scatter, segmented_reduce,
+    DeviceBuffer, KernelKind, LaunchPlan, ReduceOp, SortKeys, debug_assert_bindings, fill, gather,
+    radix_sort, scatter, segmented_reduce,
 };
 
 use crate::emission::EmissionPlan;

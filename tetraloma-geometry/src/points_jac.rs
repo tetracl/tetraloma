@@ -1,7 +1,8 @@
 //! The physical-points and Jacobian kernels and their launchers (Listing B5).
 
-use tetraloma_device::{Real, Result};
+use tetraloma_device::Real;
 use tetraloma_dims::{Dim, EmbeddedIn, TopoDim};
+use tetraloma_topology::Result;
 
 use crate::layout::{Factor, launch_factor};
 use crate::{DeviceGrid, JacShape, PointSet, QuadField, VecShape};

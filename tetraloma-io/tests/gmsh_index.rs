@@ -9,8 +9,8 @@ use std::ops::Range;
 use std::path::{Path, PathBuf};
 
 use common::{Fixture, manifest};
-use tetraloma_device::GridError;
 use tetraloma_io::gmsh::{self, ElementBlock, MshFile, MshIndex};
+use tetraloma_topology::GridError;
 
 /// The even chunk r of P over n items.
 fn chunk(n: usize, r: usize, p: usize) -> Range<usize> {

@@ -31,7 +31,7 @@
 //! let mut bytes = Vec::new();
 //! file.write_to(&mut bytes, Binary::Appended, false)?;
 //! assert_eq!(parse_vtu(&bytes)?, file);
-//! # Ok::<(), tetraloma_device::GridError>(())
+//! # Ok::<(), tetraloma_topology::GridError>(())
 //! ```
 //!
 //! [Reading and writing files]: https://tetracl.github.io/tetraloma/tutorials/read-write.html#writing-vtu

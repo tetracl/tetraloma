@@ -6,7 +6,8 @@
 //! cell-fastest connectivity copy included, and returns the outputs in an opaque owner, so the
 //! caller can sync, time and drop them.
 
-use tetraloma_device::{DeviceBuffer, GridError, Result};
+use crate::{GridError, Result};
+use tetraloma_device::DeviceBuffer;
 use tetraloma_dims::TopoDim;
 
 use crate::Topology;

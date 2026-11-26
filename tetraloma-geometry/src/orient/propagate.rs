@@ -26,12 +26,10 @@
 //! non-orientable (the two cells of a facet carry one label after convergence).
 
 use cubecl::prelude::*;
-use tetraloma_device::{
-    DeviceBuffer, DeviceStrided, GridError, Result, debug_assert_bindings, fill,
-};
+use tetraloma_device::{DeviceBuffer, DeviceStrided, debug_assert_bindings, fill};
 use tetraloma_dims::TopoDim;
 use tetraloma_parallel::{CommDyn, CommExt, Scatterer};
-use tetraloma_topology::CellBlock;
+use tetraloma_topology::{CellBlock, GridError, Result};
 
 use super::parity::{NONE, Neighbours, SideExchange, fit, plan};
 

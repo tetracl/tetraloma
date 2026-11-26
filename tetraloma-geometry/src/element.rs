@@ -1,9 +1,10 @@
 //! `CoordinateElement` and `GeometryBlock` (Listing B3; tetraloma-geometry, re-exported by tetraloma).
 
-use tetraloma_device::{DeviceStrided, Result};
+use tetraloma_device::DeviceStrided;
 use tetraloma_dims::CellType;
 use tetraloma_dims::TopoDim;
 use tetraloma_refcell::NodeFamily;
+use tetraloma_topology::Result;
 
 // Design: "Geometry", Listing B3.
 /// The coordinate element of a cell block: its cell type, the polynomial degree p of its

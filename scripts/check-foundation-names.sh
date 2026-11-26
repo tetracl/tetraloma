@@ -28,7 +28,6 @@ caller_pwd=$PWD
 script_path="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 cd "$(dirname "$script_path")/.."
 
-# pending M18.T6: enable in CI `cpu` and `scripts/check-user-docs.sh`.
 DEFAULT_CRATES="tetraloma-comm,tetraloma-device,tetraloma-parallel,tetraloma-partition"
 PYTHON=${TETRALOMA_PYTHON:-python3}
 die() { echo "check-foundation-names: $*" >&2; exit 2; }

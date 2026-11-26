@@ -6,9 +6,9 @@ mod direction;
 mod parity;
 mod propagate;
 
-use tetraloma_device::{DeviceBuffer, DeviceStrided, Real, Result};
+use tetraloma_device::{DeviceBuffer, DeviceStrided, Real};
 use tetraloma_dims::{Codim1, Dim, TopoDim};
-use tetraloma_topology::{facet_cells_of_parts, facet_rows};
+use tetraloma_topology::{Result, facet_cells_of_parts, facet_rows};
 
 use crate::DeviceGrid;
 use parity::{Neighbours, SideExchange};

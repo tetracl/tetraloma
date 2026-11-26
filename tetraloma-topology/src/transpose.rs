@@ -8,10 +8,10 @@
 //! it. It is an indirect copy, so it is scalar and plans as `KernelKind::Scalar`; its time
 //! counts towards the family, because the `bench` hooks time the whole sequence.
 
+use crate::{GridError, Result};
 use cubecl::prelude::*;
 use tetraloma_device::{
-    DeviceBuffer, DeviceStrided, GridError, KernelKind, LaunchPlan, Result, debug_assert_bindings,
-    pad_len,
+    DeviceBuffer, DeviceStrided, KernelKind, LaunchPlan, debug_assert_bindings, pad_len,
 };
 
 /// Cell-major rows to vertex planes: `out[j · padded + c] = rows[min(c, cells − 1) · nv + j]`

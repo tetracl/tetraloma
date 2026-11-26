@@ -28,9 +28,9 @@
 //! bitwise equal across vector sizes on the CPU runtime.
 
 use cubecl::prelude::*;
-use tetraloma_device::Result;
 use tetraloma_dims::CellType;
 use tetraloma_refcell::{LagrangeElement, NodeFamily};
+use tetraloma_topology::Result;
 
 use super::tensor::{bc, int};
 use super::{permutation, prism_permutation};

@@ -1,8 +1,8 @@
 //! The Gmsh element table (A.7), generated from A.7's type-id lists and tetraloma-refcell's node
 //! counts.
 
-use tetraloma_device::{GridError, Result};
 use tetraloma_dims::CellType;
+use tetraloma_topology::{GridError, Result};
 
 use super::FORMAT;
 
@@ -19,7 +19,7 @@ use super::FORMAT;
 ///
 /// let ty = element_type(118)?;
 /// assert_eq!((ty.cell, ty.degree, ty.num_nodes, ty.serendipity), (CellType::Pyramid, 3, 30, false));
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [File formats]: https://tetracl.github.io/tetraloma/elements/file-formats.html#gmsh
@@ -105,7 +105,7 @@ fn lagrange(cell: CellType, ids: &[i32], degree: u32) -> Option<ElementType> {
 /// # Example
 ///
 /// ```
-/// use tetraloma_device::GridError;
+/// use tetraloma_topology::GridError;
 /// use tetraloma_dims::CellType;
 /// use tetraloma_io::gmsh::element_type;
 ///
@@ -157,7 +157,7 @@ pub fn element_type(id: i32) -> Result<ElementType> {
 /// assert_eq!(lagrange_element_type(CellType::Triangle, 2)?.id, 9);
 /// assert_eq!(lagrange_element_type(CellType::Hexahedron, 9)?.num_nodes, 1000);
 /// assert!(lagrange_element_type(CellType::Hexahedron, 10).is_err());
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [File formats]: https://tetracl.github.io/tetraloma/elements/file-formats.html#gmsh

@@ -1,4 +1,4 @@
-// Design: "Topology construction on the device"; ADR-0012.
+// Design: "Topology construction on the device"; ADR-0012, ADR-0074.
 //! The topology of a mesh on the device: cell and entity blocks, sort-based entity creation,
 //! connectivity, the owners of shared entities and permutation bits.
 //!
@@ -8,6 +8,9 @@
 //! [`Topology::create_connectivity`]. Most programs never build a `Topology` themselves: a
 //! `tetraloma::Mesh` owns one and offers these operations as its own methods, and the facade
 //! crate `tetraloma` re-exports [`CellBlock`], [`EntityBlock`] and [`Connectivity`].
+//!
+//! This crate also defines [`GridError`], [`Result`] and [`ConnKey`], which `tetraloma`
+//! re-exports.
 //!
 //! Origin ids live on the device as interleaved (hi ^ 0x8000_0000, lo) u32 pairs
 //! ([`encode_origin_ids`]), so unsigned pair order equals i64 order.
@@ -41,6 +44,7 @@ mod cell_block;
 mod connectivity;
 mod emission;
 mod entity;
+mod error;
 mod facet_cells;
 mod keys;
 mod matching;
@@ -54,9 +58,9 @@ mod transpose;
 
 pub use cell_block::CellBlock;
 pub use entity::{Connectivity, EntityBlock};
+pub use error::{ConnKey, GridError, Result};
 #[doc(hidden)]
 pub use facet_cells::{FacetCells, facet_cell_counts, facet_cells_of_parts, facet_rows};
 pub use origin::{decode_origin_ids, encode_origin_ids, origin_ids_fit_u32};
 pub use sharers::VertexSharers;
-pub use tetraloma_device::ConnKey;
 pub use topology::Topology;

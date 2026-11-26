@@ -11,10 +11,11 @@
 
 use std::collections::HashMap;
 
+use crate::{GridError, Result};
 use cubecl::prelude::*;
 use tetraloma_device::{
-    DeviceBuffer, GridError, KernelKind, LaunchPlan, ReduceOp, Result, SortKeys,
-    debug_assert_bindings, exclusive_scan, reduce,
+    DeviceBuffer, KernelKind, LaunchPlan, ReduceOp, SortKeys, debug_assert_bindings,
+    exclusive_scan, reduce,
 };
 use tetraloma_parallel::{CommDyn, CommExt, Neighbourhood, owner_hash};
 

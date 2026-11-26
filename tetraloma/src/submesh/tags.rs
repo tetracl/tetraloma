@@ -7,8 +7,9 @@
 
 use cubecl::prelude::*;
 use tetraloma_device::{
-    DeviceBuffer, ReduceOp, Result, debug_assert_bindings, exclusive_scan, fill, reduce, scatter,
+    DeviceBuffer, ReduceOp, debug_assert_bindings, exclusive_scan, fill, reduce, scatter,
 };
+use tetraloma_topology::Result;
 
 use super::{fit, plan};
 use crate::{EntityMap, MeshTags, TagRegistry};

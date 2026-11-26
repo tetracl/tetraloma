@@ -1,11 +1,12 @@
 //! `FacetPointSet` and `FacetQuadRule` (Listing B4b; ADR-0012).
 
 use cubecl::prelude::Client;
-use tetraloma_device::{DeviceBuffer, GridError, Real, Result, check_precision};
+use tetraloma_device::{DeviceBuffer, Real, check_precision};
 use tetraloma_dims::{CellType, TopoDim};
 use tetraloma_refcell::{
     facet_points_to_cell, gauss_rule, reference_facet_normals, sub_entity_types,
 };
+use tetraloma_topology::{GridError, Result};
 
 use crate::names::cell_name;
 use crate::rule::distinct;
@@ -283,7 +284,7 @@ impl<F: Real, TD: TopoDim> FacetQuadRule<F, TD> {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_device::GridError;
+    /// use tetraloma_topology::GridError;
     /// use tetraloma_dims::{Cell2, D2};
     /// use tetraloma_geometry::FacetQuadRule;
     ///

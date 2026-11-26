@@ -35,10 +35,10 @@ pub(crate) mod upload;
 
 use cubecl::MemoryScope;
 use cubecl::prelude::Client;
-use tetraloma_device::{GridError, Result};
 use tetraloma_dims::CellType;
 use tetraloma_geometry::NodeFamily;
 use tetraloma_parallel::{CommDyn, CommExt};
+use tetraloma_topology::{GridError, Result};
 
 /// The agreed result of a collective step (ADR-0026, item 15): a failing rank returns its own
 /// error, every other rank `RemoteFailure` with the lowest failing rank. Collective.

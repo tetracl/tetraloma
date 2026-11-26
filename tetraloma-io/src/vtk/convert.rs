@@ -1,7 +1,7 @@
 //! A host mesh description to the file model.
 
-use tetraloma_device::{GridError, Result};
 use tetraloma_dims::CellType;
+use tetraloma_topology::{GridError, Result};
 
 use super::cell_type::{cell_name, written_linear};
 use super::{DataValues, VtkMesh, VtuFile, vtk_cell_type};
@@ -108,7 +108,7 @@ fn vtk_order(cell: CellType, degree: u32, linear: bool) -> Result<Vec<usize>> {
 /// let mut bad = mesh.clone();
 /// bad.blocks[0].nodes[8] = 9;
 /// assert!(to_vtu(&bad, true, false).is_err());
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [Writing VTU]: https://tetracl.github.io/tetraloma/tutorials/read-write.html#writing-vtu

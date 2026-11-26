@@ -9,7 +9,7 @@ use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use tetraloma_device::{GridError, Result};
+use tetraloma_topology::{GridError, Result};
 
 use super::parse::{Binary, format_of, small_section};
 use super::{BlockHeader, ElementBlock, FORMAT, MshFile, element_type};
@@ -70,7 +70,7 @@ struct ElementBlockAt {
 /// let file = read_file(path)?;
 /// let all: Vec<i64> = file.element_blocks.iter().filter(|b| b.dim == 2).flat_map(|b| b.tags.clone()).collect();
 /// assert_eq!(tags, all[n / 2..]);
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [Reading Gmsh in parallel]: https://tetracl.github.io/tetraloma/tutorials/parallel-io.html#reading-gmsh-in-parallel
@@ -98,7 +98,7 @@ pub struct MshIndex {
 /// let path = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/gmsh/interval_p1-binary.msh"));
 /// let chunk = MshIndex::scan(path)?.read_nodes(0..2)?;
 /// assert_eq!((chunk.tags.len(), chunk.coords.len()), (2, 2));
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [Reading Gmsh in parallel]: https://tetracl.github.io/tetraloma/tutorials/parallel-io.html#reading-gmsh-in-parallel
@@ -122,7 +122,7 @@ pub struct NodeChunk {
 /// let chunk = MshIndex::scan(path)?.read_elements(1, 0..1)?;
 /// // One 2-node line (type 1).
 /// assert_eq!((chunk.blocks[0].element_type, chunk.blocks[0].nodes.len()), (1, 2));
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [Reading Gmsh in parallel]: https://tetracl.github.io/tetraloma/tutorials/parallel-io.html#reading-gmsh-in-parallel
@@ -355,7 +355,7 @@ impl MshIndex {
     /// let index = MshIndex::scan(path)?;
     /// assert_eq!(index.num_nodes(), 32);
     /// assert_eq!(index.num_elements(2), 35);
-    /// # Ok::<(), tetraloma_device::GridError>(())
+    /// # Ok::<(), tetraloma_topology::GridError>(())
     /// ```
     ///
     /// [Reading Gmsh in parallel]: https://tetracl.github.io/tetraloma/tutorials/parallel-io.html#reading-gmsh-in-parallel
@@ -543,7 +543,7 @@ impl MshIndex {
     ///
     /// let path = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/gmsh/triangle_p1.msh"));
     /// assert!(!MshIndex::scan(path)?.is_binary());
-    /// # Ok::<(), tetraloma_device::GridError>(())
+    /// # Ok::<(), tetraloma_topology::GridError>(())
     /// ```
     ///
     /// [Reading Gmsh in parallel]: https://tetracl.github.io/tetraloma/tutorials/parallel-io.html#reading-gmsh-in-parallel
@@ -562,7 +562,7 @@ impl MshIndex {
     /// let path = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/gmsh/triangle_p1-binary.msh"));
     /// let index = MshIndex::scan(path)?;
     /// assert_eq!(index.read_nodes(0..index.num_nodes())?.tags.len(), index.num_nodes());
-    /// # Ok::<(), tetraloma_device::GridError>(())
+    /// # Ok::<(), tetraloma_topology::GridError>(())
     /// ```
     ///
     /// [Reading Gmsh in parallel]: https://tetracl.github.io/tetraloma/tutorials/parallel-io.html#reading-gmsh-in-parallel
@@ -582,7 +582,7 @@ impl MshIndex {
     /// let index = MshIndex::scan(path)?;
     /// assert_eq!(index.num_elements(3), 100);
     /// assert_eq!(index.num_elements(4), 0);
-    /// # Ok::<(), tetraloma_device::GridError>(())
+    /// # Ok::<(), tetraloma_topology::GridError>(())
     /// ```
     ///
     /// [Reading Gmsh in parallel]: https://tetracl.github.io/tetraloma/tutorials/parallel-io.html#reading-gmsh-in-parallel
@@ -614,7 +614,7 @@ impl MshIndex {
     /// let file = read_file(path)?;
     /// let tags: Vec<i64> = file.node_blocks.iter().flat_map(|b| b.tags.clone()).collect();
     /// assert_eq!(chunk.tags, tags[4..9]);
-    /// # Ok::<(), tetraloma_device::GridError>(())
+    /// # Ok::<(), tetraloma_topology::GridError>(())
     /// ```
     ///
     /// [Reading Gmsh in parallel]: https://tetracl.github.io/tetraloma/tutorials/parallel-io.html#reading-gmsh-in-parallel
@@ -692,7 +692,7 @@ impl MshIndex {
     /// let chunk = index.read_elements(3, 2 * n / 3..n)?;
     /// let count: usize = chunk.blocks.iter().map(|b| b.tags.len()).sum();
     /// assert_eq!(count, n - 2 * n / 3);
-    /// # Ok::<(), tetraloma_device::GridError>(())
+    /// # Ok::<(), tetraloma_topology::GridError>(())
     /// ```
     ///
     /// [Reading Gmsh in parallel]: https://tetracl.github.io/tetraloma/tutorials/parallel-io.html#reading-gmsh-in-parallel

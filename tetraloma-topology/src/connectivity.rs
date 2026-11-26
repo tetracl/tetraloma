@@ -2,10 +2,11 @@
 //! radix sort of the entity ids with the flat cell index as payload; offsets from `histogram`
 //! and `exclusive_scan`. Deterministic without atomics.
 
+use crate::{GridError, Result};
 use cubecl::prelude::*;
 use tetraloma_device::{
-    DeviceBuffer, DeviceCsr, DeviceStrided, GridError, KernelKind, LaunchPlan, Result,
-    debug_assert_bindings, exclusive_scan, histogram, radix_sort,
+    DeviceBuffer, DeviceCsr, DeviceStrided, KernelKind, LaunchPlan, debug_assert_bindings,
+    exclusive_scan, histogram, radix_sort,
 };
 
 use crate::renumber::one_word_keys;

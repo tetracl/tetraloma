@@ -93,6 +93,13 @@ jobs:
           rc=0
           scripts/check-workspace-deps.sh --no-mesh tetraloma-topology || rc=$?
           test "$rc" -eq 3
+      # Public names of the four foundation crates (M18 A3; ADR-0074).
+      - run: scripts/check-foundation-names.sh
+      # Negative check: the script must find forbidden names (exit 3) on a mesh crate (M18 A3).
+      - run: |
+          rc=0
+          scripts/check-foundation-names.sh --crates tetraloma-topology || rc=$?
+          test "$rc" -eq 3
 
   # tetraloma's tests, the larger half of `cargo test --workspace` (with the cpu job's), in the twelve
   # shards of scripts/ci-tetraloma-shard.sh, eleven jobs: in one job they took 52-59 min (M8 review).
@@ -361,9 +368,9 @@ jobs:
           ln -sfn /usr/include/hdf5/openmpi "$root/include"
           ln -sfn "$(dirname "$so")" "$root/lib"
           echo "HDF5_DIR=$root" >> "$GITHUB_ENV"
-      # Checks (a)-(h). The steps after it run even if it fails, so one push reports them all.
+      # Checks (a)-(h) and the foundation public-name check (M18 A3). The steps after it run even if it fails, so one push reports them all.
       - run: scripts/check-user-docs.sh --verbose
-      # tetraloma-partition's API with parmetis instead of metis (ADR-0033): checks (c)-(e).
+      # tetraloma-partition's API with parmetis instead of metis (ADR-0033): checks (c)-(e) and the foundation public-name check (M18 A3).
       - if: ${{ !cancelled() }}
         run: scripts/check-user-docs.sh --parmetis --verbose
       # The book's Rust blocks (tetraloma-examples' doctest harness) on the CPU runtime.

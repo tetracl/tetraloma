@@ -4,9 +4,8 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use tetraloma_device::{GridError, Result};
 use tetraloma_parallel::{CommDyn, CommExt, owner_hash};
-use tetraloma_topology::VertexSharers;
+use tetraloma_topology::{GridError, Result, VertexSharers};
 
 use super::ghosts::LocalCells;
 use super::nodes::Nodes;

@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # The checks of the user documentation (ADR-0067, rule 7): builds the site with
 # scripts/build-site.sh (the book at site/, the API of the eleven library crates at site/api/), lists
-# the doctests, and runs scripts/doc_audit.py on them.
+# the doctests, and runs scripts/doc_audit.py on them, plus scripts/check-foundation-names.sh on
+# the foundation crates' API pages (ADR-0074).
 #
 # Usage: scripts/check-user-docs.sh [--no-build] [--audit-only CRATE] [--parmetis] [--verbose]
 #   --no-build          check the site, doctest lists and logs of the last build
 #   --audit-only CRATE  only the API checks (c), (d) and (e), for CRATE's items
 #   --parmetis          the second audit: tetraloma-partition with `parmetis` instead of `metis`
 #                       (metis and parmetis exclude each other); builds its API and doctest list
-#                       into target/user-docs/parmetis and runs (c), (d) and (e) on it
+#                       into target/user-docs/parmetis and runs (c), (d), (e) and
+#                       scripts/check-foundation-names.sh on it
 #   --verbose           print every failure (they are always in target/user-docs/report.txt)
 #
 # Checks (scripts/doc_audit.py): (a) the site builds without warnings; (b) links and anchors
@@ -113,9 +115,17 @@ if [[ -n $parmetis ]]; then
             "tetraloma-partition/parmetis,tetraloma-partition/scotch,tetraloma-partition/ptscotch" \
             "$pwork/doctests"
     fi
+    rc=0
     "$PYTHON" scripts/doc_audit.py check --site "$SITE" --work "$pwork" --api "$pwork/api" \
-        --checks cde --crate tetraloma-partition ${verbose[@]+"${verbose[@]}"}
-    exit $?
+        --checks cde --crate tetraloma-partition ${verbose[@]+"${verbose[@]}"} || rc=$?
+    names_rc=0
+    scripts/check-foundation-names.sh --crates tetraloma-partition --api "$pwork/api" || names_rc=$?
+    if [[ $names_rc -eq 2 ]]; then
+        exit 2
+    elif [[ $names_rc -ne 0 && $rc -eq 0 ]]; then
+        rc=1
+    fi
+    exit "$rc"
 fi
 
 if [[ -n $build ]]; then
@@ -136,5 +146,14 @@ if [[ -n $only ]]; then
     "$PYTHON" scripts/doc_audit.py check --site "$SITE" --work "$WORK" --checks cde --crate "$only" \
         ${verbose[@]+"${verbose[@]}"}
 else
-    "$PYTHON" scripts/doc_audit.py check --site "$SITE" --work "$WORK" ${verbose[@]+"${verbose[@]}"}
+    rc=0
+    "$PYTHON" scripts/doc_audit.py check --site "$SITE" --work "$WORK" ${verbose[@]+"${verbose[@]}"} || rc=$?
+    names_rc=0
+    scripts/check-foundation-names.sh --api "$SITE/api" || names_rc=$?
+    if [[ $names_rc -eq 2 ]]; then
+        exit 2
+    elif [[ $names_rc -ne 0 && $rc -eq 0 ]]; then
+        rc=1
+    fi
+    exit "$rc"
 fi

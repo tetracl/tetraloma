@@ -4,9 +4,10 @@ use core::cell::RefCell;
 use std::collections::HashMap;
 
 use cubecl::prelude::Client;
-use tetraloma_device::{DeviceBuffer, Real, Result};
+use tetraloma_device::{DeviceBuffer, Real};
 use tetraloma_dims::{CellType, TopoDim};
 use tetraloma_refcell::LagrangeElement;
+use tetraloma_topology::Result;
 
 use crate::CoordinateElement;
 use crate::names::element_error;

@@ -1,6 +1,7 @@
 //! `CellBlock` (Listing B3).
 
-use tetraloma_device::{DeviceBuffer, DeviceStrided, Result};
+use crate::Result;
+use tetraloma_device::{DeviceBuffer, DeviceStrided};
 use tetraloma_dims::TopoDim;
 use tetraloma_parallel::{CommDyn, IndexMap};
 
@@ -73,7 +74,7 @@ impl<TD: TopoDim> CellBlock<TD> {
     ///     DeviceBuffer::from_host(&client, &[0u32])?,
     /// );
     /// assert_eq!(block.vertices.stride, 4);
-    /// # Ok::<(), tetraloma_device::GridError>(())
+    /// # Ok::<(), tetraloma_topology::GridError>(())
     /// ```
     ///
     /// [Cell blocks]: https://tetracl.github.io/tetraloma/concepts/meshes.html#cell-blocks
@@ -123,7 +124,7 @@ impl<TD: TopoDim> CellBlock<TD> {
     /// let copy = topology.cell_blocks()[0].try_clone(&Serial)?;
     /// assert_eq!(copy.vertices.data.to_host()?, [0, 1, 2, 3, 2, 1]);
     /// assert_eq!(copy.index_map.num_local(), 2);
-    /// # Ok::<(), tetraloma_device::GridError>(())
+    /// # Ok::<(), tetraloma_topology::GridError>(())
     /// ```
     ///
     /// [Cell blocks]: https://tetracl.github.io/tetraloma/concepts/meshes.html#cell-blocks

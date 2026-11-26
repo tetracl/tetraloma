@@ -1,7 +1,8 @@
 // Design: "Tags, regions and submeshes"; ADR-0039, item 1.
 //! `EntityMap`: the map from the cells, vertices and nodes of a submesh to those of its parent.
 
-use tetraloma_device::{DeviceBuffer, Result};
+use tetraloma_device::DeviceBuffer;
+use tetraloma_topology::Result;
 
 // Design: "Tags, regions and submeshes"; ADR-0039, item 1.
 /// The map from a submesh to its parent mesh, on the device: the parent entity of every local child

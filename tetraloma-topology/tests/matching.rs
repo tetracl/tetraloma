@@ -2,11 +2,11 @@
 //! itself, in any key order; absent keys, entity types the dimension lacks and empty key sets.
 
 use cubecl::prelude::Client;
-use tetraloma_device::{DeviceBuffer, DeviceStrided, GridError, SortKeys};
+use tetraloma_device::{DeviceBuffer, DeviceStrided, SortKeys};
 use tetraloma_dims::{Cell2, Cell3, CellType, D1, D2, D3, TopoDim};
 use tetraloma_parallel::{IndexMap, Serial};
 use tetraloma_testing::HostMesh;
-use tetraloma_topology::{CellBlock, Topology, encode_origin_ids};
+use tetraloma_topology::{CellBlock, GridError, Topology, encode_origin_ids};
 
 /// The topology of the degree-1 host mesh `h` (nodes are vertices).
 fn topology<TD: TopoDim>(client: &Client, h: &HostMesh) -> Topology<TD>

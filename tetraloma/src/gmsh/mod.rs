@@ -37,9 +37,9 @@ mod tests {
 
     use std::path::{Path, PathBuf};
 
-    use tetraloma_device::{GridError, Real, Result};
+    use tetraloma_device::Real;
     use tetraloma_geometry::DeviceGrid;
-    use tetraloma_topology::decode_origin_ids;
+    use tetraloma_topology::{GridError, Result, decode_origin_ids};
 
     use super::*;
     use crate::{Codim, CoordinateElement, D2, GmshOptions, MeshBuilder, NodeFamily, PlanarMesh};

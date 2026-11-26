@@ -2,11 +2,11 @@
 //! creation pipeline"; ADR-0026, item 14).
 
 use cubecl::prelude::Client;
-use tetraloma_device::{DeviceBuffer, DeviceStrided, GridError, Real, Result};
+use tetraloma_device::{DeviceBuffer, DeviceStrided, Real};
 use tetraloma_dims::{Dim, EmbeddedIn, TopoDim};
 use tetraloma_geometry::{CoordinateElement, Geometry, GeometryBlock};
 use tetraloma_parallel::{CommDyn, IndexMap};
-use tetraloma_topology::{CellBlock, Topology, encode_origin_ids};
+use tetraloma_topology::{CellBlock, GridError, Result, Topology, encode_origin_ids};
 
 use super::nodes::Nodes;
 use super::number::{MapInput, Numbered};

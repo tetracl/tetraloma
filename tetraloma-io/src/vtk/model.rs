@@ -19,7 +19,7 @@ use tetraloma_dims::CellType;
 /// // Points are Float64, or Float32 on request.
 /// let (file, _) = to_vtu(&mesh, true, true)?;
 /// assert_eq!(file.points, DataValues::F32(vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0]));
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [Writing VTU]: https://tetracl.github.io/tetraloma/tutorials/read-write.html#writing-vtu
@@ -94,7 +94,7 @@ pub struct DataArray {
 /// let DataValues::F64(points) = &file.points else { unreachable!() };
 /// assert_eq!(points[9..], [1.0, 1.0, 0.0]);
 /// assert!(file.point_data.is_empty() && file.cell_data.is_empty());
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [Writing VTU]: https://tetracl.github.io/tetraloma/tutorials/read-write.html#writing-vtu
@@ -132,7 +132,7 @@ pub struct VtuFile {
 /// };
 /// let (file, _) = to_vtu(&mesh, true, false)?;
 /// assert_eq!((file.types[0], &file.connectivity[..]), (68, &[0, 1, 2][..]));
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [Lagrange nodes]: https://tetracl.github.io/tetraloma/elements/lagrange.html#node-ordering

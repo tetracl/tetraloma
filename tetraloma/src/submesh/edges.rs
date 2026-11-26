@@ -12,14 +12,11 @@
 //!   closure map in the direction of the canonical rows (`closure::edge_table`).
 
 use cubecl::prelude::*;
-use tetraloma_device::{
-    ConnKey, DeviceBuffer, DeviceCsr, DeviceStrided, GridError, Real, Result,
-    debug_assert_bindings, fill,
-};
+use tetraloma_device::{DeviceBuffer, DeviceCsr, DeviceStrided, Real, debug_assert_bindings, fill};
 use tetraloma_dims::{CellType, D3};
 use tetraloma_geometry::NodeFamily;
 use tetraloma_parallel::{Comm, CommDyn, CommExt, IndexMap, ReverseOp};
-use tetraloma_topology::{Connectivity, EntityBlock, Topology};
+use tetraloma_topology::{ConnKey, Connectivity, EntityBlock, GridError, Result, Topology};
 
 use super::select::{self, ParentBlock, RowSource, Selected};
 use super::topology::{self, ChildTopology};

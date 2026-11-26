@@ -19,7 +19,7 @@ use std::io::Write;
 
 use flate2::Compression;
 use flate2::write::ZlibEncoder;
-use tetraloma_device::{GridError, Result};
+use tetraloma_topology::{GridError, Result};
 
 use super::{DataArray, DataValues, VtuFile, base64};
 
@@ -52,7 +52,7 @@ const WORD: usize = 8;
 ///     assert!(text.contains(&format!("Name=\"Points\" NumberOfComponents=\"3\" {format}")));
 ///     assert_eq!(text.contains("<AppendedData encoding=\"raw\">"), binary == Binary::Appended);
 /// }
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [Writing VTU]: https://tetracl.github.io/tetraloma/tutorials/read-write.html#writing-vtu
@@ -371,7 +371,7 @@ impl VtuFile {
     /// let mut bytes = Vec::new();
     /// assert!(bad.write_to(&mut bytes, Binary::Appended, false).is_err());
     /// assert!(bytes.is_empty());
-    /// # Ok::<(), tetraloma_device::GridError>(())
+    /// # Ok::<(), tetraloma_topology::GridError>(())
     /// ```
     ///
     /// [Writing VTU]: https://tetracl.github.io/tetraloma/tutorials/read-write.html#writing-vtu
@@ -473,7 +473,7 @@ impl VtuFile {
 /// assert!(text.contains("<PDataArray type=\"Int32\" Name=\"rank\" NumberOfComponents=\"1\"/>"));
 /// assert!(text.contains("<PDataArray type=\"Float64\" Name=\"Points\" NumberOfComponents=\"3\"/>"));
 /// assert!(text.contains("<Piece Source=\"out_0.vtu\"/>"));
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [Writing PVTU]: https://tetracl.github.io/tetraloma/tutorials/read-write.html#writing-pvtu

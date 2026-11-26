@@ -2,10 +2,11 @@
 //! the facet entities and the (tdim − 1, tdim) connectivity, computes the flags with
 //! `tetraloma_geometry::orientation_flags` and stores them in the cell blocks.
 
-use tetraloma_device::{Real, Result};
+use tetraloma_device::Real;
 use tetraloma_dims::{Codim1, Dim, TopoDim};
 use tetraloma_geometry::OrientationRule;
 use tetraloma_parallel::Comm;
+use tetraloma_topology::Result;
 
 use crate::Mesh;
 

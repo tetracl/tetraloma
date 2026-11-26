@@ -3,10 +3,10 @@
 
 use cubecl::prelude::*;
 use tetraloma_device::{
-    DeviceBuffer, GridError, KernelKind, LaunchPlan, Real, Result, VECTOR_PAD,
-    debug_assert_bindings,
+    DeviceBuffer, KernelKind, LaunchPlan, Real, VECTOR_PAD, debug_assert_bindings,
 };
 use tetraloma_dims::{CellType, Dim, EmbeddedIn, TopoDim};
+use tetraloma_topology::{GridError, Result};
 
 use crate::basis_eval::{expansion, expansion_loops, loops_capacity};
 use crate::cooperative::pull_back::{pull_back_cooperative_kernel, step_components};

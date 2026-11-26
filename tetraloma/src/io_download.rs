@@ -5,12 +5,12 @@
 
 use std::collections::BTreeSet;
 
-use tetraloma_device::{GridError, Real, Result};
+use tetraloma_device::Real;
 use tetraloma_dims::{CellType, Dim, EmbeddedIn, TopoDim};
 use tetraloma_geometry::DeviceGrid;
 use tetraloma_io::gmsh::GmshTagGroup;
 use tetraloma_parallel::{Comm, CommDyn, CommExt, CommScalar, IndexMap};
-use tetraloma_topology::decode_origin_ids;
+use tetraloma_topology::{GridError, Result, decode_origin_ids};
 
 use crate::Mesh;
 use crate::gmsh::{elementary_of, values_by_index};

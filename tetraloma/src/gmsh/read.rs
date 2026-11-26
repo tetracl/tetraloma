@@ -15,7 +15,7 @@ use std::ops::Range;
 use std::path::Path;
 
 use cubecl::prelude::Client;
-use tetraloma_device::{GridError, Real, Result, check_precision};
+use tetraloma_device::{Real, check_precision};
 use tetraloma_dims::{CellType, D1, D2, D3, Dim, EmbeddedIn, TopoDim};
 use tetraloma_geometry::{CoordinateElement, NodeFamily};
 use tetraloma_io::gmsh::{
@@ -24,6 +24,7 @@ use tetraloma_io::gmsh::{
     node_range,
 };
 use tetraloma_parallel::{Comm, CommDyn, CommExt};
+use tetraloma_topology::{GridError, Result};
 
 use super::options::{GmshOptions, Shared};
 use crate::pipeline::input::TagKind;

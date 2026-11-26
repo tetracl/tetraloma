@@ -1,10 +1,11 @@
 //! `Mesh::pull_back`: `tetraloma_geometry::pull_back_block` over the cell blocks (ADR-0039,
 //! item 13).
 
-use tetraloma_device::{GridError, Real, Result};
+use tetraloma_device::Real;
 use tetraloma_dims::{Dim, EmbeddedIn, TopoDim};
 use tetraloma_geometry::{BlockFields, PullBack, PullBackOptions, VecShape, pull_back_block};
 use tetraloma_parallel::Comm;
+use tetraloma_topology::{GridError, Result};
 
 use crate::Mesh;
 

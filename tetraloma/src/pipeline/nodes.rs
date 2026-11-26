@@ -3,8 +3,8 @@
 
 use std::collections::HashMap;
 
-use tetraloma_device::{GridError, Result};
 use tetraloma_parallel::{CommDyn, CommExt};
+use tetraloma_topology::{GridError, Result};
 
 use super::ghosts::LocalCells;
 use super::input::NodeChunk;

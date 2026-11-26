@@ -3,7 +3,7 @@
 
 use std::io::Write;
 
-use tetraloma_device::{GridError, Result};
+use tetraloma_topology::{GridError, Result};
 
 use super::{Entity, FORMAT, MshFile, PartitionedEntity};
 
@@ -21,7 +21,7 @@ use super::{Entity, FORMAT, MshFile, PartitionedEntity};
 ///     MshFile::default().write_to(&mut bytes, encoding)?;
 ///     assert!(bytes.starts_with(format!("$MeshFormat\n{header}\n").as_bytes()));
 /// }
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [Writing Gmsh]: https://tetracl.github.io/tetraloma/tutorials/read-write.html#writing-gmsh
@@ -226,7 +226,7 @@ impl MshFile {
     ///     file.write_to(&mut bytes, encoding)?;
     ///     assert_eq!(parse(&bytes)?, file);
     /// }
-    /// # Ok::<(), tetraloma_device::GridError>(())
+    /// # Ok::<(), tetraloma_topology::GridError>(())
     /// ```
     ///
     /// [Writing Gmsh]: https://tetracl.github.io/tetraloma/tutorials/read-write.html#writing-gmsh

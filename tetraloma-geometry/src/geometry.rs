@@ -3,9 +3,10 @@
 
 use core::cell::OnceCell;
 
-use tetraloma_device::{DeviceBuffer, GridError, Real, Result};
+use tetraloma_device::{DeviceBuffer, Real};
 use tetraloma_dims::{Dim, EmbeddedIn, TopoDim};
 use tetraloma_parallel::{CommDyn, IndexMap};
+use tetraloma_topology::{GridError, Result};
 
 use crate::strategy::StrategyFamily;
 use crate::{EVector, GeometryBlock};
@@ -78,7 +79,8 @@ where
     /// # Example
     ///
     /// ```
-    /// use tetraloma_device::{DeviceBuffer, DeviceStrided, GridError};
+    /// use tetraloma_device::{DeviceBuffer, DeviceStrided};
+    /// use tetraloma_topology::GridError;
     /// use tetraloma_dims::{Cell1, D1, D2};
     /// use tetraloma_geometry::{CoordinateElement, Geometry, GeometryBlock, NodeFamily};
     /// use tetraloma_parallel::{IndexMap, Serial};

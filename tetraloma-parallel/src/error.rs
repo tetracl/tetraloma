@@ -1,14 +1,37 @@
 // Design: "Distributed mesh model", Listing S2c; ADR-0074.
-//! `ParallelError` and the crate-private `Result` alias of `tetraloma-parallel`.
+//! `ParallelError` and `Result` of `tetraloma-parallel`.
 
 use core::fmt;
 
 use tetraloma_comm::CommError;
-use tetraloma_device::{DeviceError, GridError, ServerError};
+use tetraloma_device::{DeviceError, ServerError};
 
-/// Crate-private result alias for `tetraloma-parallel` functions while
-/// `tetraloma_parallel::Result` remains an alias of `GridError` until M18.T6.
-pub(crate) type Result<T, E = ParallelError> = core::result::Result<T, E>;
+// Design: "Distributed mesh model", Listing S2c; ADR-0074.
+/// The result type of `tetraloma-parallel`: `Ok(T)` or a [`ParallelError`].
+///
+/// Every fallible index-map and halo-exchange operation returns it, and a [`ParallelError`]
+/// converts into `Box<dyn std::error::Error>` as well as `tetraloma`'s `GridError`. See [Halo
+/// exchange](https://tetracl.github.io/tetraloma/tutorials/halo-exchange.html).
+///
+/// # Example
+///
+/// ```
+/// use tetraloma_parallel::{ParallelError, Result};
+///
+/// fn check_len(expected: usize, found: usize) -> Result<()> {
+///     if expected == found {
+///         Ok(())
+///     } else {
+///         Err(ParallelError::LengthMismatch { expected, found })
+///     }
+/// }
+/// assert!(check_len(4, 4).is_ok());
+/// assert!(matches!(
+///     check_len(4, 2),
+///     Err(ParallelError::LengthMismatch { expected: 4, found: 2 })
+/// ));
+/// ```
+pub type Result<T, E = ParallelError> = core::result::Result<T, E>;
 
 // Design: "Distributed mesh model", Listing S2c; ADR-0074.
 /// Errors of index maps and halo exchanges.
@@ -168,39 +191,15 @@ impl From<DeviceError> for ParallelError {
     }
 }
 
-// Design: section 7; ADR-0074. Moves to tetraloma-topology with `GridError` in M18.T6.
-impl From<ParallelError> for GridError {
-    fn from(error: ParallelError) -> Self {
-        match error {
-            ParallelError::TooLarge => GridError::TooLarge,
-            ParallelError::AllocationTooLarge { bytes, max } => {
-                GridError::AllocationTooLarge { bytes, max }
-            }
-            ParallelError::UnsupportedPrecision { scalar, device } => {
-                GridError::UnsupportedPrecision { scalar, device }
-            }
-            ParallelError::LengthMismatch { expected, found } => {
-                GridError::LengthMismatch { expected, found }
-            }
-            ParallelError::Server(error) => GridError::Server(error),
-            ParallelError::IndexOutOfRange { index, len } => {
-                GridError::IndexOutOfRange { index, len }
-            }
-            ParallelError::MessageTooLarge { count } => GridError::MessageTooLarge { count },
-            ParallelError::RemoteFailure { rank } => GridError::RemoteFailure { rank },
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::ParallelError;
     use tetraloma_comm::CommError;
-    use tetraloma_device::{DeviceError, GridError, ServerError};
+    use tetraloma_device::{DeviceError, ServerError};
 
     // M18 A4: exhaustive match without a wildcard arm. Adding a variant to `ParallelError`
-    // breaks this test and points to `From<ParallelError> for GridError` (in `tetraloma-parallel`
-    // until M18.T6, then `tetraloma-topology`) and to
+    // breaks this test and points to `From<ParallelError> for GridError` (in `tetraloma-topology`)
+    // and to
     // `tetraloma::pipeline::dual_graph::tests::foundation_errors_convert_to_their_grid_error_variants`.
     fn variant_index(error: &ParallelError) -> usize {
         match error {
@@ -376,29 +375,5 @@ mod tests {
             ParallelError::from(DeviceError::Server(ServerError::TornDown)),
             ParallelError::Server(ServerError::TornDown)
         ));
-    }
-
-    #[test]
-    fn parallel_error_converts_to_matching_grid_error() {
-        let cases = [
-            ParallelError::TooLarge,
-            ParallelError::AllocationTooLarge { bytes: 31, max: 32 },
-            ParallelError::UnsupportedPrecision {
-                scalar: "f64",
-                device: "device-b",
-            },
-            ParallelError::LengthMismatch {
-                expected: 33,
-                found: 34,
-            },
-            ParallelError::Server(ServerError::TornDown),
-            ParallelError::IndexOutOfRange { index: 35, len: 36 },
-            ParallelError::MessageTooLarge { count: 37 },
-            ParallelError::RemoteFailure { rank: 38 },
-        ];
-        for e in cases {
-            let g = GridError::from(e.clone());
-            assert_eq!(g.to_string(), e.to_string());
-        }
     }
 }

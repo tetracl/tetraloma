@@ -12,11 +12,11 @@
 
 use cubecl::prelude::*;
 use tetraloma_device::{
-    DeviceBuffer, GridError, KernelKind, LaunchPlan, Real, Result, VECTOR_PAD,
-    debug_assert_bindings,
+    DeviceBuffer, KernelKind, LaunchPlan, Real, VECTOR_PAD, debug_assert_bindings,
 };
 use tetraloma_dims::CellType;
 use tetraloma_refcell::{NodeFamily, num_lagrange_nodes, tdim};
+use tetraloma_topology::{GridError, Result};
 
 use crate::basis_eval::{
     broadcast_rows, device_coefficients, expansion, expansion_cooperative, expansion_loops,
@@ -211,7 +211,7 @@ fn interpolant_cooperative_kernel<F: Float, N: Size>(
 /// points[0] = 0.25;
 /// let out = f.evaluate(&DeviceBuffer::from_host(&client, &points)?, 16)?.to_host()?;
 /// assert!((out[0] - 1.5).abs() < 1e-6 && (out[16] - 2.0).abs() < 1e-6);
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 pub struct Interpolant<F: Real> {
     cell: CellType,

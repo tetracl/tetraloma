@@ -4,10 +4,12 @@
 //! equal those of the clamped rows and are deterministic.
 
 use cubecl::prelude::Client;
-use tetraloma_device::{ConnKey, DeviceBuffer, DeviceStrided, GridError};
+use tetraloma_device::{DeviceBuffer, DeviceStrided};
 use tetraloma_dims::{Cell2, Cell3, D2, D3, TopoDim};
 use tetraloma_parallel::{IndexMap, Serial};
-use tetraloma_topology::{CellBlock, Connectivity, Topology, encode_origin_ids};
+use tetraloma_topology::{
+    CellBlock, ConnKey, Connectivity, GridError, Topology, encode_origin_ids,
+};
 
 /// A block of `cell` with vertex rows `rows`, `origin_words` origin-id words and `flags` flag
 /// words.

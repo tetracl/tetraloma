@@ -12,10 +12,10 @@
 use std::collections::{BTreeMap, HashMap};
 
 use cubecl::prelude::*;
-use tetraloma_device::{DeviceBuffer, DeviceStrided, GridError, Result, debug_assert_bindings};
+use tetraloma_device::{DeviceBuffer, DeviceStrided, debug_assert_bindings};
 use tetraloma_dims::TopoDim;
 use tetraloma_parallel::{CommDyn, IndexMap};
-use tetraloma_topology::{Topology, VertexSharers};
+use tetraloma_topology::{GridError, Result, Topology, VertexSharers};
 
 use super::sharers::{ChildItems, Decided, Shared, Sharing, child_items, hashed_owner, number};
 use super::{fit, plan};

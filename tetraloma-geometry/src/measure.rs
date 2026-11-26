@@ -1,10 +1,9 @@
 //! `measure_block` (Listing B11).
 
 use cubecl::prelude::*;
-use tetraloma_device::{
-    DeviceBuffer, GridError, KernelKind, LaunchPlan, Real, Result, debug_assert_bindings,
-};
+use tetraloma_device::{DeviceBuffer, KernelKind, LaunchPlan, Real, debug_assert_bindings};
 use tetraloma_dims::{Dim, EmbeddedIn, TopoDim};
+use tetraloma_topology::{GridError, Result};
 
 use crate::layout::{Factor, launch_factor};
 use crate::{DeviceGrid, PointSet, QuadField, ScalarShape};

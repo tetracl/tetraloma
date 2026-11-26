@@ -31,9 +31,8 @@ pub(crate) mod factors;
 pub(crate) mod pull_back;
 
 use cubecl::prelude::*;
-use tetraloma_device::{
-    DeviceClass, GridError, KernelKind, LaunchPlan, Result, VECTOR_PAD, device_properties,
-};
+use tetraloma_device::{DeviceClass, KernelKind, LaunchPlan, VECTOR_PAD, device_properties};
+use tetraloma_topology::{GridError, Result};
 
 /// The most leaves of a group's tree: a power of two.
 pub(crate) const MAX_LEAVES: usize = 32;

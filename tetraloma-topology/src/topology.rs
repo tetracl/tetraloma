@@ -3,8 +3,9 @@
 
 use std::collections::HashMap;
 
+use crate::{ConnKey, GridError, Result};
 use cubecl::prelude::Client;
-use tetraloma_device::{ConnKey, DeviceBuffer, DeviceStrided, GridError, Result};
+use tetraloma_device::{DeviceBuffer, DeviceStrided};
 use tetraloma_dims::{CellType, TopoDim};
 use tetraloma_parallel::{CommDyn, IndexMap};
 
@@ -99,10 +100,10 @@ impl<TD: TopoDim> Topology<TD> {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_device::{DeviceBuffer, DeviceStrided, GridError};
+    /// use tetraloma_device::{DeviceBuffer, DeviceStrided};
     /// use tetraloma_dims::{Cell2, D2};
     /// use tetraloma_parallel::{IndexMap, Serial};
-    /// use tetraloma_topology::{CellBlock, Topology, encode_origin_ids};
+    /// use tetraloma_topology::{CellBlock, GridError, Topology, encode_origin_ids};
     ///
     /// // client: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
     /// # let client = tetraloma_testing::test_client();
@@ -242,7 +243,7 @@ impl<TD: TopoDim> Topology<TD> {
     /// // A new buffer on the topology's device.
     /// let flags = DeviceBuffer::from_host(topology.client(), &[0u32, 1])?;
     /// assert_eq!(flags.to_host()?, [0, 1]);
-    /// # Ok::<(), tetraloma_device::GridError>(())
+    /// # Ok::<(), tetraloma_topology::GridError>(())
     /// ```
     ///
     /// [Compute devices]: https://tetracl.github.io/tetraloma/devices.html
@@ -276,7 +277,7 @@ impl<TD: TopoDim> Topology<TD> {
     /// assert_eq!(blocks.len(), 1);
     /// assert_eq!(blocks[0].cell, Cell2::Triangle);
     /// assert_eq!(blocks[0].index_map.num_local(), 2);
-    /// # Ok::<(), tetraloma_device::GridError>(())
+    /// # Ok::<(), tetraloma_topology::GridError>(())
     /// ```
     ///
     /// [Blocks]: https://tetracl.github.io/tetraloma/tutorials/iterate.html#blocks
@@ -309,7 +310,7 @@ impl<TD: TopoDim> Topology<TD> {
     /// // A serial topology has no ghosts.
     /// let vertices = topology.vertex_index_map();
     /// assert_eq!((vertices.num_owned(), vertices.num_ghosts()), (4, 0));
-    /// # Ok::<(), tetraloma_device::GridError>(())
+    /// # Ok::<(), tetraloma_topology::GridError>(())
     /// ```
     ///
     /// [Ownership and ghosts]: https://tetracl.github.io/tetraloma/concepts/meshes.html#ownership-and-ghosts
@@ -343,7 +344,7 @@ impl<TD: TopoDim> Topology<TD> {
     /// // A host read, for inspection only.
     /// let words = topology.vertex_origin_ids().to_host()?;
     /// assert_eq!(tetraloma_topology::decode_origin_ids(&words), [10, 11, 12, 13]);
-    /// # Ok::<(), tetraloma_device::GridError>(())
+    /// # Ok::<(), tetraloma_topology::GridError>(())
     /// ```
     ///
     /// [Origin ids]: https://tetracl.github.io/tetraloma/concepts/meshes.html#origin-ids
@@ -376,7 +377,7 @@ impl<TD: TopoDim> Topology<TD> {
     /// # let topology = Topology::new(&client, vec![block], IndexMap::new(&Serial, 4)?, &[10, 11, 12, 13])?;
     /// // The origin ids 10–13 fit in 32 bits.
     /// assert!(topology.ids_fit_u32());
-    /// # Ok::<(), tetraloma_device::GridError>(())
+    /// # Ok::<(), tetraloma_topology::GridError>(())
     /// ```
     ///
     /// [Origin ids]: https://tetracl.github.io/tetraloma/concepts/meshes.html#origin-ids
@@ -415,7 +416,7 @@ impl<TD: TopoDim> Topology<TD> {
     /// // The second triangle's edges (3, 2), (3, 1) and (2, 1) all do.
     /// let bits = topology.permutation_info(0).expect("triangles have edge bits").to_host()?;
     /// assert_eq!(bits, [0b000, 0b111]);
-    /// # Ok::<(), tetraloma_device::GridError>(())
+    /// # Ok::<(), tetraloma_topology::GridError>(())
     /// ```
     ///
     /// [Orientation bits]: https://tetracl.github.io/tetraloma/elements/orientation-bits.html
@@ -450,13 +451,13 @@ impl<TD: TopoDim> Topology<TD> {
     /// #     DeviceBuffer::from_host(&client, &[0u32, 0])?,
     /// # );
     /// # let mut topology = Topology::new(&client, vec![block], IndexMap::new(&Serial, 4)?, &[10, 11, 12, 13])?;
-    /// # use tetraloma_device::GridError;
+    /// # use tetraloma_topology::GridError;
     /// assert!(matches!(topology.entity_blocks(1), Err(GridError::EntitiesNotCreated(1))));
     /// topology.create_entities(&Serial, 1)?;
     /// // One block of edges: five edges, numbered from 0.
     /// let edges = &topology.entity_blocks(1)?[0];
     /// assert_eq!((edges.index_map.num_local(), edges.offset), (5, 0));
-    /// # Ok::<(), tetraloma_device::GridError>(())
+    /// # Ok::<(), tetraloma_topology::GridError>(())
     /// ```
     ///
     /// [Entities]: https://tetracl.github.io/tetraloma/tutorials/iterate.html#entities
@@ -527,7 +528,7 @@ impl<TD: TopoDim> Topology<TD> {
     /// #     DeviceBuffer::from_host(&client, &[0u32, 0])?,
     /// # );
     /// # let mut topology = Topology::new(&client, vec![block], IndexMap::new(&Serial, 4)?, &[10, 11, 12, 13])?;
-    /// # use tetraloma_device::{ConnKey, GridError};
+    /// # use tetraloma_topology::{ConnKey, GridError};
     /// # use tetraloma_topology::Connectivity;
     /// let key = ConnKey { from: 1, to: 2 };
     /// assert!(matches!(topology.connectivity(key), Err(GridError::ConnectivityNotCreated(_))));
@@ -541,7 +542,7 @@ impl<TD: TopoDim> Topology<TD> {
     /// };
     /// // Five edges; only the shared edge (1, 2) has two cells.
     /// assert_eq!((csr.offsets.len(), csr.indices.len()), (6, 6));
-    /// # Ok::<(), tetraloma_device::GridError>(())
+    /// # Ok::<(), tetraloma_topology::GridError>(())
     /// ```
     ///
     /// [Connectivity]: https://tetracl.github.io/tetraloma/tutorials/iterate.html#connectivity
@@ -571,10 +572,10 @@ impl<TD: TopoDim> Topology<TD> {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_device::{DeviceBuffer, DeviceStrided, GridError};
+    /// use tetraloma_device::{DeviceBuffer, DeviceStrided};
     /// use tetraloma_dims::{Cell1, D1};
     /// use tetraloma_parallel::{IndexMap, Serial};
-    /// use tetraloma_topology::{CellBlock, Topology, VertexSharers, encode_origin_ids};
+    /// use tetraloma_topology::{CellBlock, GridError, Topology, VertexSharers, encode_origin_ids};
     ///
     /// // client: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
     /// # let client = tetraloma_testing::test_client();
@@ -704,8 +705,8 @@ impl<TD: TopoDim> Topology<TD> {
     /// assert!(edges.iter().all(|e| e[0] < e[1]));
     /// edges.sort();
     /// assert_eq!(edges, [[0, 1], [0, 2], [1, 2], [1, 3], [2, 3]]);
-    /// assert!(topology.connectivity(tetraloma_device::ConnKey { from: 2, to: 1 }).is_ok());
-    /// # Ok::<(), tetraloma_device::GridError>(())
+    /// assert!(topology.connectivity(tetraloma_topology::ConnKey { from: 2, to: 1 }).is_ok());
+    /// # Ok::<(), tetraloma_topology::GridError>(())
     /// ```
     ///
     /// [Cells and entities]: https://tetracl.github.io/tetraloma/concepts/meshes.html#cells-and-entities
@@ -827,7 +828,7 @@ impl<TD: TopoDim> Topology<TD> {
     /// #     DeviceBuffer::from_host(&client, &[0u32, 0])?,
     /// # );
     /// # let mut topology = Topology::new(&client, vec![block], IndexMap::new(&Serial, 4)?, &[10, 11, 12, 13])?;
-    /// # use tetraloma_device::{ConnKey, GridError};
+    /// # use tetraloma_topology::{ConnKey, GridError};
     /// # use tetraloma_topology::Connectivity;
     /// // Vertex → cell: the cells around each vertex, ascending.
     /// topology.create_connectivity(&Serial, 0, 2)?;
@@ -840,7 +841,7 @@ impl<TD: TopoDim> Topology<TD> {
     /// // Edge → vertex is the edge blocks' `vertices`, not a stored connectivity.
     /// let err = topology.create_connectivity(&Serial, 1, 0);
     /// assert!(matches!(err, Err(GridError::UnsupportedConnectivity(_))));
-    /// # Ok::<(), tetraloma_device::GridError>(())
+    /// # Ok::<(), tetraloma_topology::GridError>(())
     /// ```
     ///
     /// [Connectivity]: https://tetracl.github.io/tetraloma/concepts/meshes.html#connectivity
@@ -999,7 +1000,7 @@ impl<TD: TopoDim> Topology<TD> {
     /// let copy = topology.try_clone(&Serial)?;
     /// assert_eq!(copy.entity_blocks(1)?[0].index_map.num_local(), 5);
     /// assert_eq!(copy.permutation_info(0).unwrap().to_host()?, [0b000, 0b111]);
-    /// # Ok::<(), tetraloma_device::GridError>(())
+    /// # Ok::<(), tetraloma_topology::GridError>(())
     /// ```
     ///
     /// [Meshes and topology]: https://tetracl.github.io/tetraloma/concepts/meshes.html

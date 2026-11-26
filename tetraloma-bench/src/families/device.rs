@@ -353,7 +353,7 @@ impl Sort {
         let mut rng = SplitMix(SEED ^ 3);
         let keys_host: Vec<u32> = (0..n * SORT_WORDS).map(|_| rng.next_u32()).collect();
         let payload: Vec<u32> = (0..n)
-            .map(|i| u32::try_from(i).map_err(|_| tetraloma_device::GridError::TooLarge))
+            .map(|i| u32::try_from(i).map_err(|_| tetraloma_device::DeviceError::TooLarge))
             .collect::<tetraloma_device::Result<_>>()?;
         Ok(Sort {
             keys: SortKeys::from_host(client, &keys_host, SORT_WORDS)?,
@@ -597,7 +597,7 @@ impl Segmented {
         while end < n {
             end = (end + (rng.next_u64() % (SEGMENT_MAX + 1)) as usize).min(n);
             offsets_host
-                .push(u32::try_from(end).map_err(|_| tetraloma_device::GridError::TooLarge)?);
+                .push(u32::try_from(end).map_err(|_| tetraloma_device::DeviceError::TooLarge)?);
         }
         Ok(Segmented {
             values: DeviceBuffer::from_host(client, &values_host)?,

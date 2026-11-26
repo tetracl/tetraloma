@@ -15,8 +15,9 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use cubecl::prelude::Client;
-use tetraloma_device::{DeviceClass, Result};
+use tetraloma_device::DeviceClass;
 use tetraloma_dims::CellType;
+use tetraloma_topology::Result;
 
 /// How a kernel family evaluates a block, from the simplest to the most involved.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

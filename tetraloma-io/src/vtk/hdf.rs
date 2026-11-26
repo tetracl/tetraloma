@@ -22,8 +22,8 @@ use hdf5_metno::file::LibraryVersion;
 use hdf5_metno::types::FixedAscii;
 use hdf5_metno::{Dataset, File, Group, H5Type};
 use ndarray::{ArrayView2, s};
-use tetraloma_device::{GridError, Result};
 use tetraloma_parallel::{CommDyn, CommExt, CommScalar};
+use tetraloma_topology::{GridError, Result};
 
 use super::write::type_name;
 use super::{DataArray, DataValues, VtuFile};

@@ -2,10 +2,10 @@
 
 use cubecl::prelude::*;
 use tetraloma_device::{
-    DeviceBuffer, GridError, KernelKind, LaunchPlan, Real, Result, VectorPolicy,
-    debug_assert_bindings,
+    DeviceBuffer, KernelKind, LaunchPlan, Real, VectorPolicy, debug_assert_bindings,
 };
 use tetraloma_dims::{CellType, Dim, EmbeddedIn, TopoDim};
+use tetraloma_topology::{GridError, Result};
 
 use crate::cooperative::factors::{factor_cooperative_kernel, summed_components};
 use crate::cooperative::{self, Group};

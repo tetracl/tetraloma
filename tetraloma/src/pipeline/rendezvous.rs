@@ -1,8 +1,8 @@
 //! Variable-length i64 records between ranks, and the rendezvous rank of a key (ADR-0026,
 //! item 9).
 
-use tetraloma_device::Result;
 use tetraloma_parallel::{CommDyn, CommExt, owner_hash};
+use tetraloma_topology::Result;
 
 /// The rendezvous rank of `key` on `size` ranks: `owner_hash(key) mod size`.
 pub(crate) fn rendezvous_rank(key: &[i64], size: usize) -> usize {

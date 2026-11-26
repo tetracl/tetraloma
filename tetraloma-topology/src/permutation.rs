@@ -8,10 +8,10 @@
 //! on its values. The sub-entity tables are comptime constants, and when every id
 //! fits in u32 the kernel compares the lo words only.
 
+use crate::{GridError, Result};
 use cubecl::prelude::*;
 use tetraloma_device::{
-    DeviceBuffer, DeviceStrided, GridError, KernelKind, LaunchPlan, Result, VECTOR_PAD,
-    debug_assert_bindings, pad_len,
+    DeviceBuffer, DeviceStrided, KernelKind, LaunchPlan, VECTOR_PAD, debug_assert_bindings, pad_len,
 };
 use tetraloma_dims::CellType;
 use tetraloma_refcell::{sub_entities, sub_entity_types, tdim, vertices};

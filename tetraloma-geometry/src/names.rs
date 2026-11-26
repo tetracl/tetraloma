@@ -1,9 +1,9 @@
 //! Static names of cell types and node families in `GridError`s, and the mapping of
 //! `RefCellError` onto `GridError` (ADR-0012).
 
-use tetraloma_device::GridError;
 use tetraloma_dims::CellType;
 use tetraloma_refcell::{NodeFamily, RefCellError};
+use tetraloma_topology::GridError;
 
 /// The name of a cell type in errors: its `CellType` variant name.
 pub(crate) fn cell_name(cell: CellType) -> &'static str {

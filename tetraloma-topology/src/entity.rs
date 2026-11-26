@@ -1,10 +1,11 @@
 //! Entity creation, steps 3–8: sort, unique, ownership (`crate::ownership`), renumbering,
 //! canonical vertex lists and global numbers; `EntityBlock` and `Connectivity` (Listing T1).
 
+use crate::{GridError, Result};
 use cubecl::prelude::*;
 use tetraloma_device::{
-    DeviceBuffer, DeviceCsr, DeviceStrided, GridError, KernelKind, LaunchPlan, Result, Unique,
-    debug_assert_bindings, gather, radix_sort_owned, scatter, unique_by_key_runs,
+    DeviceBuffer, DeviceCsr, DeviceStrided, KernelKind, LaunchPlan, Unique, debug_assert_bindings,
+    gather, radix_sort_owned, scatter, unique_by_key_runs,
 };
 use tetraloma_dims::CellType;
 use tetraloma_parallel::{CommDyn, CommExt, IndexMap};

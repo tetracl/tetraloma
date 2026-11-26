@@ -2,9 +2,9 @@
 
 use std::collections::{HashMap, HashSet};
 
-use tetraloma_device::{GridError, Result};
 use tetraloma_dims::CellType;
 use tetraloma_parallel::CommDyn;
+use tetraloma_topology::{GridError, Result};
 
 use super::chunk::{BlockHeader, Layout, complete, geometric_dim, missing_node};
 use super::{ElementBlock, FORMAT, MshFile, PhysicalName, element_type, lagrange_element_type};
@@ -28,7 +28,7 @@ use super::{ElementBlock, FORMAT, MshFile, PhysicalName, element_type, lagrange_
 /// assert_eq!((block.cell, block.degree), (CellType::Triangle, 1));
 /// assert_eq!((&block.tags[..], &block.elementary[..]), (&[1, 2][..], &[1, 1][..]));
 /// assert_eq!(block.nodes, [0, 1, 2, 0, 2, 3]);
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [Lagrange nodes]: https://tetracl.github.io/tetraloma/elements/lagrange.html#node-ordering
@@ -68,7 +68,7 @@ pub struct GmshCellBlock {
 /// assert_eq!((group.dim, group.cell), (1, CellType::Interval));
 /// assert_eq!((&group.corners[..], &group.tags[..]), (&[1, 3][..], &[3][..]));
 /// assert_eq!(group.elementary, [5]);
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [Physical groups]: https://tetracl.github.io/tetraloma/tutorials/tags-submeshes.html#physical-groups
@@ -111,7 +111,7 @@ pub struct GmshTagGroup {
 /// assert_eq!(mesh.node_tags, [1, 2, 3, 4]);
 /// assert_eq!(&mesh.nodes[4..6], [1.0, 1.0]);
 /// assert_eq!((mesh.blocks.len(), mesh.tag_groups.len()), (1, 1));
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [Reading and writing files]: https://tetracl.github.io/tetraloma/tutorials/read-write.html#reading-gmsh
@@ -220,7 +220,7 @@ fn check_unique(tags: impl IntoIterator<Item = i64>) -> Result<()> {
 /// assert_eq!(mesh.blocks[0].nodes, [0, 1, 2, 0, 2, 3]);
 /// assert_eq!(mesh.tag_groups[0].corners, [1, 3]);
 /// assert_eq!(mesh.tag_groups[0].elementary, [5]);
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [Fixing the dimensions]: https://tetracl.github.io/tetraloma/tutorials/read-write.html#fixing-the-dimensions
@@ -429,7 +429,7 @@ fn shift_to_one(tags: impl Iterator<Item = i64>) -> Result<i64> {
 /// assert_eq!(file.node_blocks[0].coords[2], [1.0, 1.0, 0.0]);
 /// assert_eq!(file.element_blocks[0].tags, [1, 2]);
 /// assert_eq!(file.entities.unwrap().surfaces[0].max, [1.0, 1.0, 0.0]);
-/// # Ok::<(), tetraloma_device::GridError>(())
+/// # Ok::<(), tetraloma_topology::GridError>(())
 /// ```
 ///
 /// [Writing Gmsh]: https://tetracl.github.io/tetraloma/tutorials/read-write.html#writing-gmsh
