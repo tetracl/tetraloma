@@ -4,8 +4,8 @@
 #   (docs/design.md, "Dependency rules" 5 and 6; M0 acceptance);
 # - any crate in the --no-cubecl list depends on any cubecl crate across normal, build and dev
 #   dependencies (rules 8 and 9; M11 A13, M18 A2);
-# - any crate in the --no-mesh list depends on a mesh crate of rule 9 across normal and build
-#   dependencies (M18 A1);
+# - any crate in the --no-mesh list depends on a mesh crate of rule 9 across normal, build and dev
+#   dependencies (M18 A1, T7);
 # - any crate in the --foundation-only list depends in its normal dependencies on a workspace
 #   crate outside {tetraloma-comm, tetraloma-device, tetraloma-parallel, tetraloma-comm-testing,
 #   tetraloma-testing-base} (M18 A6).
@@ -18,7 +18,9 @@
 #   --no-mesh CRATE          add CRATE to the mesh-free list (repeatable; default:
 #                            tetraloma-comm, tetraloma-device, tetraloma-parallel,
 #                            tetraloma-partition); e.g. `--no-mesh tetraloma-topology` must fail.
-#   --foundation-only CRATE  add CRATE to the foundation-only list (repeatable; default: none).
+#   --foundation-only CRATE  add CRATE to the foundation-only list (repeatable; default:
+#                            tetraloma-foundation-tests); e.g. `--foundation-only tetraloma-testing`
+#                            must fail.
 #   Extra arguments go to the workspace `cargo tree`; e.g. `--features tetraloma-mpi-tests/mpi`
 #   must fail.
 #
@@ -30,8 +32,8 @@ cd "$(dirname "$script_path")/.."
 
 # Default lists; enabling tasks add their crates here.
 no_cubecl_crates=("tetraloma-element" "tetraloma-comm" "tetraloma-partition")
-no_mesh_crates=("tetraloma-comm" "tetraloma-device" "tetraloma-parallel" "tetraloma-partition") # widened to dev in M18.T7
-foundation_only_crates=() # pending M18.T7 (tetraloma-foundation-tests)
+no_mesh_crates=("tetraloma-comm" "tetraloma-device" "tetraloma-parallel" "tetraloma-partition")
+foundation_only_crates=("tetraloma-foundation-tests")
 tree_args=()
 
 has_item() {
@@ -70,7 +72,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -h | --help)
-            sed -n '2,23p' "$script_path" | sed 's/^# \{0,1\}//'
+            sed -n '2,25p' "$script_path" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *)
@@ -102,7 +104,7 @@ done
 
 mesh_re='^(tetraloma|tetraloma-(dims|refcell|topology|geometry|io|element|function))$'
 for crate in ${no_mesh_crates[@]+"${no_mesh_crates[@]}"}; do
-    deps=$(cargo tree -p "$crate" --all-features --target all -e normal,build --prefix none --format '{p}' |
+    deps=$(cargo tree -p "$crate" --all-features --target all -e normal,build,dev --prefix none --format '{p}' |
         awk -v self="$crate" 'NF && $1 != self { print $1 }' | sort -u)
     report_hits "$crate depends on mesh crates (rule 9)" "$(grep -E "$mesh_re" <<<"$deps" || true)"
 done

@@ -19,7 +19,7 @@ on:
       - "tetraloma-testing/src/partition.rs"
       - "tetraloma-testing/src/meshes/boxes.rs"
       - "tetraloma-testing/src/io_parallel.rs"
-      - "tetraloma-testing/src/world_size.rs"
+      - "tetraloma-comm-testing/src/world_size.rs"
       - "scripts/mpi-test.sh"
       - "scripts/check-docs.sh"
       - ".github/workflows/ptscotch.yml"
@@ -88,12 +88,13 @@ jobs:
         run: |
           cargo build -p ptscotch-sys --features mpi --example threading_probe
           timeout 300 mpirun --oversubscribe -n 2 target/debug/examples/threading_probe
-      # tetraloma's ptscotch and parmetis imply mpi, so ThreadComm needs tetraloma-testing/mpi. Only
-      # what the features change; ci.yml's cpu job runs the rest of tetraloma's suite and the VTK
-      # oracles (Python).
+      # ptscotch and parmetis imply tetraloma-comm/mpi, so ThreadComm needs
+      # tetraloma-comm-testing/mpi when running tetraloma-partition alone, and tetraloma-testing/mpi
+      # (which forwards to it) when running tetraloma. Only what the features change; ci.yml's cpu
+      # job runs the rest of tetraloma's suite and the VTK oracles (Python).
       - name: Partitioner tests
         run: |
-          cargo test -p tetraloma-partition --features "$FEATURES"
+          cargo test -p tetraloma-partition --features "$FEATURES,tetraloma-comm-testing/mpi"
           cargo test -p tetraloma --features "$FEATURES,tetraloma-testing/mpi" --test integration partition_threads::
           cargo test -p tetraloma --features "$FEATURES,tetraloma-testing/mpi" --doc -- partitioner
         env:

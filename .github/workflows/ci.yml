@@ -93,6 +93,11 @@ jobs:
           rc=0
           scripts/check-workspace-deps.sh --no-mesh tetraloma-topology || rc=$?
           test "$rc" -eq 3
+      # Negative check: the script must find a disallowed workspace dependency (exit 3) on a crate above the foundation (M18 A6).
+      - run: |
+          rc=0
+          scripts/check-workspace-deps.sh --foundation-only tetraloma-testing || rc=$?
+          test "$rc" -eq 3
       # Public names of the four foundation crates (M18 A3; ADR-0074).
       - run: scripts/check-foundation-names.sh
       # Negative check: the script must find forbidden names (exit 3) on a mesh crate (M18 A3).
@@ -318,7 +323,8 @@ jobs:
     env:
       # As in the mpi jobs: the one-process MPI doctests must not pick an unusable RDMA device.
       UCX_TLS: self,sm,tcp
-      # The site's features (scripts/build-site.sh), and tetraloma-testing's ThreadComm with them.
+      # The site's features (scripts/build-site.sh), and tetraloma-testing/mpi (which forwards to
+      # tetraloma-testing-base/mpi and tetraloma-comm-testing/mpi for ThreadComm).
       DOCTEST_FEATURES: tetraloma/mpi,tetraloma/hdf5,tetraloma/scotch,tetraloma/ptscotch,tetraloma/metis,tetraloma-testing/mpi
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
