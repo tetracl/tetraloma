@@ -849,6 +849,17 @@ fn high_degree_interpolation_and_reproduction() {
                         } else {
                             strided_indices(dim)
                         };
+                        if cell != CellType::Hexahedron {
+                            let mat = el.interpolation_matrix();
+                            assert_eq!(mat.len(), dim * dim, "{key:?}");
+                            for &i in &check_rows {
+                                for j in 0..dim {
+                                    let want = if i == j { 1.0 } else { 0.0 };
+                                    assert_eq!(mat[i * dim + j], want, "{key:?}: M[{i}, {j}]");
+                                }
+                            }
+                        }
+
                         let check_pts: Vec<f64> = check_rows
                             .iter()
                             .flat_map(|&i| &pts[i * td..(i + 1) * td])

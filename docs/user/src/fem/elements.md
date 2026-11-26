@@ -125,16 +125,16 @@ follows:
 - **`Nodal(Gll)` and `Legendre`**: validated to $10^{-12}$ across every degree up to $p = 10$
   (pyramids: $p = 8$, `Legendre` only)—interpolation identity for both, orthonormal mass matrices
   for `Legendre`, and base transformations for `Nodal(Gll)`—and at sampled higher degrees up to
-  each cell's maximum ($p = 15$ on triangles, tetrahedra and prisms; $p = 20$ on intervals,
-  quadrilaterals and hexahedra) for degree-$p$ polynomial reproduction and interpolation identity
-  (checked on sampled rows for high-degree prisms and hexahedra, and through the 1D tensor factors,
-  tensor-product interpolation points and orthonormal basis for hexahedral `Legendre` so dense
-  tables remain lazy).
+  each cell's maximum ($p = 12, 15$ on triangles, tetrahedra and prisms; $p = 12, 16, 20$ on
+  intervals, quadrilaterals and hexahedra) for degree-$p$ polynomial reproduction and interpolation
+  identity (checked on sampled rows for high-degree prisms and hexahedra, and through the 1D tensor
+  factors, tensor-product interpolation points and orthonormal basis for hexahedral `Legendre` so
+  dense tables remain lazy).
 - **`Nodal(Equispaced)`**: validated to $10^{-12}$ for interpolation identity up to $p = 6$ and for
   base transformations up to $p = 10$ (pyramids: $p = 8$). Higher equispaced degrees up to the
-  table's maximum are offered for compatibility, but the Lebesgue constant of equispaced nodes
-  grows rapidly with $p$, degrading their conditioning; prefer `Nodal(Gll)` or `Legendre` for
-  high-degree spaces.
+  table's maximum are also offered, but the Lebesgue constant of equispaced nodes grows rapidly
+  with $p$, degrading their conditioning; prefer `Nodal(Gll)` or `Legendre` for high-degree
+  spaces.
 
 The example below checks that degrees beyond a cell's range and unsupported cell–variant pairs
 return `ElementError::Unsupported`:

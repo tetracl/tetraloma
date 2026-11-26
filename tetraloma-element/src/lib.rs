@@ -294,14 +294,17 @@ impl Element {
     ///
     /// Across the supported Lagrange degree table, [`Variant::Nodal`] with `NodeFamily::Gll` and
     /// [`Variant::Legendre`] are validated to `10⁻¹²` across every degree up to `p = 10`
-    /// (pyramids: `p = 8`, `Legendre` only) and at sampled higher degrees up to each cell's
-    /// maximum (`p = 15` on triangles, tetrahedra and prisms; `p = 20` on intervals,
-    /// quadrilaterals and hexahedra; on sampled nodes for high-degree prisms and hexahedra, and
-    /// through the 1D tensor factors and orthonormal basis for hexahedral `Legendre` so dense
-    /// tables remain lazy). [`Variant::Nodal`] with `NodeFamily::Equispaced` is validated to
-    /// `10⁻¹²` for interpolation identity up to `p = 6` and for base transformations up to
-    /// `p = 10` (pyramids: `p = 8`); higher equispaced degrees remain available for compatibility
-    /// but lose conditioning as `p` grows. See [Families and degrees].
+    /// (pyramids: `p = 8`, `Legendre` only) for interpolation identity (plus orthonormal mass
+    /// matrices for `Legendre` and base transformations for `Nodal(Gll)`), and at sampled higher
+    /// degrees (`p = 12, 15` on triangles, tetrahedra and prisms; `p = 12, 16, 20` on intervals,
+    /// quadrilaterals and hexahedra) for interpolation identity and degree-`p` polynomial
+    /// reproduction (on sampled rows for high-degree prisms and hexahedra, and through the 1D
+    /// tensor factors, tensor-product interpolation points and orthonormal basis for hexahedral
+    /// `Legendre` so dense tables remain lazy). [`Variant::Nodal`] with `NodeFamily::Equispaced`
+    /// is validated to `10⁻¹²` for interpolation identity up to `p = 6` and for base
+    /// transformations up to `p = 10` (pyramids: `p = 8`); higher equispaced degrees up to each
+    /// cell's maximum are also accepted, but lose conditioning as `p` grows. See
+    /// [Families and degrees].
     ///
     /// # Errors
     ///
