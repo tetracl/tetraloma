@@ -290,13 +290,34 @@ impl Element {
     /// Returns the finite element for `key`, building and caching it on first use.
     ///
     /// Repeated calls with the same `key` return clones of the same [`Arc<Element>`] from a
-    /// process-wide thread-safe cache. See [Families and degrees].
+    /// process-wide thread-safe cache.
+    ///
+    /// Across the supported Lagrange degree table, [`Variant::Nodal`] with `NodeFamily::Gll` and
+    /// [`Variant::Legendre`] are validated to `10⁻¹²` across every degree up to `p = 10`
+    /// (pyramids: `p = 8`, `Legendre` only) for interpolation identity (plus orthonormal mass
+    /// matrices for `Legendre` and base transformations for `Nodal(Gll)`), and at sampled higher
+    /// degrees (`p = 12, 15` on triangles, tetrahedra and prisms; `p = 12, 16, 20` on intervals,
+    /// quadrilaterals and hexahedra) for interpolation identity and degree-`p` polynomial
+    /// reproduction (on sampled rows for high-degree prisms and hexahedra, and through the 1D
+    /// tensor factors, tensor-product interpolation points and orthonormal basis for hexahedral
+    /// `Legendre` so dense tables remain lazy). [`Variant::Nodal`] with `NodeFamily::Equispaced`
+    /// is validated to `10⁻¹²` for interpolation identity up to `p = 6` and for base
+    /// transformations up to `p = 10` (pyramids: `p = 8`); higher equispaced degrees up to each
+    /// cell's maximum are also accepted, but lose conditioning as `p` grows. See
+    /// [Families and degrees].
     ///
     /// # Errors
     ///
     /// Returns [`ElementError::Unsupported`] if `key` is outside the supported table, or
     /// [`ElementError::RefCell`] if element construction fails (for example a singular dual
     /// matrix).
+    ///
+    /// # Panics
+    ///
+    /// Panics if an internal construction invariant is violated—specifically, if a nodal Lagrange
+    /// base transformation does not classify as a pure permutation within the crate's internal
+    /// classification tolerance. Every supported Lagrange key in the table satisfies this
+    /// invariant.
     ///
     /// # Example
     ///
