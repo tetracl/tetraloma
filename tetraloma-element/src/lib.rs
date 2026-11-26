@@ -290,13 +290,29 @@ impl Element {
     /// Returns the finite element for `key`, building and caching it on first use.
     ///
     /// Repeated calls with the same `key` return clones of the same [`Arc<Element>`] from a
-    /// process-wide thread-safe cache. See [Families and degrees].
+    /// process-wide thread-safe cache.
+    ///
+    /// Across the supported degree table, [`Variant::Nodal`] with `NodeFamily::Gll` and
+    /// [`Variant::Legendre`] are validated to `10⁻¹²` across every degree up to `p = 10`
+    /// (pyramids: `p = 8`, `Legendre` only) and at sampled higher degrees up to each cell's
+    /// maximum (`p = 15` on triangles, tetrahedra and prisms; `p = 20` on intervals,
+    /// quadrilaterals and hexahedra). [`Variant::Nodal`] with `NodeFamily::Equispaced` is
+    /// validated to `10⁻¹²` for interpolation identity up to `p = 6` and for base transformations
+    /// up to `p = 10` (pyramids: `p = 8`); higher equispaced degrees remain available for
+    /// compatibility but lose conditioning as `p` grows. See [Families and degrees].
     ///
     /// # Errors
     ///
     /// Returns [`ElementError::Unsupported`] if `key` is outside the supported table, or
     /// [`ElementError::RefCell`] if element construction fails (for example a singular dual
     /// matrix).
+    ///
+    /// # Panics
+    ///
+    /// Panics if an internal construction invariant is violated—specifically, if a nodal Lagrange
+    /// base transformation does not classify as a pure permutation within the internal
+    /// classification tolerance (`10⁻⁹`). Every supported Lagrange key in the table satisfies this
+    /// invariant.
     ///
     /// # Example
     ///

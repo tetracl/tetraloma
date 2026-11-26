@@ -118,6 +118,19 @@ but not yet constructed—returns
 | Prism | DefElement prism space | – | – | $1\text{–}15$ (DG $0\text{–}15$) |
 | Pyramid | DefElement Definition 9 | – | – | $1\text{–}8$ (DG $0\text{–}8$) |
 
+All combinations in the table above can be constructed, with accuracy validated in `f64` to
+$10^{-12}$ as follows:
+
+- **`Nodal(Gll)` and `Legendre`**: validated to $10^{-12}$ across every degree up to $p = 10$
+  (pyramids: $p = 8$, `Legendre` only)—interpolation identity for both, orthonormal mass matrices
+  for `Legendre`, and base transformations for `Nodal(Gll)`—and at sampled higher degrees up to
+  each cell's maximum ($p = 15$ on triangles, tetrahedra and prisms; $p = 20$ on intervals,
+  quadrilaterals and hexahedra) for interpolation identity and degree-$p$ polynomial reproduction.
+- **`Nodal(Equispaced)`**: validated to $10^{-12}$ for interpolation identity up to $p = 6$ and for
+  base transformations up to $p = 10$ (pyramids: $p = 8$). Higher equispaced degrees up to the
+  table's maximum are offered for compatibility, but Runge's phenomenon degrades their conditioning
+  as $p$ grows; prefer `Nodal(Gll)` or `Legendre` for high-degree spaces.
+
 The example below checks that degrees beyond a cell's range and unsupported cell–variant pairs
 return `ElementError::Unsupported`:
 
@@ -262,8 +275,9 @@ For nodal Lagrange variants at $p \ge 1$, the points are the Lagrange nodes and 
 $p = 0$, the single point is the mean of the cell's vertices and $M = [1]$. For
 `Variant::Legendre`, the points come from a degree-$2p$ Gauss rule and $M_{i,q} = w_q \psi_i(\xi_q)$.
 Because $l_i(\phi_j) = \delta_{ij}$, applying $M$ to the basis tabulated at
-`interpolation_points()` recovers the identity to $10^{-12}$ (up to $p = 10$ for `Gll` and
-`Legendre`, and $p = 6$ for `Equispaced`).
+`interpolation_points()` recovers the identity to $10^{-12}$ (validated across every degree up to
+$p = 10$ for `Gll` and `Legendre` and $p = 6$ for `Equispaced`, plus sampled higher degrees up to
+each cell's maximum as listed in [Families and degrees](#families-and-degrees)).
 
 ```rust
 use tetraloma::CellType;
