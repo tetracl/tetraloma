@@ -71,7 +71,7 @@ fn histogram_kernel(
 /// use tetraloma_device::{DeviceBuffer, histogram};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let values = DeviceBuffer::from_host(&client, &[2u32, 0, 2, 9, 1, 2]).unwrap();
 /// assert_eq!(histogram(&values, 4).unwrap().to_host().unwrap(), vec![1, 1, 3, 0]);
 /// ```
@@ -141,7 +141,7 @@ mod tests {
     /// only the zero fill of the output, a `fill`, plans as Fill and follows a forced size.
     #[test]
     fn histogram_plans_as_scalar() {
-        let client = tetraloma_testing::test_client();
+        let client = tetraloma_testing_base::test_client();
         let values = DeviceBuffer::from_host(&client, &[2u32, 0, 2, 9, 1, 2]).unwrap();
         let (counts, plans) = testing::record_plans(|| {
             testing::with_vector_size(crate::VectorSizeOverride::Fixed(2), || {

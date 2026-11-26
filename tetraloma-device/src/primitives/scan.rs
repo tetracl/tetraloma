@@ -158,7 +158,7 @@ fn scan_tile_kernel<T: Numeric, N: Size>(
 /// use tetraloma_device::{DeviceBuffer, inclusive_scan};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let x = DeviceBuffer::from_host(&client, &[3u32, 1, 4, 1, 5]).unwrap();
 /// assert_eq!(inclusive_scan(&x).unwrap().to_host().unwrap(), vec![3, 4, 8, 9, 14]);
 /// ```
@@ -187,7 +187,7 @@ pub fn inclusive_scan<T: DeviceScalar>(x: &DeviceBuffer<T>) -> Result<DeviceBuff
 /// use tetraloma_device::{DeviceBuffer, exclusive_scan};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let x = DeviceBuffer::from_host(&client, &[3u32, 1, 4, 1, 5]).unwrap();
 /// let offsets = exclusive_scan(&x).unwrap();
 /// assert_eq!(offsets.len(), 6);

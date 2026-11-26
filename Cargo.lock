@@ -4445,6 +4445,7 @@ dependencies = [
  "bytemuck",
  "mpi",
  "proptest",
+ "tetraloma-comm-testing",
 ]
 
 [[package]]
@@ -4466,7 +4467,7 @@ dependencies = [
  "num-complex 0.4.6",
  "proptest",
  "tetraloma-comm",
- "tetraloma-testing",
+ "tetraloma-testing-base",
  "toml",
 ]
 
@@ -4558,7 +4559,7 @@ dependencies = [
  "proptest",
  "tetraloma-comm",
  "tetraloma-device",
- "tetraloma-testing",
+ "tetraloma-testing-base",
 ]
 
 [[package]]
@@ -4573,6 +4574,7 @@ dependencies = [
  "scotch",
  "scotch-sys",
  "tetraloma-comm",
+ "tetraloma-comm-testing",
 ]
 
 [[package]]

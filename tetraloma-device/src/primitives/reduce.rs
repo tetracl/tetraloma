@@ -173,7 +173,7 @@ pub(crate) fn tree_half(cube_dim: u32) -> u32 {
 /// use tetraloma_device::{DeviceBuffer, ReduceOp, reduce};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let x = DeviceBuffer::from_host(&client, &[3i32, -1, 4, 1, -5]).unwrap();
 /// assert_eq!(reduce(&x, ReduceOp::Sum).unwrap().to_host().unwrap(), vec![2]);
 /// assert_eq!(reduce(&x, ReduceOp::Min).unwrap().to_host().unwrap(), vec![-5]);

@@ -23,7 +23,7 @@ use crate::{VECTOR_PAD, testing};
 /// use tetraloma_device::{KernelKind, VectorPolicy};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let n = VectorPolicy::for_client(&client).vector_size(KernelKind::Fill, 4);
 /// assert!(n.is_power_of_two());
 /// ```
@@ -108,7 +108,7 @@ impl KernelKind {
 /// use tetraloma_device::DeviceClass;
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let class = DeviceClass::for_client(&client);
 /// assert_eq!(class == DeviceClass::Cpu, client.properties().hardware.num_cpu_cores.is_some());
 /// ```
@@ -134,7 +134,7 @@ impl DeviceClass {
     /// use tetraloma_device::DeviceClass;
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let class = DeviceClass::for_client(&client);
     /// let reports_cores = client.properties().hardware.num_cpu_cores.is_some();
     /// assert_eq!(class == DeviceClass::Cpu, reports_cores);
@@ -184,7 +184,7 @@ impl DeviceClass {
 /// use tetraloma_device::{CpuUnits, DeviceClass, KernelKind, VectorPolicy};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let units = VectorPolicy::for_client(&client).cpu_units(KernelKind::Reduce, 4);
 /// assert_eq!(units.is_none(), DeviceClass::for_client(&client) == DeviceClass::Gpu);
 /// ```
@@ -229,7 +229,7 @@ pub(crate) const QUAD_TILE_VAR: &str = "TETRALOMA_QUAD_TILE";
 /// use tetraloma_device::testing::with_vector_size;
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let plan = with_vector_size(VectorSizeOverride::Scalar, || {
 ///     LaunchPlan::elementwise(&client, KernelKind::Fill, 1000, 4, 16, 1)
 /// })
@@ -325,7 +325,7 @@ fn read_env(var: &str) -> Option<String> {
 /// use tetraloma_device::VectorPolicy;
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// assert!([1, 2, 4, 8, 16].contains(&VectorPolicy::for_client(&client).quad_tile(4)));
 /// ```
 #[derive(Debug)]
@@ -352,7 +352,7 @@ impl VectorPolicy {
     /// use tetraloma_device::{KernelKind, VectorPolicy};
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let policy = VectorPolicy::for_client(&client);
     /// // Kernels that are not vectorised run at vector size 1.
     /// assert_eq!(policy.vector_size(KernelKind::Scalar, 4), 1);
@@ -381,7 +381,7 @@ impl VectorPolicy {
     /// use tetraloma_device::{KernelKind, VECTOR_PAD, VectorPolicy};
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let n = VectorPolicy::for_client(&client).vector_size(KernelKind::Fill, 4);
     /// assert!(n.is_power_of_two() && VECTOR_PAD % n == 0);
     /// ```
@@ -404,7 +404,7 @@ impl VectorPolicy {
     /// use tetraloma_device::VectorPolicy;
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let tile = VectorPolicy::for_client(&client).quad_tile(size_of::<f32>());
     /// assert!([1, 2, 4, 8, 16].contains(&tile));
     /// ```
@@ -429,7 +429,7 @@ impl VectorPolicy {
     /// use tetraloma_device::{DeviceClass, KernelKind, VectorPolicy};
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let block = VectorPolicy::for_client(&client).cpu_block_bytes(KernelKind::Fill, 4);
     /// match DeviceClass::for_client(&client) {
     ///     DeviceClass::Gpu => assert_eq!(block, None),
@@ -458,7 +458,7 @@ impl VectorPolicy {
     /// use tetraloma_device::{CpuUnits, DeviceClass, KernelKind, VectorPolicy};
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let units = VectorPolicy::for_client(&client).cpu_units(KernelKind::GeomFactors, 8);
     /// match DeviceClass::for_client(&client) {
     ///     DeviceClass::Gpu => assert_eq!(units, None),
@@ -840,7 +840,7 @@ mod tests {
 
     #[test]
     fn device_class_from_properties() {
-        let mut props = tetraloma_testing::test_client().properties().clone();
+        let mut props = tetraloma_testing_base::test_client().properties().clone();
         for width in [64, 128, 256, 512] {
             props.hardware.load_width = width;
             props.hardware.num_cpu_cores = None;

@@ -16,7 +16,7 @@ workspace = true
 # the transport is deferred (docs/design.md, "Dependency rules" 4; ADR-0059).
 gpu-aware-cuda = []
 # Test support, not part of the stable API: the scoped overrides of `tetraloma_device::testing`.
-# tetraloma-testing turns it on for every workspace test (docs/design.md, "Cargo features").
+# tetraloma-testing-base and tetraloma-testing turn it on for every workspace test (docs/design.md, "Cargo features").
 testing = []
 
 [dependencies]
@@ -31,7 +31,7 @@ toml.workspace = true
 libc.workspace = true
 
 [dev-dependencies]
-tetraloma-testing = { path = "../tetraloma-testing" }
+tetraloma-testing-base = { path = "../tetraloma-testing-base" }
 proptest.workspace = true
 
 # The test files are modules of one test executable (tests/main.rs): one link of the

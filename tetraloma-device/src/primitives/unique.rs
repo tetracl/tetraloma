@@ -165,7 +165,7 @@ fn offsets_kernel(starts: &[u32], offsets: &mut [u32], len: u32, items_per_unit:
 /// use tetraloma_device::{Runs, SortKeys, run_length};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let Runs { keys, offsets } = run_length(&SortKeys::from_host(&client, &[7, 7, 9], 1).unwrap()).unwrap();
 /// assert_eq!(keys.to_host().unwrap(), vec![7, 9]);
 /// assert_eq!(offsets.to_host().unwrap(), vec![0, 2, 3]);
@@ -194,7 +194,7 @@ pub struct Runs {
 /// use tetraloma_device::{SortKeys, run_length};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let keys = SortKeys::from_host(&client, &[4, 4, 4, 1, 4, 4], 1).unwrap();
 /// let runs = run_length(&keys).unwrap();
 /// assert_eq!(runs.keys.to_host().unwrap(), vec![4, 1, 4]);
@@ -253,7 +253,7 @@ pub fn run_length(keys: &SortKeys) -> Result<Runs> {
 /// use tetraloma_device::{DeviceBuffer, SortKeys, Unique, unique_by_key};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let sorted = SortKeys::from_host(&client, &[1, 1, 5, 5, 5, 8], 1).unwrap();
 /// let payload = DeviceBuffer::from_host(&client, &[10u32, 11, 12, 13, 14, 15]).unwrap();
 /// let Unique { keys, first, group } = unique_by_key(&sorted, &payload).unwrap();
@@ -290,7 +290,7 @@ pub struct Unique {
 /// use tetraloma_device::{DeviceBuffer, SortKeys, unique_by_key};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let keys = SortKeys::from_host(&client, &[2, 2, 5, 7, 7, 7], 1).unwrap();
 /// let payload = DeviceBuffer::from_host(&client, &[10u32, 11, 12, 13, 14, 15]).unwrap();
 /// let u = unique_by_key(&keys, &payload).unwrap();
@@ -316,7 +316,7 @@ pub fn unique_by_key(sorted: &SortKeys, payload: &DeviceBuffer<u32>) -> Result<U
 /// use tetraloma_device::{DeviceBuffer, SortKeys, unique_by_key_runs};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let keys = SortKeys::from_host(&client, &[2, 2, 5, 7, 7, 7], 1).unwrap();
 /// let payload = DeviceBuffer::from_host(&client, &[10u32, 11, 12, 13, 14, 15]).unwrap();
 /// let (u, offsets) = unique_by_key_runs(&keys, &payload).unwrap();

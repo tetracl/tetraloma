@@ -22,7 +22,7 @@ use crate::testing;
 /// use tetraloma_device::{DeviceBuffer, VECTOR_PAD};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let b = DeviceBuffer::from_host(&client, &[1u32, 2, 3]).unwrap();
 /// assert_eq!(b.padded_len(), VECTOR_PAD);
 /// ```
@@ -48,7 +48,7 @@ pub const VECTOR_PAD: usize = 16;
 /// use tetraloma_device::DeviceBuffer;
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let b = DeviceBuffer::from_host(&client, &[1.5f32, 2.5]).unwrap();
 /// assert_eq!(b.len(), 2);
 /// assert_eq!(b.to_host().unwrap(), vec![1.5, 2.5]);
@@ -79,7 +79,7 @@ impl<T: CubeElement> DeviceBuffer<T> {
     /// use tetraloma_device::DeviceBuffer;
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let b = DeviceBuffer::from_host(&client, &[7i32; 20]).unwrap();
     /// assert_eq!((b.len(), b.padded_len()), (20, 32));
     /// ```
@@ -107,7 +107,7 @@ impl<T: CubeElement> DeviceBuffer<T> {
     /// use tetraloma_device::{DeviceBuffer, VECTOR_PAD};
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let b = DeviceBuffer::<f32>::uninit(&client, 0).unwrap();
     /// assert_eq!((b.len(), b.padded_len()), (0, VECTOR_PAD));
     /// ```
@@ -131,7 +131,7 @@ impl<T: CubeElement> DeviceBuffer<T> {
     /// use tetraloma_device::DeviceBuffer;
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let z = DeviceBuffer::<f32>::zeros(&client, 3).unwrap();
     /// assert_eq!(z.to_host().unwrap(), vec![0.0; 3]);
     /// ```
@@ -153,7 +153,7 @@ impl<T: CubeElement> DeviceBuffer<T> {
     /// use tetraloma_device::DeviceBuffer;
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let a = DeviceBuffer::from_host(&client, &[1u32, 2]).unwrap();
     /// let b = a.share();
     /// assert_eq!(b.to_host().unwrap(), a.to_host().unwrap());
@@ -177,7 +177,7 @@ impl<T: CubeElement> DeviceBuffer<T> {
     /// use tetraloma_device::DeviceBuffer;
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let a = DeviceBuffer::from_host(&client, &[1u32, 2, 3]).unwrap();
     /// let b = a.deep_clone().unwrap();
     /// drop(a);
@@ -198,7 +198,7 @@ impl<T: CubeElement> DeviceBuffer<T> {
     /// use tetraloma_device::DeviceBuffer;
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// assert_eq!(DeviceBuffer::from_host(&client, &[1u32, 2, 3]).unwrap().len(), 3);
     /// assert_eq!(DeviceBuffer::<u32>::uninit(&client, 0).unwrap().len(), 0);
     /// ```
@@ -216,7 +216,7 @@ impl<T: CubeElement> DeviceBuffer<T> {
     /// use tetraloma_device::{DeviceBuffer, VECTOR_PAD};
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// assert_eq!(DeviceBuffer::from_host(&client, &[1u32, 2, 3]).unwrap().padded_len(), VECTOR_PAD);
     /// assert_eq!(DeviceBuffer::<u32>::uninit(&client, 0).unwrap().padded_len(), VECTOR_PAD);
     /// assert_eq!(DeviceBuffer::<u32>::uninit(&client, 17).unwrap().padded_len(), 2 * VECTOR_PAD);
@@ -234,7 +234,7 @@ impl<T: CubeElement> DeviceBuffer<T> {
     /// use tetraloma_device::{DeviceBuffer, VECTOR_PAD};
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let b = DeviceBuffer::<f64>::uninit(&client, 17).unwrap();
     /// assert_eq!(b.footprint_bytes(), 2 * VECTOR_PAD * 8);
     /// ```
@@ -254,7 +254,7 @@ impl<T: CubeElement> DeviceBuffer<T> {
     /// use tetraloma_device::DeviceBuffer;
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let x = DeviceBuffer::from_host(&client, &[1u32, 2, 3]).unwrap();
     /// let bytes = client.read_one(x.handle().clone()).unwrap();
     /// assert_eq!(bytes.len(), x.padded_len() * size_of::<u32>());
@@ -272,7 +272,7 @@ impl<T: CubeElement> DeviceBuffer<T> {
     /// use tetraloma_device::DeviceBuffer;
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let x = DeviceBuffer::from_host(&client, &[1.0f32, 2.0]).unwrap();
     /// let y = DeviceBuffer::from_host(x.client(), &[3.0f32, 4.0]).unwrap();
     /// assert_eq!(y.client().name(), client.name());
@@ -296,7 +296,7 @@ impl<T: CubeElement> DeviceBuffer<T> {
     /// use tetraloma_device::DeviceBuffer;
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let b = DeviceBuffer::from_host(&client, &[3u32, 1, 4]).unwrap();
     /// assert_eq!(b.to_host().unwrap(), vec![3, 1, 4]);
     /// ```
@@ -328,7 +328,7 @@ impl<T: CubeElement> DeviceBuffer<T> {
     /// use tetraloma_device::{DeviceBuffer, DeviceError};
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let mut b = DeviceBuffer::from_host(&client, &[1u32, 2, 3]).unwrap();
     /// b.write_host(&[7, 8, 9]).unwrap();
     /// assert_eq!(b.to_host().unwrap(), vec![7, 8, 9]);
@@ -371,7 +371,7 @@ impl<T: CubeElement> DeviceBuffer<T> {
     /// use tetraloma_device::DeviceBuffer;
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let b = DeviceBuffer::from_host(&client, &[2.0f32, 4.0]).unwrap();
     /// let host = cubecl::future::block_on(b.to_host_async()).unwrap();
     /// assert_eq!(host, vec![2.0, 4.0]);
@@ -397,7 +397,7 @@ impl<T: CubeElement> DeviceBuffer<T> {
     /// use tetraloma_device::DeviceBuffer;
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let b = DeviceBuffer::from_host(&client, &[1u32, 2, 3]).unwrap();
     /// // SAFETY: the argument is not passed to a kernel.
     /// let _arg = unsafe { b.arg() };
@@ -423,7 +423,7 @@ impl<T: CubeElement> DeviceBuffer<T> {
     /// use tetraloma_device::DeviceBuffer;
     ///
     /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-    /// # let client = tetraloma_testing::test_client();
+    /// # let client = tetraloma_testing_base::test_client();
     /// let b = DeviceBuffer::from_host(&client, &[0.5f32; 40]).unwrap();
     /// // SAFETY: the argument is not passed to a kernel.
     /// let _arg = unsafe { b.vector_arg(4) };
@@ -533,7 +533,7 @@ fn decode<T: CubeElement>(bytes: &[u8], len: usize) -> Result<Vec<T>> {
 /// use tetraloma_device::{DeviceBuffer, DeviceStrided};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let triangles = DeviceStrided { data: DeviceBuffer::from_host(&client, &[0u32, 1, 2, 1, 3, 2]).unwrap(), stride: 3 };
 /// assert_eq!(triangles.data.len() / triangles.stride as usize, 2);
 /// ```
@@ -557,7 +557,7 @@ pub struct DeviceStrided<T: CubeElement> {
 /// use tetraloma_device::{DeviceBuffer, DeviceCsr};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let csr = DeviceCsr {
 ///     offsets: DeviceBuffer::from_host(&client, &[0u32, 2, 3]).unwrap(),
 ///     indices: DeviceBuffer::from_host(&client, &[4u32, 5, 6]).unwrap(),
@@ -632,7 +632,7 @@ mod tests {
     /// the memory held other values before (a released buffer of the same size).
     #[test]
     fn write_host_zeroes_the_padding() {
-        let client = tetraloma_testing::test_client();
+        let client = tetraloma_testing_base::test_client();
         for len in [1, 5, VECTOR_PAD, VECTOR_PAD + 3] {
             let padded = pad_len(len).unwrap();
             drop(DeviceBuffer::from_host(&client, &vec![u32::MAX; padded]).unwrap());
@@ -651,8 +651,8 @@ mod tests {
     /// CUDA and HIP, not the CPU runtime, Metal or Vulkan.
     #[test]
     fn write_host_stages_only_where_staging_pins() {
-        let client = tetraloma_testing::test_client();
-        let device = std::env::var(tetraloma_testing::TEST_DEVICE_VAR).unwrap_or_default();
+        let client = tetraloma_testing_base::test_client();
+        let device = std::env::var(tetraloma_testing_base::TEST_DEVICE_VAR).unwrap_or_default();
         assert_eq!(
             stages_in_pinned_memory(&client),
             matches!(device.as_str(), "cuda" | "hip"),
@@ -663,7 +663,7 @@ mod tests {
 
     #[test]
     fn empty_buffer_allocates_one_block() {
-        let client = tetraloma_testing::test_client();
+        let client = tetraloma_testing_base::test_client();
         let b = DeviceBuffer::<f32>::uninit(&client, 0).unwrap();
         assert_eq!(b.len(), 0);
         assert_eq!(b.padded_len(), VECTOR_PAD);

@@ -4,7 +4,7 @@
 use cubecl::prelude::*;
 use tetraloma_device::testing::with_properties;
 use tetraloma_device::{DeviceBuffer, DeviceError, VECTOR_PAD, check_precision};
-use tetraloma_testing::{supports, test_client};
+use tetraloma_testing_base::{supports, test_client};
 
 /// The injected `max_page_size`: 1024 bytes, 256 u32 elements.
 const LIMIT: u64 = 1024;

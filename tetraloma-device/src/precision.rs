@@ -152,7 +152,7 @@ impl FieldScalar for num_complex::Complex<f64> {
 /// use tetraloma_device::{DeviceError, check_precision};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// check_precision::<f32>(&client).unwrap();
 /// match check_precision::<f64>(&client) {
 ///     Ok(()) => {}

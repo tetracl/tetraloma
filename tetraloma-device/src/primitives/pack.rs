@@ -132,7 +132,7 @@ fn check_packed(packed: usize, num_idx: usize, block: usize) -> Result<()> {
 /// use tetraloma_device::{DeviceBuffer, pack};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// // Three blocks of two values.
 /// let src = DeviceBuffer::from_host(&client, &[1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0]).unwrap();
 /// let idx = DeviceBuffer::from_host(&client, &[2u32, 0]).unwrap();
@@ -237,7 +237,7 @@ pub fn pack<T: CubeElement>(
 /// use tetraloma_device::{DeviceBuffer, unpack};
 ///
 /// // `client`: a CubeCL client, for example `cubecl::Device::cpu()?.client()`.
-/// # let client = tetraloma_testing::test_client();
+/// # let client = tetraloma_testing_base::test_client();
 /// let packed = DeviceBuffer::from_host(&client, &[7i32, 8, 9, 10]).unwrap();
 /// let idx = DeviceBuffer::from_host(&client, &[2u32, 0]).unwrap();
 /// let mut dst = DeviceBuffer::from_host(&client, &[0i32; 6]).unwrap();

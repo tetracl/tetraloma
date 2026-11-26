@@ -22,7 +22,7 @@ const KINDS: [KernelKind; 13] = [
 
 #[test]
 fn device_class_has_exactly_cpu_and_gpu() {
-    let client = tetraloma_testing::test_client();
+    let client = tetraloma_testing_base::test_client();
     let class = DeviceClass::for_client(&client);
     // Exhaustive: a third variant does not compile.
     let cpu = match class {
@@ -35,7 +35,7 @@ fn device_class_has_exactly_cpu_and_gpu() {
         "Cpu exactly for devices with CPU cores"
     );
     // The CPU runtime is Cpu; Metal, CUDA, HIP and the wgpu backends are Gpu.
-    let device = std::env::var(tetraloma_testing::TEST_DEVICE_VAR).unwrap_or_default();
+    let device = std::env::var(tetraloma_testing_base::TEST_DEVICE_VAR).unwrap_or_default();
     let want_cpu = matches!(device.as_str(), "" | "cpu");
     assert_eq!(cpu, want_cpu, "TETRALOMA_TEST_DEVICE={device:?}");
 }
@@ -90,7 +90,7 @@ fn vector_policy_has_four_sets() {
         }
     }
     // The policy of the test device parses (one of the two sets).
-    let client = tetraloma_testing::test_client();
+    let client = tetraloma_testing_base::test_client();
     let policy = VectorPolicy::for_client(&client);
     for kind in KINDS {
         for bytes in [4, 8] {

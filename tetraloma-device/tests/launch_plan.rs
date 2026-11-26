@@ -15,8 +15,8 @@ use tetraloma_device::{
     CpuUnits, DeviceBuffer, DeviceError, KernelKind, LaunchPlan, VECTOR_PAD, VectorPolicy,
     VectorSizeOverride,
 };
-use tetraloma_testing::primitive_checks::{SplitMix, TestScalar};
-use tetraloma_testing::test_client;
+use tetraloma_testing_base::primitive_checks::{SplitMix, TestScalar};
+use tetraloma_testing_base::test_client;
 
 const KINDS: [KernelKind; 13] = [
     KernelKind::Fill,
@@ -718,7 +718,7 @@ fn group_tree_case<T: TestScalar + Float>(client: &Client) {
         .1
         .units_per_group;
     assert!(limit.is_power_of_two() && limit <= 64, "{limit}");
-    let bitwise = tetraloma_testing::bitwise_device();
+    let bitwise = tetraloma_testing_base::bitwise_device();
     for vector in [VectorSizeOverride::Scalar, VectorSizeOverride::Policy] {
         for units in [1usize, 2, 64] {
             let (have, plan) = with_cpu_block_bytes(4 << 10, || {
@@ -748,7 +748,7 @@ fn group_tree_case<T: TestScalar + Float>(client: &Client) {
 fn group_tree_is_independent_of_units_per_group() {
     let client = test_client();
     group_tree_case::<f32>(&client);
-    if tetraloma_testing::supports::<f64>(&client) {
+    if tetraloma_testing_base::supports::<f64>(&client) {
         group_tree_case::<f64>(&client);
     } else {
         println!("{}: no f64", client.name());
