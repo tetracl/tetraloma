@@ -77,7 +77,19 @@ jobs:
       # Rustdoc without warnings and every public item documented (ADR-0060 item 7); the
       # partitioner and I/O features in ptscotch.yml.
       - run: scripts/check-docs.sh default
-      - run: scripts/check-workspace-deps.sh
+      # Default workspace dependency checks, and guard that tetraloma-element stays on the default
+      # no-CubeCL and rule-8 allowlist checks (M11 A13, G11).
+      - run: |
+          out=$(scripts/check-workspace-deps.sh)
+          echo "$out"
+          grep -Eq '^check-workspace-deps: ok \(.*free of cubecl: ([^;]*, )?tetraloma-element(,|;|\))' <<<"$out" || {
+            echo "::error::check-workspace-deps.sh default no-cubecl list must include tetraloma-element" >&2
+            exit 1
+          }
+          grep -Eq '^check-workspace-deps: ok \(.*element-only: ([^;]*, )?tetraloma-element(,|;|\))' <<<"$out" || {
+            echo "::error::check-workspace-deps.sh default element-only list must include tetraloma-element" >&2
+            exit 1
+          }
       # Negative check: the script must still find MPI (exit 3) when a feature pulls it in.
       - run: |
           rc=0
@@ -92,6 +104,14 @@ jobs:
       - run: |
           rc=0
           scripts/check-workspace-deps.sh --no-mesh tetraloma-topology || rc=$?
+          test "$rc" -eq 3
+      # Negative check: the script must find disallowed normal/build dependencies (exit 3) under --element-only (rule 8; M11 G11).
+      - run: |
+          rc=0
+          scripts/check-workspace-deps.sh --element-only tetraloma-topology || rc=$?
+          test "$rc" -eq 3
+          rc=0
+          scripts/check-workspace-deps.sh --element-only tetraloma-comm || rc=$?
           test "$rc" -eq 3
       # Negative check: the script must find a disallowed workspace dependency (exit 3) on a crate above the foundation (M18 A6).
       - run: |
