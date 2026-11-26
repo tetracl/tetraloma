@@ -1,4 +1,5 @@
-//! M11 acceptance tests for tetraloma-element (docs/plans/M11.md: A6, A7, A8, A10 and A12).
+//! M11 acceptance tests (docs/plans/M11.md: A6, A7, A8, A10 and A12) and M11 G8 high-degree
+//! validation tests for tetraloma-element.
 
 use std::collections::BTreeMap;
 
@@ -758,12 +759,12 @@ fn reproduction_points(cell: CellType) -> &'static [f64] {
     }
 }
 
-/// Strided index selection of length at most ~33, always including `0` and `n - 1`.
+/// Strided index selection of length at most 33, always including `0` and `n - 1`.
 fn strided_indices(n: usize) -> Vec<usize> {
     if n <= 33 {
         return (0..n).collect();
     }
-    let step = n / 32;
+    let step = n.div_ceil(32);
     let mut idxs: Vec<usize> = (0..n).step_by(step).collect();
     if *idxs.last().unwrap() != n - 1 {
         idxs.push(n - 1);
@@ -903,6 +904,23 @@ fn high_degree_interpolation_and_reproduction() {
                             el1.interpolation_matrix(),
                         );
                         let m1 = pts1.len();
+                        let hex_pts = el.interpolation_points();
+                        assert_eq!(hex_pts.len(), m1 * m1 * m1 * td, "{key:?}");
+                        for (q2, &z) in pts1.iter().enumerate() {
+                            for (q1, &y) in pts1.iter().enumerate() {
+                                for (q0, &x) in pts1.iter().enumerate() {
+                                    let q = q0 + m1 * (q1 + m1 * q2);
+                                    let got = &hex_pts[q * td..(q + 1) * td];
+                                    for (d, (&g, w)) in got.iter().zip([x, y, z]).enumerate() {
+                                        let err = (g - w).abs();
+                                        assert!(
+                                            err <= TOL,
+                                            "{key:?}: interp point {q} coord {d}: {g} vs {w} (err {err:e})"
+                                        );
+                                    }
+                                }
+                            }
+                        }
                         let proj_1d = |k: u32| -> Vec<f64> {
                             let s: Vec<f64> = pts1.iter().map(|&t| chebyshev_01(k, t)).collect();
                             (0..n)
@@ -991,6 +1009,30 @@ fn high_degree_interpolation_and_reproduction() {
                         assert_reproduces(key, &dofs, &tab_test.values, &exact);
                     }
                 }
+            }
+        }
+    }
+}
+
+/// M11 G8: every supported nodal Lagrange key in section 26's table constructs without panicking
+/// and classifies every sub-entity base transformation as a pure permutation (not `Dense`),
+/// exhaustively backing `Element::get`'s `# Panics` invariant.
+#[test]
+fn all_nodal_lagrange_keys_construct() {
+    for cell in ALL_CELLS {
+        let max_p = max_degree(cell);
+        for variant in variants_for(cell) {
+            if !matches!(variant, Variant::Nodal(_)) {
+                continue;
+            }
+            for degree in 0..=max_p {
+                let key = lagrange_key(cell, degree, variant);
+                let el = Element::get(key).unwrap();
+                assert_ne!(
+                    el.transformation_kind(),
+                    TransformationKind::Dense,
+                    "{key:?}: Lagrange must not be Dense"
+                );
             }
         }
     }

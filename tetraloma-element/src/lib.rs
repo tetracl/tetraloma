@@ -292,14 +292,16 @@ impl Element {
     /// Repeated calls with the same `key` return clones of the same [`Arc<Element>`] from a
     /// process-wide thread-safe cache.
     ///
-    /// Across the supported degree table, [`Variant::Nodal`] with `NodeFamily::Gll` and
+    /// Across the supported Lagrange degree table, [`Variant::Nodal`] with `NodeFamily::Gll` and
     /// [`Variant::Legendre`] are validated to `10⁻¹²` across every degree up to `p = 10`
     /// (pyramids: `p = 8`, `Legendre` only) and at sampled higher degrees up to each cell's
     /// maximum (`p = 15` on triangles, tetrahedra and prisms; `p = 20` on intervals,
-    /// quadrilaterals and hexahedra). [`Variant::Nodal`] with `NodeFamily::Equispaced` is
-    /// validated to `10⁻¹²` for interpolation identity up to `p = 6` and for base transformations
-    /// up to `p = 10` (pyramids: `p = 8`); higher equispaced degrees remain available for
-    /// compatibility but lose conditioning as `p` grows. See [Families and degrees].
+    /// quadrilaterals and hexahedra; on sampled nodes for high-degree prisms and hexahedra, and
+    /// through the 1D tensor factors and orthonormal basis for hexahedral `Legendre` so dense
+    /// tables remain lazy). [`Variant::Nodal`] with `NodeFamily::Equispaced` is validated to
+    /// `10⁻¹²` for interpolation identity up to `p = 6` and for base transformations up to
+    /// `p = 10` (pyramids: `p = 8`); higher equispaced degrees remain available for compatibility
+    /// but lose conditioning as `p` grows. See [Families and degrees].
     ///
     /// # Errors
     ///
@@ -310,8 +312,8 @@ impl Element {
     /// # Panics
     ///
     /// Panics if an internal construction invariant is violated—specifically, if a nodal Lagrange
-    /// base transformation does not classify as a pure permutation within the internal
-    /// classification tolerance (`10⁻⁹`). Every supported Lagrange key in the table satisfies this
+    /// base transformation does not classify as a pure permutation within the crate's internal
+    /// classification tolerance. Every supported Lagrange key in the table satisfies this
     /// invariant.
     ///
     /// # Example
