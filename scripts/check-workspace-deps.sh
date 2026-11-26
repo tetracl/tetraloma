@@ -6,8 +6,8 @@
 #   dependencies (rules 8 and 9; M11 A13, M18 A2);
 # - any crate in the --no-mesh list depends on a mesh crate of rule 9 across normal and build
 #   dependencies (M18 A1);
-# - any crate in the --element-only list depends in its normal or build dependencies on any
-#   crate outside {tetraloma-dims, tetraloma-refcell} (rule 8; M11 G11);
+# - any crate in the --element-only list depends anywhere in its normal or build dependency tree
+#   on any crate outside {tetraloma-dims, tetraloma-refcell} (rule 8; M11 G11);
 # - any crate in the --foundation-only list depends in its normal dependencies on a workspace
 #   crate outside {tetraloma-comm, tetraloma-device, tetraloma-parallel, tetraloma-comm-testing,
 #   tetraloma-testing-base} (M18 A6).
