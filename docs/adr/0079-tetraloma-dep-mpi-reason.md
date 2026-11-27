@@ -11,7 +11,7 @@ Raised by: issue #136 (follow-up from #131 and ADR-0078)
 
 That rationale no longer matches the codebase:
 
-1. **`tetraloma` has no test communicator.** `tetraloma/src/test_comm.rs` (then `gridcl/src/test_comm.rs`) was removed in M8 (`ee73a29`). No source file under `tetraloma/src/` or `tetraloma/tests/` implements `CommDyn` or names `mpi::ffi::MPI_Comm`.
+1. **`tetraloma` has no test communicator.** `src/test_comm.rs` in the facade crate was removed in M8 (`ee73a29`). No source file under `tetraloma/src/` or `tetraloma/tests/` implements `CommDyn` or names `mpi::ffi::MPI_Comm`.
 2. **`CommDyn::raw` now has a default body.** ADR-0078 (implemented in #137) gave `CommDyn::raw` the default body `{ None }`, removing the need for non-MPI `CommDyn` implementors to depend on `mpi`.
 3. **`dep:mpi` is still required by `tetraloma`'s MPI rustdoc examples.** Four `no_run` rustdoc examples in `tetraloma/src/` call `mpi::initialize()` to construct an `Mpi` communicator under `#[cfg(feature = "mpi")]` or `#[cfg(feature = "ptscotch")]`:
    - `tetraloma/src/mesh.rs:65` (`Mesh`)
