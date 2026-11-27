@@ -35,26 +35,9 @@ pub(crate) mod upload;
 
 use cubecl::MemoryScope;
 use cubecl::prelude::Client;
+pub(crate) use tetraloma_comm::agree;
 use tetraloma_dims::CellType;
 use tetraloma_geometry::NodeFamily;
-use tetraloma_parallel::{CommDyn, CommExt};
-use tetraloma_topology::{GridError, Result};
-
-/// The agreed result of a collective step (ADR-0026, item 15): a failing rank returns its own
-/// error, every other rank `RemoteFailure` with the lowest failing rank. Collective.
-pub(crate) fn agree<T>(comm: &dyn CommDyn, local: Result<T>) -> Result<T> {
-    let lowest = comm.min(if local.is_err() {
-        comm.rank() as u64
-    } else {
-        u64::MAX
-    });
-    match local {
-        Ok(_) if lowest != u64::MAX => Err(GridError::RemoteFailure {
-            rank: lowest as usize,
-        }),
-        other => other,
-    }
-}
 
 /// The log target of [`log_memory`].
 pub(crate) const MEMORY_LOG: &str = "tetraloma::memory";
@@ -387,7 +370,9 @@ pub(crate) mod testing;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tetraloma_parallel::CommDyn;
     use tetraloma_testing::ThreadComm;
+    use tetraloma_topology::GridError;
 
     #[test]
     fn agree_names_the_lowest_failing_rank() {
@@ -403,7 +388,9 @@ mod tests {
         assert!(matches!(out[1], Err(GridError::TooLarge)));
         assert!(matches!(out[2], Err(GridError::RemoteFailure { rank: 1 })));
         assert!(matches!(out[3], Err(GridError::TooLarge)));
-        let ok = ThreadComm::run(3, |comm| agree(&comm, Ok(comm.rank())).unwrap());
+        let ok = ThreadComm::run(3, |comm| {
+            agree(&comm, Ok::<_, GridError>(comm.rank())).unwrap()
+        });
         assert_eq!(ok, [0, 1, 2]);
     }
 

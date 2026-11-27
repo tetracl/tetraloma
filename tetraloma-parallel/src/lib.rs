@@ -33,3 +33,35 @@ pub use tetraloma_comm::{
     Comm, CommDyn, CommError, CommExt, CommScalar, DType, Neighbourhood, ReduceOp, Serial,
     local_gpu_index, owner_hash,
 };
+// Design: ADR-0026, item 15; ADR-0074; hidden item (dependency rule 7; docs/plans/M18.md,
+// Hidden items & Decision 9, issue #131 / G5), re-exported for workspace crates above
+// `tetraloma-parallel` (`tetraloma-topology`, `tetraloma-io`).
+#[doc(hidden)]
+pub use tetraloma_comm::agree;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tetraloma_testing_base::ThreadComm;
+
+    #[test]
+    fn hidden_agree_reexport_agrees_on_parallel_error() {
+        let out = ThreadComm::run(3, |comm| {
+            let local: Result<usize> = if comm.rank() == 1 {
+                Err(ParallelError::TooLarge)
+            } else {
+                Ok(comm.rank())
+            };
+            crate::agree(&comm, local)
+        });
+        assert!(matches!(
+            out[0],
+            Err(ParallelError::RemoteFailure { rank: 1 })
+        ));
+        assert!(matches!(out[1], Err(ParallelError::TooLarge)));
+        assert!(matches!(
+            out[2],
+            Err(ParallelError::RemoteFailure { rank: 1 })
+        ));
+    }
+}

@@ -33,10 +33,6 @@ cd "$(dirname "$0")/.."
 # The features of the site (ADR-0067, rule 2), and of the parmetis audit.
 SITE_FEATURES="tetraloma/mpi,tetraloma/hdf5,tetraloma/scotch,tetraloma/ptscotch,tetraloma/metis"
 PARMETIS_FEATURES="tetraloma/mpi,tetraloma/hdf5,tetraloma/scotch,tetraloma/ptscotch,tetraloma/parmetis"
-# The doctests also build the test-support dev-dependencies, whose ThreadComm needs its `mpi`
-# feature with tetraloma/mpi; tetraloma-testing/mpi forwards to tetraloma-testing-base/mpi and
-# tetraloma-comm-testing/mpi when tetraloma is selected.
-DOCTEST_EXTRA="tetraloma-testing/mpi"
 
 SITE=${TETRALOMA_SITE_DIR:-site}
 WORK=target/user-docs
@@ -113,7 +109,7 @@ if [[ -n $parmetis ]]; then
         TETRALOMA_USER_DOCS_LOCKED=1 scripts/build-site.sh --api-only --out "$pwork/api" \
             --features "$PARMETIS_FEATURES" --crates tetraloma-partition --logs "$pwork/logs" || true
         list_doctests tetraloma-partition \
-            "tetraloma-partition/parmetis,tetraloma-partition/scotch,tetraloma-partition/ptscotch,tetraloma-comm-testing/mpi" \
+            "tetraloma-partition/parmetis,tetraloma-partition/scotch,tetraloma-partition/ptscotch" \
             "$pwork/doctests"
     fi
     rc=0
@@ -139,7 +135,7 @@ if [[ -n $build ]]; then
     TETRALOMA_USER_DOCS_LOCKED=1 scripts/build-site.sh --out "$SITE" --features "$SITE_FEATURES" \
         --logs "$WORK/logs" || true
     list_doctests "$(cut -d' ' -f1 "$WORK/api-order.txt" | tr '\n' ' ')" \
-        "$SITE_FEATURES,$DOCTEST_EXTRA" "$WORK/doctests"
+        "$SITE_FEATURES" "$WORK/doctests"
 fi
 
 [[ -d $SITE ]] || die "no site at $SITE: run without --no-build first"

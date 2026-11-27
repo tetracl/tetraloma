@@ -28,7 +28,7 @@ use tetraloma_io::vtk::{
 use tetraloma_parallel::{Comm, CommExt, CommScalar};
 use tetraloma_topology::{GridError, Result};
 
-use crate::io_download::{self, Download, DownloadBlock, agree_write};
+use crate::io_download::{self, Download, DownloadBlock};
 use crate::pipeline::agree;
 use crate::{AnyMeshRef, Mesh};
 
@@ -843,7 +843,7 @@ impl<'a> VtkWriter<'a> {
             }
             Ok(())
         });
-        agree_write(comm, local)
+        agree(comm, local)
     }
 
     /// The VTKHDF file of the PVTU pieces. Collective, with an agreed status.
@@ -887,7 +887,7 @@ impl<'a> VtkWriter<'a> {
             .into_iter()
             .map(|a| gather_array(mesh, a, true))
             .collect::<Result<Vec<_>>>()?;
-        let local = (|| {
+        let local = (|| -> Result<()> {
             if comm.rank() != 0 {
                 return Ok(());
             }
@@ -904,7 +904,7 @@ impl<'a> VtkWriter<'a> {
             }
             Ok(())
         })();
-        agree_write(comm, local)
+        agree(comm, local)
     }
 
     /// For a PVTU, the path of the piece of `rank` and its name relative to the header.

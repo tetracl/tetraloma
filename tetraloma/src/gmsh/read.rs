@@ -296,7 +296,7 @@ fn scatter(
     let mut own = None;
     let mut rest = (Vec::new(), Vec::new());
     if let Some(prepared) = prepared {
-        let encoded = (|| {
+        let encoded = (|| -> Result<()> {
             let mut chunks = prepared.chunks.into_iter();
             own = chunks.next();
             for (r, chunk) in chunks.enumerate() {
@@ -311,7 +311,7 @@ fn scatter(
         agree(comm, encoded)?;
         rest = (prepared.names, prepared.coords);
     } else {
-        agree(comm, Ok(()))?;
+        agree(comm, Ok::<(), GridError>(()))?;
     }
     let (w, _) = comm.all_to_all_v(&words, &word_counts)?;
     drop(words);
@@ -582,7 +582,7 @@ pub fn read<F: Real, C: Comm>(
     path: impl AsRef<Path>,
     options: GmshOptions,
 ) -> Result<AnyMesh<F, C>> {
-    agree(&comm, check_precision::<F>(client).map_err(Into::into))?;
+    agree(&comm, check_precision::<F>(client).map_err(GridError::from))?;
     let path = path.as_ref();
     log_memory(client, "read (start)");
     let (chunk, names, gdim) = local(&comm, path, options.gdim)?;

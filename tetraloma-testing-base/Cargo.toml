@@ -21,13 +21,12 @@ vulkan = ["cubecl/vulkan"]
 metal = ["cubecl/metal"]
 metal-native = ["cubecl/metal-native"]
 wgpu = ["cubecl/wgpu"]
-# ThreadComm implements `CommDyn::raw`, which exists only under tetraloma-comm's `mpi`: turn
-# this on whenever MPI is enabled alongside tetraloma-testing-base.
-mpi = ["tetraloma-comm-testing/mpi", "tetraloma-parallel/mpi", "dep:mpi"]
+# Forwards `mpi` to tetraloma-comm-testing and tetraloma-parallel (docs/design.md, section 18;
+# ADR-0078).
+mpi = ["tetraloma-comm-testing/mpi", "tetraloma-parallel/mpi"]
 
 [dependencies]
 cubecl.workspace = true
-mpi = { workspace = true, optional = true }
 tetraloma-comm-testing = { path = "../tetraloma-comm-testing" }
 tetraloma-device = { path = "../tetraloma-device", features = ["testing"] }
 tetraloma-parallel = { path = "../tetraloma-parallel" }

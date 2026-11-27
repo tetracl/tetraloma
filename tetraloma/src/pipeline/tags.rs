@@ -263,7 +263,7 @@ fn match_lower<TD: TopoDim>(
     }
 
     // Match by (dimension, corner count): entries whose corners are all local vertices.
-    let local = (|| {
+    let local = (|| -> Result<_> {
         let mut groups: BTreeMap<(usize, usize), Received> = BTreeMap::new();
         let mut keys: BTreeMap<(usize, usize), Vec<u32>> = BTreeMap::new();
         for (source, r) in at_holder.records() {

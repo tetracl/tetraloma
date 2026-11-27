@@ -840,7 +840,7 @@ where
     pub(crate) fn build_with_comm<C: Comm>(mut self, comm: C) -> Result<BuiltMesh<F, TD, GD, C>> {
         let client = self.client.clone();
         let client = &client;
-        agree(&comm, check_precision::<F>(client).map_err(Into::into))?;
+        agree(&comm, check_precision::<F>(client).map_err(GridError::from))?;
         // Stages 1–8. Every intermediate is dropped once its last stage has run (the M8
         // memory bound, docs/plans/M8.md T5b).
         let Read {

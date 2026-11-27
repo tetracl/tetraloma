@@ -14,7 +14,8 @@ use tetraloma_io::gmsh::{
 use tetraloma_parallel::Comm;
 use tetraloma_topology::{GridError, Result};
 
-use crate::io_download::{self, GmshNumbering, agree_write};
+use crate::io_download::{self, GmshNumbering};
+use crate::pipeline::agree;
 use crate::{AnyMeshRef, Mesh, MeshTags};
 
 // Design: "Import and export / Gmsh MSH 4.1"; ADR-0022, item 10; ADR-0035, item 11.
@@ -197,7 +198,7 @@ where
     C: Comm,
 {
     let comm = mesh.comm();
-    let tags = crate::pipeline::agree(comm, cell_tags(mesh))?;
+    let tags = agree(comm, cell_tags(mesh))?;
     let host = io_download::gather(mesh)?;
     let elementary = io_download::gather_cell_data(mesh, &tags.elementary, 1)?;
     let (counts, physical) = io_download::gather_cell_lists(mesh, &tags.counts, &tags.physical)?;
@@ -461,7 +462,7 @@ impl GmshWriter {
         let numbering = io_download::gmsh_numbering(mesh)?;
         let shifts = shift_to_one(numbering.node_min)
             .and_then(|n| Ok((n, shift_to_one(numbering.cell_min)?)));
-        let (node_shift, element_shift) = crate::pipeline::agree(comm, shifts)?;
+        let (node_shift, element_shift) = agree(comm, shifts)?;
         let host = if partitioned {
             part(mesh, &numbering)
         } else {
@@ -479,7 +480,7 @@ impl GmshWriter {
             let file = from_numbered_gmsh_mesh(&host, &numbering)?;
             self.write_file(&path, &file)
         });
-        agree_write(comm, local)
+        agree(comm, local)
     }
 
     /// Writes `file` to `path`; I/O errors name the path.

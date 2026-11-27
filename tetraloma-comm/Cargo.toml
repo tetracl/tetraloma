@@ -19,5 +19,4 @@ mpi = { workspace = true, optional = true }
 
 [dev-dependencies]
 proptest.workspace = true
-# With `mpi` on, ThreadComm needs `tetraloma-comm-testing/mpi` too.
 tetraloma-comm-testing = { path = "../tetraloma-comm-testing" }

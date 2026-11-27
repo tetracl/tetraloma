@@ -12,13 +12,11 @@ publish = false
 workspace = true
 
 [features]
-# ThreadComm implements `CommDyn::raw`, which exists only under tetraloma-comm's `mpi`: turn
-# this on whenever tetraloma-comm's `mpi` is on.
-mpi = ["tetraloma-comm/mpi", "dep:mpi"]
+# Forwards `mpi` to tetraloma-comm (docs/design.md, section 18; ADR-0078).
+mpi = ["tetraloma-comm/mpi"]
 
 [dependencies]
 tetraloma-comm = { path = "../tetraloma-comm" }
-mpi = { workspace = true, optional = true }
 
 [dev-dependencies]
 proptest.workspace = true

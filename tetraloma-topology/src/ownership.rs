@@ -207,23 +207,6 @@ fn candidate_rows_kernel(
     }
 }
 
-/// The agreed result of a collective step (ADR-0026, item 15): every rank learns the lowest
-/// failing rank, which returns its own error, as does every other failing rank; the others
-/// return `RemoteFailure { rank }`. Collective. (tetraloma-parallel's helper is crate-private.)
-pub(crate) fn agree<T>(comm: &dyn CommDyn, local: Result<T>) -> Result<T> {
-    let lowest = comm.min(if local.is_err() {
-        comm.rank() as u64
-    } else {
-        u64::MAX
-    });
-    match local {
-        Ok(_) if lowest != u64::MAX => Err(GridError::RemoteFailure {
-            rank: lowest as usize,
-        }),
-        r => r,
-    }
-}
-
 /// u32 of `x`, or `TooLarge`.
 fn fit(x: usize) -> Result<u32> {
     u32::try_from(x).map_err(|_| GridError::TooLarge)
