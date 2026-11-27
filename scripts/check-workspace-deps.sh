@@ -14,7 +14,8 @@
 #
 # Usage: scripts/check-workspace-deps.sh [--no-cubecl CRATE]... [--no-mesh CRATE]...
 #                                        [--element-only CRATE]... [--foundation-only CRATE]...
-#                                        [--self-test] [CARGO-TREE-ARGS...]
+#                                        [CARGO-TREE-ARGS...]
+#        scripts/check-workspace-deps.sh --self-test
 #   --no-cubecl CRATE        add CRATE to the cubecl-free list (repeatable; default:
 #                            tetraloma-element, tetraloma-comm, tetraloma-partition); e.g.
 #                            `--no-cubecl tetraloma-geometry` must fail.
@@ -48,6 +49,7 @@ tree_args=()
 self_test=0
 explicit_opt=0
 self_test_tmp=""
+self_test_active_err=""
 
 has_item() {
     local needle=$1 item
@@ -121,10 +123,15 @@ check_no_mesh_crate() {
 }
 
 cleanup_self_test() {
+    local rc=$?
+    if [[ "$rc" -ne 0 && -n "$self_test_active_err" && -s "$self_test_active_err" ]]; then
+        cat "$self_test_active_err" >&3
+    fi
     [[ -z "$self_test_tmp" ]] || rm -rf "$self_test_tmp"
 }
 
 run_self_test() {
+    exec 3>&2
     trap cleanup_self_test EXIT
     self_test_tmp=$(mktemp -d "${TMPDIR:-/tmp}/check-workspace-deps-self-test.XXXXXX")
 
@@ -194,7 +201,9 @@ TOML
         fi
         failed=0
         err_file="$self_test_tmp/$probe.err"
+        self_test_active_err="$err_file"
         check_no_mesh_crate "$probe" --manifest-path "$manifest" --offline 2>"$err_file"
+        self_test_active_err=""
         if [[ "$failed" -ne 1 ]] || ! grep -qx '  tetraloma-dims' "$err_file"; then
             echo "check-workspace-deps: self-test failed: $probe dev-dependency on tetraloma-dims was not caught" >&2
             cat "$err_file" >&2
@@ -204,7 +213,9 @@ TOML
 
     failed=0
     err_file="$self_test_tmp/clean-probe.err"
+    self_test_active_err="$err_file"
     check_no_mesh_crate clean-probe --manifest-path "$manifest" --offline 2>"$err_file"
+    self_test_active_err=""
     if [[ "$failed" -ne 0 ]] || grep -q '^check-workspace-deps:' "$err_file"; then
         echo "check-workspace-deps: self-test failed: clean-probe was rejected" >&2
         cat "$err_file" >&2
