@@ -86,14 +86,11 @@ fn same_device(a: &Client, b: &Client) -> bool {
 ///
 /// ```
 /// use tetraloma_device::{Client, DeviceBuffer};
-/// use tetraloma_parallel::{CommDyn, IndexMap, ParallelError, ReverseOp};
+/// use tetraloma_parallel::{CommDyn, IndexMap, Result, ReverseOp};
 ///
 /// /// Each rank owns two indices and holds the first index of the next rank, round the ring,
 /// /// as a ghost. Returns the values after the forward and after the reverse exchange.
-/// fn ring(
-///     comm: &dyn CommDyn,
-///     client: &Client,
-/// ) -> std::result::Result<(Vec<f32>, Vec<f32>), ParallelError> {
+/// fn ring(comm: &dyn CommDyn, client: &Client) -> Result<(Vec<f32>, Vec<f32>)> {
 ///     let next = (comm.rank() + 1) % comm.size();
 ///     let map = IndexMap::with_ghosts(comm, 2, vec![2 * next as i64], vec![next as i32])?;
 ///     let scatterer = map.scatterer(client, 1)?;
@@ -276,10 +273,10 @@ impl Scatterer {
     ///
     /// ```
     /// use tetraloma_device::{Client, DeviceBuffer};
-    /// use tetraloma_parallel::{CommDyn, IndexMap, ParallelError};
+    /// use tetraloma_parallel::{CommDyn, IndexMap, Result};
     ///
     /// /// Each rank owns one index, with two values, and holds the other rank's as a ghost.
-    /// fn swap(comm: &dyn CommDyn, client: &Client) -> std::result::Result<Vec<u32>, ParallelError> {
+    /// fn swap(comm: &dyn CommDyn, client: &Client) -> Result<Vec<u32>> {
     ///     let (rank, other) = (comm.rank(), 1 - comm.rank());
     ///     let map = IndexMap::with_ghosts(comm, 1, vec![other as i64], vec![other as i32])?;
     ///     let scatterer = map.scatterer(client, 2)?;
@@ -350,14 +347,11 @@ impl Scatterer {
     ///
     /// ```
     /// use tetraloma_device::{Client, DeviceBuffer};
-    /// use tetraloma_parallel::{CommDyn, IndexMap, ParallelError, ReverseOp};
+    /// use tetraloma_parallel::{CommDyn, IndexMap, Result, ReverseOp};
     ///
     /// /// Each rank owns one index and holds the other rank's as a ghost; every value is its
     /// /// rank plus 1. Returns the values after a reverse maximum.
-    /// fn largest(
-    ///     comm: &dyn CommDyn,
-    ///     client: &Client,
-    /// ) -> std::result::Result<Vec<i32>, ParallelError> {
+    /// fn largest(comm: &dyn CommDyn, client: &Client) -> Result<Vec<i32>> {
     ///     let other = 1 - comm.rank();
     ///     let map = IndexMap::with_ghosts(comm, 1, vec![other as i64], vec![other as i32])?;
     ///     let scatterer = map.scatterer(client, 1)?;

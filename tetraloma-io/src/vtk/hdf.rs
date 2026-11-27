@@ -22,7 +22,7 @@ use hdf5_metno::file::LibraryVersion;
 use hdf5_metno::types::FixedAscii;
 use hdf5_metno::{Dataset, File, Group, H5Type};
 use ndarray::{ArrayView2, s};
-use tetraloma_parallel::{CommDyn, CommExt, CommScalar};
+use tetraloma_parallel::{CommDyn, CommExt, CommScalar, agree};
 use tetraloma_topology::{GridError, Result};
 
 use super::write::type_name;
@@ -242,23 +242,6 @@ fn check_schema(comm: &dyn CommDyn, piece: &VtuFile) -> Result<()> {
         });
     }
     Ok(())
-}
-
-/// The agreed status of a collective step (ADR-0026, item 15): a failing rank returns its own
-/// error, every other rank `RemoteFailure` with the lowest failing rank. Collective.
-fn agree<T>(comm: &dyn CommDyn, local: Result<T>) -> Result<T> {
-    let lowest = comm.min(if local.is_err() {
-        comm.rank() as u64
-    } else {
-        u64::MAX
-    });
-    match local {
-        Err(e) => Err(e),
-        Ok(_) if lowest != u64::MAX => Err(GridError::RemoteFailure {
-            rank: lowest as usize,
-        }),
-        ok => ok,
-    }
 }
 
 /// `Io` naming `path` and the HDF5 error.

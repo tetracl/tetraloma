@@ -4452,7 +4452,6 @@ dependencies = [
 name = "tetraloma-comm-testing"
 version = "0.1.0"
 dependencies = [
- "mpi",
  "proptest",
  "tetraloma-comm",
 ]
@@ -4591,7 +4590,6 @@ name = "tetraloma-testing"
 version = "0.1.0"
 dependencies = [
  "cubecl",
- "mpi",
  "proptest",
  "serde_json",
  "tetraloma",
@@ -4607,7 +4605,6 @@ name = "tetraloma-testing-base"
 version = "0.1.0"
 dependencies = [
  "cubecl",
- "mpi",
  "tetraloma-comm-testing",
  "tetraloma-device",
  "tetraloma-parallel",

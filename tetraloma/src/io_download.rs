@@ -171,7 +171,7 @@ where
     T: CommScalar,
 {
     let comm = mesh.comm();
-    let local = (|| {
+    let local = (|| -> Result<_> {
         let blocks = mesh.cell_blocks();
         let cells = blocks
             .iter()
@@ -242,7 +242,7 @@ where
     T: CommScalar,
 {
     let comm = mesh.comm();
-    let local = (|| {
+    let local = (|| -> Result<_> {
         let blocks = mesh.cell_blocks();
         let cells = blocks
             .iter()
@@ -336,24 +336,6 @@ pub(crate) fn gather_tag_groups(
         });
     }
     Ok(out)
-}
-
-/// The agreed status of a collective write (ADR-0026, item 15; ADR-0035, items 11 and 12): a
-/// failing rank returns its own error, every other rank `RemoteFailure` with the lowest
-/// failing rank. Collective.
-pub(crate) fn agree_write(comm: &dyn CommDyn, local: Result<()>) -> Result<()> {
-    let lowest = comm.min(if local.is_err() {
-        comm.rank() as u64
-    } else {
-        u64::MAX
-    });
-    match local {
-        _ if lowest == u64::MAX => Ok(()),
-        Err(e) => Err(e),
-        Ok(()) => Err(GridError::RemoteFailure {
-            rank: lowest as usize,
-        }),
-    }
 }
 
 /// The global Gmsh numbering of a mesh (ADR-0035, item 11), before the shift of tags below 1.

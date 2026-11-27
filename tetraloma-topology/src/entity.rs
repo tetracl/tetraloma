@@ -8,11 +8,11 @@ use tetraloma_device::{
     gather, radix_sort_owned, scatter, unique_by_key_runs,
 };
 use tetraloma_dims::CellType;
-use tetraloma_parallel::{CommDyn, CommExt, IndexMap};
+use tetraloma_parallel::{CommDyn, CommExt, IndexMap, agree};
 
 use crate::emission::{EmissionPlan, emission_plans, sub_entity_vertices};
 use crate::keys::emit_keys;
-use crate::ownership::{Candidates, GHOST_CELL, Ownership, Sharing, SharingExchange, agree};
+use crate::ownership::{Candidates, GHOST_CELL, Ownership, Sharing, SharingExchange};
 
 // Design: Listing T1.
 /// The entities of one type and dimension, for example the triangular faces of a mesh of
@@ -777,7 +777,7 @@ pub(crate) fn create_dimension(
     }
     let offsets = agree(
         comm,
-        (|| {
+        (|| -> Result<_> {
             let mut offsets = Vec::with_capacity(types.len());
             let mut next = 0usize;
             for (_, map, ..) in &types {

@@ -166,11 +166,11 @@ impl IndexMap {
     /// # Example
     ///
     /// ```
-    /// use tetraloma_parallel::{CommDyn, IndexMap, ParallelError};
+    /// use tetraloma_parallel::{CommDyn, IndexMap, Result};
     ///
     /// /// Each rank owns three indices and holds the first index of the next rank, round the
     /// /// ring, as a ghost.
-    /// fn ring(comm: &dyn CommDyn) -> std::result::Result<IndexMap, ParallelError> {
+    /// fn ring(comm: &dyn CommDyn) -> Result<IndexMap> {
     ///     let next = (comm.rank() + 1) % comm.size();
     ///     IndexMap::with_ghosts(comm, 3, vec![3 * next as i64], vec![next as i32])
     /// }
@@ -497,18 +497,12 @@ mod tests {
 
     /// Pretends to be rank `rank` of `size` ranks that all pass the same buffer: the sum is
     /// `size` times the value and the exclusive scan `rank` times. Only u64 sums.
-    ///
-    /// Compiled only without `feature = "mpi"`: `tetraloma-parallel` forwards `mpi` to
-    /// `tetraloma-comm` without a direct `mpi` dependency, so this unit-test mock does not name
-    /// `mpi::ffi::MPI_Comm` for `CommDyn::raw`. Default builds run all `Uniform` tests.
-    #[cfg(not(feature = "mpi"))]
     #[derive(Clone)]
     struct Uniform {
         rank: usize,
         size: usize,
     }
 
-    #[cfg(not(feature = "mpi"))]
     impl Uniform {
         fn scale(buf: &mut [u8], dtype: DType, op: ReduceOp, factor: usize) {
             assert!(matches!((dtype, op), (DType::U64, ReduceOp::Sum)));
@@ -521,7 +515,6 @@ mod tests {
         }
     }
 
-    #[cfg(not(feature = "mpi"))]
     impl CommDyn for Uniform {
         fn rank(&self) -> usize {
             self.rank
@@ -588,7 +581,6 @@ mod tests {
         ));
     }
 
-    #[cfg(not(feature = "mpi"))]
     #[test]
     fn ranges_on_several_ranks() {
         for rank in 0..4 {
@@ -601,7 +593,6 @@ mod tests {
         }
     }
 
-    #[cfg(not(feature = "mpi"))]
     #[test]
     fn global_overflow_is_too_large_on_every_rank() {
         // 3 * 2^61 fits in i64; 4 * 2^61 = 2^63 does not.
@@ -641,7 +632,6 @@ mod tests {
         }
     }
 
-    #[cfg(not(feature = "mpi"))]
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(256))]
 

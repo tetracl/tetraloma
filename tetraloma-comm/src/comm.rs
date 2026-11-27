@@ -200,9 +200,11 @@ pub trait CommDyn: 'static {
         recv_counts: &[usize],
         dtype: DType,
     ) -> Result<()>;
+    // ADR-0078.
     /// The MPI communicator handle, for libraries that call MPI themselves, such as the
-    /// partitioners PT-Scotch and ParMETIS; `None` for a communicator that is not an MPI one, such
-    /// as [`Serial`](crate::Serial). Feature `mpi` ([Distributed
+    /// partitioners PT-Scotch and ParMETIS. The default is `None`, which
+    /// [`Serial`](crate::Serial) and communicators without MPI keep; `Mpi` returns its
+    /// communicator. Feature `mpi` ([Distributed
     /// meshes](https://tetracl.github.io/tetraloma/tutorials/distributed.html#building-on-a-communicator)).
     ///
     /// # Example
@@ -213,7 +215,9 @@ pub trait CommDyn: 'static {
     /// assert!(Serial.raw().is_none());
     /// ```
     #[cfg(feature = "mpi")]
-    fn raw(&self) -> Option<mpi::ffi::MPI_Comm>;
+    fn raw(&self) -> Option<mpi::ffi::MPI_Comm> {
+        None
+    }
     // ADR-0026.
     /// A cheap copy that refers to the same communicator, so that a [`Neighbourhood`] can keep it:
     /// for `Mpi` a reference-counted clone, not a new MPI communicator (`MPI_Comm_dup`)
@@ -510,7 +514,8 @@ fn exchange_counts(
 /// and every other failing rank, returns its own error; the others return
 /// `CommError::RemoteFailure { rank }.into()`. Collective.
 ///
-/// For workspace crates (`tetraloma-parallel`, `tetraloma-partition`); not part of the stable API.
+/// For workspace crates (`tetraloma-parallel`, `tetraloma-partition`, `tetraloma-topology`,
+/// `tetraloma-io`, `tetraloma`); not part of the stable API.
 #[doc(hidden)]
 pub fn agree<T, E: From<CommError>>(comm: &dyn CommDyn, local: Result<T, E>) -> Result<T, E> {
     let mine = if local.is_err() {

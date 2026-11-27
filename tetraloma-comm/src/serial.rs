@@ -122,10 +122,6 @@ impl CommDyn for Serial {
         check_len(0, recv.len())?;
         Ok(())
     }
-    #[cfg(feature = "mpi")]
-    fn raw(&self) -> Option<mpi::ffi::MPI_Comm> {
-        None
-    }
     fn duplicate(&self) -> std::rc::Rc<dyn CommDyn> {
         std::rc::Rc::new(Serial)
     }
@@ -186,6 +182,49 @@ mod tests {
         comm.barrier();
         #[cfg(feature = "mpi")]
         assert!(comm.raw().is_none());
+    }
+
+    #[cfg(feature = "mpi")]
+    #[test]
+    fn comm_dyn_raw_defaults_to_none() {
+        #[derive(Clone, Copy)]
+        struct NoRaw;
+        impl CommDyn for NoRaw {
+            fn rank(&self) -> usize {
+                0
+            }
+            fn size(&self) -> usize {
+                1
+            }
+            fn barrier(&self) {}
+            fn all_reduce_bytes(&self, _buf: &mut [u8], _dtype: DType, _op: ReduceOp) {}
+            fn exscan_bytes(&self, _buf: &mut [u8], _dtype: DType, _op: ReduceOp) {}
+            fn all_to_all_v_bytes(
+                &self,
+                _send: &[u8],
+                _send_counts: &[usize],
+                _recv: &mut [u8],
+                _recv_counts: &[usize],
+                _dtype: DType,
+            ) -> Result<()> {
+                Ok(())
+            }
+            fn neighbour_all_to_all_v_bytes(
+                &self,
+                _nb: &Neighbourhood,
+                _send: &[u8],
+                _send_counts: &[usize],
+                _recv: &mut [u8],
+                _recv_counts: &[usize],
+                _dtype: DType,
+            ) -> Result<()> {
+                Ok(())
+            }
+            fn duplicate(&self) -> std::rc::Rc<dyn CommDyn> {
+                std::rc::Rc::new(*self)
+            }
+        }
+        assert!(NoRaw.raw().is_none());
     }
 
     #[test]

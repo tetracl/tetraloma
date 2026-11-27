@@ -14,7 +14,8 @@ use tetraloma_io::gmsh::{
 use tetraloma_parallel::Comm;
 use tetraloma_topology::{GridError, Result};
 
-use crate::io_download::{self, GmshNumbering, agree_write};
+use crate::io_download::{self, GmshNumbering};
+use crate::pipeline::agree;
 use crate::{AnyMeshRef, Mesh, MeshTags};
 
 // Design: "Import and export / Gmsh MSH 4.1"; ADR-0022, item 10; ADR-0035, item 11.
@@ -479,7 +480,7 @@ impl GmshWriter {
             let file = from_numbered_gmsh_mesh(&host, &numbering)?;
             self.write_file(&path, &file)
         });
-        agree_write(comm, local)
+        agree(comm, local)
     }
 
     /// Writes `file` to `path`; I/O errors name the path.

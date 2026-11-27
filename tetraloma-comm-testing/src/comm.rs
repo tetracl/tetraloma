@@ -479,10 +479,6 @@ impl CommDyn for ThreadComm {
             dtype,
         )
     }
-    #[cfg(feature = "mpi")]
-    fn raw(&self) -> Option<mpi::ffi::MPI_Comm> {
-        None
-    }
     fn duplicate(&self) -> Rc<dyn CommDyn> {
         Rc::new(self.clone())
     }
