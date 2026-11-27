@@ -773,7 +773,7 @@ Every large array is a typed wrapper around a CubeCL `Handle`, and host access i
 
 ### Device containers
 
-**Listing S1 — device containers (tetraloma-device)**
+**Listing S1 — device containers (tetraloma-device) (ADR-0074)**
 
 ```rust
 use core::marker::PhantomData;
@@ -1289,7 +1289,7 @@ A vertex is *shared* if it appears on more than one rank, whether in owned or gh
 - **Candidates.** An entity whose vertices are all shared is a sharing candidate. Its key (the sorted origin ids of its vertices) is sent to every rank in the intersection of its vertices' sharer sets. Each receiving rank replies whether it holds the entity, and whether it holds it in an owned cell.
 - **Entity owner.** Chosen among the ranks that hold the entity in an owned cell, as the one at position hash(key) mod (number of candidates). There is always at least one such rank, because the owner of any cell containing the entity holds all its vertices. Every other holder keeps the entity as a ghost.
 - **Global numbers** flow from owner to ghost holders (forward direction).
-- **Hash** (ADR-0026). `tetraloma_parallel::owner_hash(key: &[i64]) -> u64` starts at h = 0x6772_6964_636C_0006 and sets h = mix(h ^ (w as u64)) for each word w, where mix is SplitMix64's finaliser (z += 0x9E37_79B9_7F4A_7C15; z = (z ^ (z >> 30)) · 0xBF58_476D_1CE4_E5B9; z = (z ^ (z >> 27)) · 0x94D0_49BB_1331_11EB; z ^ (z >> 31), wrapping). The vertex and node owner is the candidate at position `owner_hash(&[origin id]) mod n`, the entity owner the one at `owner_hash(sorted origin ids) mod n`, and the rendezvous rank of any key `owner_hash(key) mod P`.
+- **Hash** (ADR-0026). `tetraloma_comm::owner_hash(key: &[i64]) -> u64` (re-exported by tetraloma-parallel; ADR-0074, ADR-0078) starts at h = 0x6772_6964_636C_0006 and sets h = mix(h ^ (w as u64)) for each word w, where mix is SplitMix64's finaliser (z += 0x9E37_79B9_7F4A_7C15; z = (z ^ (z >> 30)) · 0xBF58_476D_1CE4_E5B9; z = (z ^ (z >> 27)) · 0x94D0_49BB_1331_11EB; z ^ (z >> 31), wrapping). The vertex and node owner is the candidate at position `owner_hash(&[origin id]) mod n`, the entity owner the one at `owner_hash(sorted origin ids) mod n`, and the rendezvous rank of any key `owner_hash(key) mod P`.
 - **Local order.** Owned vertices and nodes are numbered in order of first touching cell; ghost vertices, nodes and entities are ordered by (owner rank, global index) (ADR-0026).
 - **Sharer sets in the topology.** `pub struct VertexSharers { pub offsets: Vec<usize>, pub ranks: Vec<i32>, pub owned_cell: Vec<bool> }` (tetraloma-topology) is a host CSR over local vertices: row v lists every rank holding vertex v, this one included, in ascending order, and `owned_cell` says whether that rank holds v in an owned cell. `Topology::set_vertex_sharers(&mut self, s: VertexSharers) -> Result<()>` checks lengths, row order and the own rank (`LengthMismatch`, `IndexOutOfRange`; ADR-0039), stores it, uploads one shared flag per vertex and derives the sharing neighbourhood (every rank sharing a vertex with this one). Without sharers, as in every serial mesh, every vertex is unshared (ADR-0026).
 
@@ -1398,9 +1398,10 @@ pub trait CommDyn: 'static {
     /// Neighbourhood variant on a distributed-graph communicator.
     fn neighbour_all_to_all_v_bytes(&self, nb: &Neighbourhood, send: &[u8], send_counts: &[usize],
                                     recv: &mut [u8], recv_counts: &[usize], dtype: DType) -> Result<()>;
-    /// Raw handle for PT-Scotch and ParMETIS; None for Serial.
+    /// Raw handle for PT-Scotch and ParMETIS. The default is None, which Serial and
+    /// communicators without MPI keep; Mpi returns its communicator (ADR-0078).
     #[cfg(feature = "mpi")]
-    fn raw(&self) -> Option<mpi::ffi::MPI_Comm>;
+    fn raw(&self) -> Option<mpi::ffi::MPI_Comm> { None }
     /// Cheap clone that refers to the same communicator (for Mpi an Rc clone, not
     /// MPI_Comm_dup), so a Neighbourhood can hold it (ADR-0026).
     fn duplicate(&self) -> Rc<dyn CommDyn>;
@@ -1893,15 +1894,15 @@ The crate graph keeps serial builds free of MPI and lets kernels live in the cra
 | tetraloma-topology | `GridError`, `Result`, `ConnKey` (ADR-0074), cell and entity blocks, sort-based entity creation, ownership, connectivity, permutation info, benchmark hooks (feature `bench`) | dims, refcell, device, parallel, cubecl; dev: tetraloma-testing |
 | tetraloma-geometry | Coordinate elements, geometry blocks, `DeviceGrid`, point sets and quadrature rules, factor kernels, orientation, E-vectors, pull-back, GLL → equispaced conversion (`equispaced_nodes`); `QuadRule::new`, `FacetQuadRule::new`, `PointSet::from_points` and `tabulate_element`, `CellPoints` (section 27; ADR-0071); hidden `Strategy`, degree-policy reader and device basis evaluator shared with tetraloma-function (section 10; ADR-0071, ADR-0074) | dims, refcell, element (ADR-0071), device, parallel, topology, cubecl; dev: tetraloma-testing |
 | tetraloma-partition | Host-only (no CubeCL, ADR-0074): `DistGraph`, `Partitioner`, `PartitionError`, block partitioner; METIS, Scotch, PT-Scotch and ParMETIS behind features | tetraloma-comm (forwards `mpi` under `ptscotch`/`parmetis`, ADR-0074); metis, scotch, scotch-sys, ptscotch-sys, parmetis-sys (all optional); build: scotch-sys-bindgen (bindgen 0.65.1, feature `scotch`; ADR-0039); dev: proptest, tetraloma-comm-testing (ADR-0074) |
-| tetraloma-io | Gmsh reader and writer (file model and host mesh description), VTU/PVTU (file model, writer, `parse_vtu`), VTKHDF | dims, refcell, device, topology, geometry, parallel (unused `partition` dependency may be dropped, ADR-0074); flate2; hdf5-metno and ndarray (optional, with `hdf5`; `mpio` with feature `mpi`; ADR-0039); dev: mshio, serde_json, tetraloma-testing |
+| tetraloma-io | Gmsh reader and writer (file model and host mesh description), VTU/PVTU (file model, writer, `parse_vtu`), VTKHDF | dims, refcell, device, topology, geometry, parallel (ADR-0078); flate2; hdf5-metno and ndarray (optional, with `hdf5`; `mpio` with feature `mpi`; ADR-0039); dev: mshio, serde_json, tetraloma-testing |
 | tetraloma-element | Finite elements in f64 (section 26): families, variants, Ciarlet construction, tabulation, entity DOFs, interpolation data, map types, base transformations, tensor factors. Host only; usable in `comptime!`. Tests read committed JSON fixtures (ADR-0071). | tetraloma-dims, tetraloma-refcell; dev: serde_json |
 | tetraloma-function | Function spaces, dofmaps, grid functions (re-exporting `FieldScalar` from tetraloma-device, ADR-0074), evaluation, interpolation (sections 28–31); its degree policy (using tetraloma-geometry's hidden `Strategy` and policy reader, ADR-0074); test hooks (feature `testing`) (ADR-0071) | dims, refcell, element, device, parallel, topology, geometry, cubecl; bytemuck; num-complex (feature `bytemuck`); dev: tetraloma-testing |
 | tetraloma | Facade: `Mesh`, builder (distributed with `build_on`, `GhostMode`, `CellOrdering`; ADR-0026), `AnyMesh`, `AnyMeshRef`, `with_mesh!`, `DeviceGrid` (re-exported), `GridError`/`Result`/`ConnKey` (re-exported from tetraloma-topology, ADR-0074), `PartitionError` conversion by a crate-private helper (ADR-0074, ADR-0075), `CommError`, `DeviceError`, `ParallelError` and `PartitionError` (re-exported at the root, ADR-0075), tags, submeshes, `gmsh::read` and `GmshWriter`, `VtkWriter`, prelude; `Mesh::create_entities_for` (section 28) and `VtkWriter::function` (section 32) (ADR-0071) | all of the above, including tetraloma-comm, tetraloma-element and tetraloma-function (ADR-0071, ADR-0074); log; mpi (optional, for `CommDyn::raw` of the test communicator; ADR-0028) |
 | ptscotch-sys | bindgen FFI to PT-Scotch, with `SCOTCH_Num` width detection | mpi, bindgen, build-probe-mpi (all behind the crate's feature `mpi`) |
 | parmetis-sys | bindgen FFI to ParMETIS, with `idx_t` and `real_t` width detection | mpi, bindgen, build-probe-mpi (all behind the crate's feature `mpi`) |
-| tetraloma-comm-testing (unpublished) | Host-only test support below the mesh (no CubeCL): `ThreadComm`, pure-communicator checks and the rank-count guard (`check_world_size`) (ADR-0074) | tetraloma-comm; mpi (optional, for `CommDyn::raw` of `ThreadComm`) |
-| tetraloma-testing-base (unpublished) | Device and parallel test support below the mesh: `test_client()`, `test_client_at(index)`, `cpu_client()`, `supports`, `bitwise_device`, `TEST_DEVICE_VAR`, `TOL_F32`, `TOL_F64`, `IndexMap` checks, the scatter and primitive checks (ADR-0075), re-exports of `tetraloma-comm-testing`; forwards runtime features (ADR-0074) | tetraloma-comm-testing; tetraloma-device (feature `testing`); tetraloma-parallel; cubecl with runtime features; mpi (optional) |
-| tetraloma-testing (unpublished) | Re-exports `tetraloma-testing-base` (and `ThreadComm`, `check_world_size`), plus test-mesh generators, mesh tolerance references, the Python oracle helper and `gen-gmsh-box` (ADR-0035, ADR-0074); forwards runtime features | tetraloma; tetraloma-testing-base (ADR-0074); tetraloma-device (feature `testing`); tetraloma-dims; tetraloma-refcell; cubecl with runtime features; serde_json; mpi (optional, forwards `tetraloma-comm-testing/mpi`; ADR-0028, ADR-0074) |
+| tetraloma-comm-testing (unpublished) | Host-only test support below the mesh (no CubeCL): `ThreadComm`, pure-communicator checks and the rank-count guard (`check_world_size`) (ADR-0074) | tetraloma-comm (feature `mpi` forwards to tetraloma-comm's; ADR-0078) |
+| tetraloma-testing-base (unpublished) | Device and parallel test support below the mesh: `test_client()`, `test_client_at(index)`, `cpu_client()`, `supports`, `bitwise_device`, `TEST_DEVICE_VAR`, `TOL_F32`, `TOL_F64`, `IndexMap` checks, the scatter and primitive checks (ADR-0075), re-exports of `tetraloma-comm-testing`; forwards runtime features (ADR-0074) | tetraloma-comm-testing; tetraloma-device (feature `testing`); tetraloma-parallel; cubecl with runtime features; feature `mpi` forwards to tetraloma-comm-testing and tetraloma-parallel (ADR-0078) |
+| tetraloma-testing (unpublished) | Re-exports `tetraloma-testing-base` (and `ThreadComm`, `check_world_size`), plus test-mesh generators, mesh tolerance references, the Python oracle helper and `gen-gmsh-box` (ADR-0035, ADR-0074); forwards runtime features | tetraloma; tetraloma-testing-base (ADR-0074); tetraloma-device (feature `testing`); tetraloma-dims; tetraloma-refcell; cubecl with runtime features; serde_json; feature `mpi` forwards to tetraloma and tetraloma-testing-base (ADR-0028, ADR-0074, ADR-0078) |
 | tetraloma-mpi-tests (unpublished) | MPI integration tests as `[[test]]` targets with `harness = false`, run by `scripts/mpi-test.sh` | tetraloma, tetraloma-testing; nix (unix; getrusage; ADR-0035) |
 | tetraloma-foundation-tests (unpublished) | The tests of the foundation crates without a mesh crate in the build: primitives at 10^6 elements and the scatterer on thread ranks, through the checks of tetraloma-testing-base. No features: a run on a GPU backend names a runtime feature of tetraloma-testing-base (ADR-0075) | tetraloma-device, tetraloma-parallel, tetraloma-comm-testing, tetraloma-testing-base |
 | tetraloma-examples (unpublished) | The examples of the API walkthrough and the programs of the user book, each over a tested `run(&Client)`; forwards runtime features (ADR-0060); the doctest harness of the book (a `#[cfg(doctest)]` module that includes every chapter) and the figure generator (the binary `figures`, from tetraloma-refcell's tables) (ADR-0067) | tetraloma, tetraloma-refcell, tetraloma-element and tetraloma-function (for the book's examples of sections 26 to 32; ADR-0072), tetraloma-testing; cubecl with runtime features; mpi (optional) |
@@ -2407,6 +2408,12 @@ These rules apply to all code in the workspace (ADR-0069). They were the code ru
   tetraloma-device (GPU-aware; the macOS performance-core count, ADR-0017) and tetraloma-partition
   (Scotch, PT-Scotch, ParMETIS; ADR-0029), behind safe wrappers; a -sys crate's own tests
   and examples may call its declarations (ADR-0039). Every unsafe block needs a SAFETY comment.
+- Foundation errors (`CommError`, `DeviceError`, `ParallelError`, `PartitionError`) are
+  `#[non_exhaustive]`, so their conversions into one another and into `GridError` end in an
+  `unreachable!` arm. A task that adds a variant adds its arm to every one of those
+  conversions, and to the `GridError` variant it maps to, in the same task. The defining
+  crate's unit test, which matches its own enum without a wildcard, names the conversions
+  (ADR-0078).
 - User documentation (ADR-0067): the book lives in docs/user/ (docs/README.md says which
   documents are for users and which for developers). Public items of the twelve published
   library crates are documented for users (ADR-0071, ADR-0074):
@@ -2449,6 +2456,7 @@ What the design leaves undecided; an agent that meets one stops and asks (ADR-00
 The terms and symbols of the user book's glossary (`docs/user/src/glossary.md`) apply here (ADR-0069). Terms used only in the design and the agent rules:
 
 - **Standing matrix:** the runs every milestone keeps (ADR-0057, amended by ADR-0073): the CPU runtime and Metal on every change (host-only `full`-tier changes scoped mechanically via `cargo metadata` when hosted CI runs; full at every gate), Locust after kernel tasks, MPI on 1–4 ranks under both flavours, f32 and f64, scalar and widest vector sizes, the review targets.
+- **Foundation crates:** tetraloma-comm, tetraloma-device, tetraloma-parallel and tetraloma-partition, the published crates below the mesh (dependency rule 9; ADR-0074, ADR-0078).
 - **Candidate protocol:** how benchmarks time and choose among candidates; section 8, "Benchmarks".
 - **Benchmark platform:** a machine and backend the policies are measured on; sections 8 ("Benchmarks") and 17.
 - **Cpu and Gpu device classes:** the two `DeviceClass` variants the vector and degree policies are keyed on; section 8 (ADR-0058).
