@@ -13,7 +13,9 @@ workspace = true
 
 [features]
 # Library features, forwarded to the crates concerned (docs/design.md, "Cargo features").
-# `dep:mpi` names `mpi::ffi::MPI_Comm` in the test communicator's `CommDyn::raw`.
+# `dep:mpi` supplies `mpi::initialize()` for the `no_run` MPI rustdoc examples (Cargo
+# dev-dependencies cannot be optional, and dependency rule 5 forbids an unconditional MPI dep;
+# ADR-0028, ADR-0079).
 mpi = ["tetraloma-comm/mpi", "tetraloma-parallel/mpi", "tetraloma-io/mpi", "dep:mpi"]
 # The distributed partitioners need MPI (ADR-0029, item 4).
 ptscotch = ["mpi", "tetraloma-partition/ptscotch"]
