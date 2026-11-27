@@ -1,6 +1,6 @@
 # ADR-0079: Reason for facade `tetraloma`'s optional `mpi` dependency
 
-Status: Proposed
+Status: Accepted
 Date: 2026-11-27
 Decision issue: #138
 Raised by: issue #136 (follow-up from #131 and ADR-0078)
@@ -48,4 +48,8 @@ For Option 2.
 
 ## Decision
 
-> (pending)
+> Accept AdR 79 as recommended
+
+Said to the agent in a session, 2026-11-27.
+
+The recommendation is Option 2, so the changes listed under "Changes if accepted" apply as written.
