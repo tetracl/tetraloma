@@ -1,6 +1,6 @@
 # ADR-0078: Sections 7, 9, 11, 18, 22 and 25 after the M18 gate
 
-Status: Proposed
+Status: Accepted
 Date: 2026-11-26
 Decision issue: #133
 Raised by: the M18 gate, findings G7, G10, G11, G12, G13 and G15 (`docs/reviews/M18.md`)
@@ -109,4 +109,8 @@ For A2, B2 and C1. Every edit carries the marker (ADR-0078), unless it only adds
 
 ## Decision
 
-> (pending)
+> accept adr as recommended
+
+Said to the agent in a session, 2026-11-27.
+
+The recommendation is A2, B2 and C1, so the changes listed under "Changes if accepted" apply as written.
