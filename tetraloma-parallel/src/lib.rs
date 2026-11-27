@@ -33,8 +33,9 @@ pub use tetraloma_comm::{
     Comm, CommDyn, CommError, CommExt, CommScalar, DType, Neighbourhood, ReduceOp, Serial,
     local_gpu_index, owner_hash,
 };
-// Design: ADR-0026, item 15; ADR-0074; hidden item (dependency rule 7), re-exported for
-// workspace crates above `tetraloma-parallel` (`tetraloma-topology`, `tetraloma-io`).
+// Design: ADR-0026, item 15; ADR-0074; hidden item (dependency rule 7; docs/plans/M18.md,
+// Hidden items & Decision 9, issue #131 / G5), re-exported for workspace crates above
+// `tetraloma-parallel` (`tetraloma-topology`, `tetraloma-io`).
 #[doc(hidden)]
 pub use tetraloma_comm::agree;
 
