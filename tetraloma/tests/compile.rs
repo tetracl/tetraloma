@@ -8,14 +8,7 @@
 //! means regenerating and reviewing the baselines. The first run builds tetraloma and cubecl in
 //! target/tests/trybuild (about two minutes on the M3 Max).
 
-// trybuild's project enables tetraloma's features but not those of its dev-dependencies: with
-// `mpi` (also implied by `ptscotch` and `parmetis`), tetraloma-testing then builds without its
-// `mpi` and `ThreadComm` lacks `CommDyn::raw`. The cpu job runs this test without features.
 #[test]
-#[cfg_attr(
-    feature = "mpi",
-    ignore = "trybuild cannot enable tetraloma-testing/mpi"
-)]
 fn ui() {
     let t = trybuild::TestCases::new();
     t.compile_fail("tests/ui/fail/*.rs");

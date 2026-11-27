@@ -4,7 +4,7 @@
 //! M7 (docs/plans/M7.md): the vertex weights of the pipeline's dual graph (`weights`), the
 //! rank-0 partitioners `Metis` and `Scotch` on 1–4 ranks (features `metis`, `scotch`), and the
 //! distributed partitioners' error without an MPI communicator (features `ptscotch`,
-//! `parmetis`, with `tetraloma-testing/mpi`).
+//! `parmetis`).
 
 use tetraloma::{
     Block, Comm, CommDyn, CommExt, D1, D2, D3, DistGraph, PartitionError, Partitioner,

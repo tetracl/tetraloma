@@ -21,5 +21,4 @@ tetraloma-device = { path = "../tetraloma-device" }
 [dev-dependencies]
 proptest.workspace = true
 # The client and threaded communicator of the API examples, on hidden lines (ADR-0067, rule 6.3).
-# With `mpi` on, its ThreadComm needs `tetraloma-testing-base/mpi` too.
 tetraloma-testing-base = { path = "../tetraloma-testing-base" }

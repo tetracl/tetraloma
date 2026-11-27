@@ -5,10 +5,7 @@
 # Usage: scripts/check-docs.sh [default|libraries]
 #   default    cargo doc at default features (CI: cpu job)
 #   libraries  with tetraloma/mpi,tetraloma/hdf5,tetraloma/scotch,tetraloma/ptscotch,tetraloma/metis (CI: the
-#              ptscotch job; needs MPI, a parallel HDF5, Scotch and PT-Scotch), and
-#              tetraloma-testing/mpi (which forwards to tetraloma-testing-base/mpi and
-#              tetraloma-comm-testing/mpi): with tetraloma/mpi, ThreadComm builds only with it
-#              (CommDyn::raw)
+#              ptscotch job; needs MPI, a parallel HDF5, Scotch and PT-Scotch)
 #   (none)     both
 #
 # Exit status: 0 if every run passes, cargo's status otherwise.
@@ -18,7 +15,7 @@ cd "$(dirname "$0")/.."
 
 export RUSTDOCFLAGS="${RUSTDOCFLAGS:+$RUSTDOCFLAGS }-Dwarnings -Dmissing_docs"
 
-libraries="tetraloma/mpi,tetraloma/hdf5,tetraloma/scotch,tetraloma/ptscotch,tetraloma/metis,tetraloma-testing/mpi"
+libraries="tetraloma/mpi,tetraloma/hdf5,tetraloma/scotch,tetraloma/ptscotch,tetraloma/metis"
 
 run() {
     echo "check-docs: cargo doc --workspace --no-deps $*" >&2
