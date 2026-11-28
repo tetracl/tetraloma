@@ -319,7 +319,7 @@ factors on first use rather than during `Element::get`. High-degree hexahedra (u
 where `dim = 9261` and a dense table would occupy 686 MB) therefore build and tabulate quickly
 without allocating dense tables unless you explicitly request them.
 
-[`TensorFactors`](../api/tetraloma_element/struct.TensorFactors.html) exposes two public fields
+[`TensorFactors`](../api/tetraloma_element/struct.TensorFactors.html) exposes three public fields
 and a 1D tabulator:
 
 - `factors[component][direction]` gives the `(Factor1d, degree)` pair for each reference component
@@ -331,6 +331,9 @@ and a 1D tabulator:
 - `lexicographic[component][tensor_index]` maps each x-fastest multi-index
   $a_0 + n_0 a_1$ (on quadrilaterals) or $a_0 + n_0 (a_1 + n_1 a_2)$ (on hexahedra) to the
   element's local DOF index.
+- `negate[component]` indicates whether the 1D factor product for that reference component is
+  negated (`false` for every Lagrange element; used when consistent facet-normal handedness
+  introduces a sign on a component of a tensor-product Raviart–Thomas element).
 - `tabulate_1d(component, direction, points, nderivs)` returns the 1D basis values (`nderivs == 0`)
   or values and first derivatives (`nderivs == 1`) at scalar points in $[0, 1]$, laid out in
   `[derivative][point][basis]` order (panicking for `nderivs > 1`, out-of-range indices,
@@ -348,6 +351,7 @@ let el = Element::get(ElementKey {
 })?;
 let tf = el.tensor_factors().expect("quadrilateral has tensor factors");
 assert_eq!(tf.factors[0], vec![(Factor1d::NodalH1(NodeFamily::Gll), 3); 2]);
+assert_eq!(tf.negate, vec![false]);
 
 let (x, y) = (0.27, 0.71);
 let tx = tf.tabulate_1d(0, 0, &[x], 1);

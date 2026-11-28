@@ -1,5 +1,5 @@
-//! M11 acceptance tests (docs/plans/M11.md: A6, A7, A8, A10 and A12) and M11 G8 high-degree
-//! validation tests for tetraloma-element.
+//! M11 acceptance tests (docs/plans/M11.md: A6, A7, A8, A10 and A12), M11 G8 high-degree
+//! validation tests, and M12 acceptance tests (docs/plans/M12.md: A3–A10) for tetraloma-element.
 
 use std::collections::BTreeMap;
 
@@ -1045,6 +1045,843 @@ fn all_nodal_lagrange_keys_construct() {
                     "{key:?}: Lagrange must not be Dense"
                 );
             }
+        }
+    }
+}
+
+const TOL_A4: f64 = 1e-11;
+const HCURL_HDIV_FAMILIES: [Family; 2] = [Family::N1curl, Family::RaviartThomas];
+const HCURL_HDIV_CELLS: [CellType; 4] = [
+    CellType::Triangle,
+    CellType::Quadrilateral,
+    CellType::Tetrahedron,
+    CellType::Hexahedron,
+];
+
+fn hcurl_hdiv_key(family: Family, cell: CellType, degree: u32) -> ElementKey {
+    ElementKey {
+        family,
+        cell,
+        degree,
+        variant: Variant::Legendre,
+    }
+}
+
+fn eval_vec_at_points(coeffs: &[f64], values: &[f64], npts: usize, vs: usize) -> Vec<f64> {
+    let dim = coeffs.len();
+    let mut out = vec![0.0; npts * vs];
+    for q in 0..npts {
+        let dst = &mut out[q * vs..(q + 1) * vs];
+        for (j, &c) in coeffs.iter().enumerate() {
+            if c != 0.0 {
+                for (d, &b) in dst.iter_mut().zip(&values[(q * dim + j) * vs..]) {
+                    *d += c * b;
+                }
+            }
+        }
+    }
+    out
+}
+
+fn sparse_rows(mat: &[f64], dim: usize, cols: usize) -> Vec<Vec<(usize, f64)>> {
+    assert_eq!(mat.len(), dim * cols);
+    mat.chunks_exact(cols)
+        .map(|row| {
+            row.iter()
+                .enumerate()
+                .filter(|&(_, &v)| v != 0.0)
+                .map(|(c, &v)| (c, v))
+                .collect()
+        })
+        .collect()
+}
+
+fn weighted_dot(weights: &[f64], a: &[f64], b: &[f64], vs: usize) -> f64 {
+    weights
+        .iter()
+        .enumerate()
+        .map(|(q, &w)| {
+            let s: f64 = (0..vs).map(|c| a[q * vs + c] * b[q * vs + c]).sum();
+            w * s
+        })
+        .sum()
+}
+
+/// M12 acceptance A3: for N1curl and RT on triangles, quadrilaterals, tetrahedra and hexahedra
+/// with p <= 10, applying the interpolation to the basis gives the identity to 1e-12.
+#[test]
+#[ignore = "pending M12.T7"]
+fn hcurl_hdiv_interpolation_of_basis_is_identity() {
+    for family in HCURL_HDIV_FAMILIES {
+        for cell in HCURL_HDIV_CELLS {
+            let td = tdim(cell);
+            for degree in 1..=10 {
+                let key = hcurl_hdiv_key(family, cell, degree);
+                let el = Element::get(key).unwrap();
+                let dim = el.dim();
+                assert_eq!(el.reference_value_size(), td, "{key:?}");
+                let (pts, mat) = (el.interpolation_points(), el.interpolation_matrix());
+                assert_eq!(pts.len() % td, 0, "{key:?}");
+                let m = pts.len() / td;
+                assert_eq!(mat.len(), dim * m * td, "{key:?}");
+                let tab = el.tabulate(pts, 0).unwrap();
+                assert_eq!(
+                    (tab.nderivs, tab.num_points, tab.dim, tab.value_size),
+                    (0, m, dim, td)
+                );
+
+                let mut b_comp = vec![vec![0.0; m * dim]; td];
+                for q in 0..m {
+                    for j in 0..dim {
+                        for (c, comp) in b_comp.iter_mut().enumerate() {
+                            comp[q * dim + j] = tab.values[(q * dim + j) * td + c];
+                        }
+                    }
+                }
+                let mut row = vec![0.0; dim];
+                for (i, m_row) in mat.chunks_exact(m * td).enumerate() {
+                    row.fill(0.0);
+                    for (q, mq) in m_row.chunks_exact(td).enumerate() {
+                        for (c, &a) in mq.iter().enumerate() {
+                            if a != 0.0 {
+                                for (r, &b) in
+                                    row.iter_mut().zip(&b_comp[c][q * dim..(q + 1) * dim])
+                                {
+                                    *r += a * b;
+                                }
+                            }
+                        }
+                    }
+                    for (j, &val) in row.iter().enumerate() {
+                        let err = (val - f64::from(u8::from(i == j))).abs();
+                        assert!(err <= TOL, "{key:?}: (M B)[{i}, {j}] = {val} (err {err:e})");
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn assert_vec_reproduces(
+    key: ElementKey,
+    member: usize,
+    nz_mat: &[Vec<(usize, f64)>],
+    u_interp: &[f64],
+    tab_test: &[f64],
+    u_test: &[f64],
+    td: usize,
+) {
+    let dofs: Vec<f64> = nz_mat
+        .iter()
+        .map(|r| r.iter().map(|&(i, w)| w * u_interp[i]).sum())
+        .collect();
+    let approx = eval_vec_at_points(&dofs, tab_test, u_test.len() / td, td);
+    let scale = u_test.iter().fold(1.0_f64, |m, v| m.max(v.abs()));
+    for (idx, (&got, &want)) in approx.iter().zip(u_test).enumerate() {
+        let err = (got - want).abs() / scale;
+        assert!(
+            err <= TOL_A4,
+            "{key:?} member {member} entry {idx}: {got} vs {want} ({err:e})"
+        );
+    }
+}
+
+/// Independent `L²`-orthonormal basis of simplex `N1curl_p` or `RT_p` at `eval_pts` (`[n][td]`).
+fn simplex_orthonormal_basis(
+    family: Family,
+    cell: CellType,
+    p: u32,
+    eval_pts: &[f64],
+) -> Vec<Vec<f64>> {
+    let td = tdim(cell);
+    let rule = gauss_rule(cell, 2 * p);
+    let (nq, ne, n_prev) = (
+        rule.weights.len(),
+        eval_pts.len() / td,
+        polyset::dim(cell, p - 1),
+    );
+    let poly_q = polyset::tabulate(cell, p - 1, &rule.points, 0);
+    let poly_e = polyset::tabulate(cell, p - 1, eval_pts, 0);
+
+    // P_{p-1}^d is already L²-orthonormal under gauss_rule(cell, 2p).
+    let (mut q_quad, mut q_eval) = (Vec::new(), Vec::new());
+    for m in 0..n_prev {
+        for c in 0..td {
+            let (mut vq, mut ve) = (vec![0.0; nq * td], vec![0.0; ne * td]);
+            for q in 0..nq {
+                vq[q * td + c] = poly_q[m * nq + q];
+            }
+            for q in 0..ne {
+                ve[q * td + c] = poly_e[m * ne + q];
+            }
+            q_quad.push(vq);
+            q_eval.push(ve);
+        }
+    }
+
+    // Two-pass modified Gram–Schmidt on homogeneous complement candidates (x P̃_{p-1} for RT,
+    // (-x_1, x_0) P̃_{p-1} in 2D or x × P̃_{p-1}^3 in 3D for N1curl).
+    let mut append = |mut vq: Vec<f64>, mut ve: Vec<f64>| {
+        let orig = weighted_dot(&rule.weights, &vq, &vq, td).sqrt();
+        if orig == 0.0 {
+            return;
+        }
+        let mut h_tot = vec![0.0; q_quad.len()];
+        for _ in 0..2 {
+            for (j, qj) in q_quad.iter().enumerate() {
+                let h = weighted_dot(&rule.weights, &vq, qj, td);
+                h_tot[j] += h;
+                for (v, &qv) in vq.iter_mut().zip(qj) {
+                    *v -= h * qv;
+                }
+            }
+            if weighted_dot(&rule.weights, &vq, &vq, td).sqrt() <= 1e-10 * orig {
+                return;
+            }
+        }
+        let norm = weighted_dot(&rule.weights, &vq, &vq, td).sqrt();
+        for (&h, ej) in h_tot.iter().zip(&q_eval) {
+            for (v, &ev) in ve.iter_mut().zip(ej) {
+                *v -= h * ev;
+            }
+        }
+        let inv = 1.0 / norm;
+        vq.iter_mut().for_each(|v| *v *= inv);
+        ve.iter_mut().for_each(|v| *v *= inv);
+        q_quad.push(vq);
+        q_eval.push(ve);
+    };
+
+    let build = |pts: &[f64], poly: &[f64], n: usize, m: usize, c: usize| -> Vec<f64> {
+        let mut out = vec![0.0; n * td];
+        for q in 0..n {
+            let pm = poly[m * n + q];
+            let x = &pts[q * td..(q + 1) * td];
+            match (family, td) {
+                (Family::RaviartThomas, _) => (0..td).for_each(|d| out[q * td + d] = x[d] * pm),
+                (Family::N1curl, 2) => {
+                    out[q * 2] = -x[1] * pm;
+                    out[q * 2 + 1] = x[0] * pm;
+                }
+                (Family::N1curl, 3) => {
+                    let (a, b) = ((c + 1) % 3, (c + 2) % 3);
+                    out[q * 3 + a] = x[b] * pm;
+                    out[q * 3 + b] = -x[a] * pm;
+                }
+                _ => unreachable!(),
+            }
+        }
+        out
+    };
+    let n_c = if family == Family::N1curl && td == 3 {
+        3
+    } else {
+        1
+    };
+    for m in 0..n_prev {
+        for c in 0..n_c {
+            append(
+                build(&rule.points, &poly_q, nq, m, c),
+                build(eval_pts, &poly_e, ne, m, c),
+            );
+        }
+    }
+    q_eval
+}
+
+/// M12 acceptance A4: for N1curl and RT on triangles, quadrilaterals, tetrahedra and hexahedra
+/// with p <= 10, interpolation reproduces every member of an orthonormal basis of the space to
+/// 1e-11.
+#[test]
+#[ignore = "pending M12.T7"]
+fn hcurl_hdiv_interpolation_reproduces_orthonormal_basis() {
+    for family in HCURL_HDIV_FAMILIES {
+        for cell in HCURL_HDIV_CELLS {
+            let (td, test_pts) = (tdim(cell), reproduction_points(cell));
+            let ntest = test_pts.len() / td;
+            for degree in 1..=10 {
+                let key = hcurl_hdiv_key(family, cell, degree);
+                let el = Element::get(key).unwrap();
+                let (dim, interp_pts) = (el.dim(), el.interpolation_points());
+                let m = interp_pts.len() / td;
+                let nz_mat = sparse_rows(el.interpolation_matrix(), dim, m * td);
+                let tab_test = el.tabulate(test_pts, 0).unwrap();
+                let split = m * td;
+
+                if matches!(cell, CellType::Triangle | CellType::Tetrahedron) {
+                    let all_pts: Vec<f64> = interp_pts.iter().chain(test_pts).copied().collect();
+                    let basis = simplex_orthonormal_basis(family, cell, degree, &all_pts);
+                    assert_eq!(basis.len(), dim, "{key:?}: basis dim");
+                    for (k, vals) in basis.iter().enumerate() {
+                        assert_vec_reproduces(
+                            key,
+                            k,
+                            &nz_mat,
+                            &vals[..split],
+                            &tab_test.values,
+                            &vals[split..],
+                            td,
+                        );
+                    }
+                } else {
+                    let n_all = m + ntest;
+                    let coords: Vec<Vec<f64>> = (0..td)
+                        .map(|d| {
+                            interp_pts
+                                .chunks_exact(td)
+                                .chain(test_pts.chunks_exact(td))
+                                .map(|pt| pt[d])
+                                .collect()
+                        })
+                        .collect();
+                    let p_hi: Vec<_> = coords
+                        .iter()
+                        .map(|c| polyset::tabulate(CellType::Interval, degree, c, 0))
+                        .collect();
+                    let p_lo: Vec<_> = coords
+                        .iter()
+                        .map(|c| polyset::tabulate(CellType::Interval, degree - 1, c, 0))
+                        .collect();
+                    let (n_hi, n_lo) = (degree as usize + 1, degree as usize);
+                    let mut member = 0usize;
+                    let mut u_all = vec![0.0; n_all * td];
+                    for c in 0..td {
+                        let is_hi = |d: usize| (family == Family::N1curl) ^ (d == c);
+                        let n_dir: Vec<usize> = (0..td)
+                            .map(|d| if is_hi(d) { n_hi } else { n_lo })
+                            .collect();
+                        for idx in 0..n_dir.iter().product::<usize>() {
+                            let (mut rem, mut a) = (idx, [0usize; 3]);
+                            for d in 0..td {
+                                a[d] = rem % n_dir[d];
+                                rem /= n_dir[d];
+                            }
+                            u_all.fill(0.0);
+                            for q in 0..n_all {
+                                u_all[q * td + c] = (0..td)
+                                    .map(|d| {
+                                        (if is_hi(d) { &p_hi[d] } else { &p_lo[d] })
+                                            [a[d] * n_all + q]
+                                    })
+                                    .product();
+                            }
+                            assert_vec_reproduces(
+                                key,
+                                member,
+                                &nz_mat,
+                                &u_all[..split],
+                                &tab_test.values,
+                                &u_all[split..],
+                                td,
+                            );
+                            member += 1;
+                        }
+                    }
+                    assert_eq!(member, dim, "{key:?}: tensor basis dim");
+                }
+            }
+        }
+    }
+}
+
+/// M12 acceptance A5: every base transformation of N1curl and RT on quadrilaterals and hexahedra
+/// with p <= 10 is classified as a signed permutation, and matches the raw transformation matrix
+/// evaluated from `Element::tabulate` to 1e-12.
+#[test]
+#[ignore = "pending M12.T7"]
+fn hcurl_hdiv_tensor_base_transformations_are_signed_permutations() {
+    let entity_generators = [
+        (CellType::Interval, Generator::Reversal),
+        (CellType::Quadrilateral, Generator::Rotation),
+        (CellType::Quadrilateral, Generator::Reflection),
+    ];
+
+    for family in HCURL_HDIV_FAMILIES {
+        for cell in [CellType::Quadrilateral, CellType::Hexahedron] {
+            let (td, verts) = (tdim(cell), vertices(cell));
+            for degree in 1..=10 {
+                let key = hcurl_hdiv_key(family, cell, degree);
+                let el = Element::get(key).unwrap();
+                let (dim, pts, mat) = (
+                    el.dim(),
+                    el.interpolation_points(),
+                    el.interpolation_matrix(),
+                );
+                let m = pts.len() / td;
+                assert_eq!(
+                    el.transformation_kind(),
+                    TransformationKind::SignedPermutation,
+                    "{key:?}"
+                );
+
+                for (entity, generator) in entity_generators {
+                    let ed = tdim(entity);
+                    // Reorientation pull-back convention (matching M11 A8 and transform.rs):
+                    // `s_local = G(s_canonical)` via `apply_generator`, with Jacobian `J_G = DG`
+                    // (unit area/length, `|det J_G| = 1`) derived from `apply_generator` on the
+                    // origin and unit axes. Each functional weight `w` at `E(s)` maps to `E(G(s))`
+                    // with `w_reor = J_E J_G J_E^T w` (covariant Piola, N1curl, orthonormal `J_E`
+                    // on quad/hex) or `w_reor = (det J_G) w` (contravariant Piola, RT), giving
+                    // `M_G[i, j] = l_i^G(φ_j) = ±δ_{perm[i], j}`.
+                    let (jg, det_jg): ([[f64; 2]; 2], f64) = if ed == 1 {
+                        let g = apply_generator(entity, generator, &[0.0, 1.0]);
+                        let d = g[1] - g[0];
+                        ([[d, 0.0], [0.0, 0.0]], d)
+                    } else {
+                        let g = apply_generator(entity, generator, &[0.0, 0.0, 1.0, 0.0, 0.0, 1.0]);
+                        let j = [[g[2] - g[0], g[4] - g[0]], [g[3] - g[1], g[5] - g[1]]];
+                        (j, j[0][0] * j[1][1] - j[0][1] * j[1][0])
+                    };
+                    let rep = (ed < td)
+                        .then(|| {
+                            sub_entity_types(cell, ed)
+                                .iter()
+                                .position(|&ty| ty == entity)
+                        })
+                        .flatten();
+                    let expected = rep.map_or(0, |e| el.entity_dofs(ed, e).len());
+                    let bt = el.base_transformation(entity, generator);
+                    let Some(BaseTransformation::SignedPermutation { perm, negate }) = bt else {
+                        assert!(
+                            bt.is_none() && expected == 0,
+                            "{key:?} ({entity:?}, {generator:?})"
+                        );
+                        continue;
+                    };
+                    assert!(expected > 0 && perm.len() == expected && negate.len() == expected);
+                    let mut seen = vec![false; expected];
+                    for &p in perm {
+                        assert!(
+                            (p as usize) < expected && !seen[p as usize],
+                            "{key:?}: {perm:?}"
+                        );
+                        seen[p as usize] = true;
+                    }
+
+                    let (e, dofs) = (rep.unwrap(), el.entity_dofs(ed, rep.unwrap()));
+                    let ev = sub_entities(cell, ed)[e];
+                    let v0 = verts[ev[0]];
+                    let t_cols: Vec<Vec<f64>> = (0..ed)
+                        .map(|k| (0..td).map(|c| verts[ev[k + 1]][c] - v0[c]).collect())
+                        .collect();
+                    let mut active_q: Vec<usize> = dofs
+                        .iter()
+                        .flat_map(|&dof| {
+                            mat[dof * m * td..(dof + 1) * m * td]
+                                .chunks_exact(td)
+                                .enumerate()
+                                .filter_map(|(q, mq)| mq.iter().any(|&v| v != 0.0).then_some(q))
+                        })
+                        .collect();
+                    active_q.sort_unstable();
+                    active_q.dedup();
+
+                    let mut epts = Vec::with_capacity(active_q.len() * ed);
+                    for &q in &active_q {
+                        let xq = &pts[q * td..(q + 1) * td];
+                        let sq: Vec<f64> = (0..ed)
+                            .map(|k| (0..td).map(|c| (xq[c] - v0[c]) * t_cols[k][c]).sum())
+                            .collect();
+                        let mapped = map_entity_points(cell, entity, ev, &sq);
+                        assert!(mapped.iter().zip(xq).all(|(a, b)| (a - b).abs() <= 1e-13));
+                        epts.extend_from_slice(&sq);
+                    }
+                    let cell_pts = map_entity_points(
+                        cell,
+                        entity,
+                        ev,
+                        &apply_generator(entity, generator, &epts),
+                    );
+                    let tab = el.tabulate(&cell_pts, 0).unwrap();
+
+                    for (row_i, &dof_i) in dofs.iter().enumerate() {
+                        let m_row = &mat[dof_i * m * td..(dof_i + 1) * m * td];
+                        let w_reor: Vec<[f64; 3]> = active_q
+                            .iter()
+                            .map(|&q| {
+                                let w = &m_row[q * td..(q + 1) * td];
+                                let mut out = [0.0; 3];
+                                if family == Family::N1curl {
+                                    let alpha: [f64; 2] = std::array::from_fn(|b| {
+                                        if b < ed {
+                                            (0..td).map(|c| t_cols[b][c] * w[c]).sum()
+                                        } else {
+                                            0.0
+                                        }
+                                    });
+                                    for a in 0..ed {
+                                        let beta: f64 = (0..ed).map(|b| jg[a][b] * alpha[b]).sum();
+                                        (0..td).for_each(|c| out[c] += beta * t_cols[a][c]);
+                                    }
+                                } else {
+                                    (0..td).for_each(|c| out[c] = det_jg * w[c]);
+                                }
+                                out
+                            })
+                            .collect();
+                        for (col_j, &dof_j) in dofs.iter().enumerate() {
+                            let got: f64 = w_reor
+                                .iter()
+                                .enumerate()
+                                .map(|(qi, w)| {
+                                    let b = &tab.values[(qi * dim + dof_j) * td..];
+                                    (0..td).map(|c| w[c] * b[c]).sum::<f64>()
+                                })
+                                .sum();
+                            let want = if perm[row_i] as usize == col_j {
+                                if negate[row_i] { -1.0 } else { 1.0 }
+                            } else {
+                                0.0
+                            };
+                            let err = (got - want).abs();
+                            assert!(
+                                err <= TOL,
+                                "{key:?} ({entity:?}, {generator:?}) [{row_i}, {col_j}]: {got} vs {want} ({err:e})"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn trace_probes(
+    family: Family,
+    cell: CellType,
+    entity_verts: &[usize],
+    ed: usize,
+) -> Vec<[f64; 3]> {
+    let (td, verts) = (tdim(cell), vertices(cell));
+    let v0 = verts[entity_verts[0]];
+    let tang = |k: usize| {
+        std::array::from_fn(|c| {
+            if c < td {
+                verts[entity_verts[k + 1]][c] - v0[c]
+            } else {
+                0.0
+            }
+        })
+    };
+    match (family, td) {
+        (Family::N1curl, _) => (0..ed).map(tang).collect(),
+        (Family::RaviartThomas, 2) => {
+            let t = tang(0);
+            vec![[-t[1], t[0], 0.0]]
+        }
+        (Family::RaviartThomas, 3) => {
+            let (a, b) = (tang(0), tang(1));
+            vec![[
+                a[1] * b[2] - a[2] * b[1],
+                a[2] * b[0] - a[0] * b[2],
+                a[0] * b[1] - a[1] * b[0],
+            ]]
+        }
+        _ => unreachable!(),
+    }
+}
+
+/// Shared continuity check for M12 A6 (N1curl tangential) and A7 (RT normal), p = 1..=6.
+fn check_vector_continuity(family: Family, seed: u64) {
+    let groups: &[&[CellType]] = &[
+        &[CellType::Triangle, CellType::Quadrilateral],
+        &[CellType::Tetrahedron, CellType::Hexahedron],
+    ];
+    let mut rng = Rng(seed);
+    for group in groups {
+        let td = tdim(group[0]);
+        let dims = if family == Family::N1curl {
+            1..td
+        } else {
+            (td - 1)..td
+        };
+        for (ia, &cell_a) in group.iter().enumerate() {
+            for &cell_b in &group[ia..] {
+                for degree in 1..=6 {
+                    let el_a = Element::get(hcurl_hdiv_key(family, cell_a, degree)).unwrap();
+                    let el_b = Element::get(hcurl_hdiv_key(family, cell_b, degree)).unwrap();
+                    for ed in dims.clone() {
+                        let (ents_a, tys_a) =
+                            (sub_entities(cell_a, ed), sub_entity_types(cell_a, ed));
+                        let (ents_b, tys_b) =
+                            (sub_entities(cell_b, ed), sub_entity_types(cell_b, ed));
+                        if !tys_a.iter().any(|ta| tys_b.contains(ta)) {
+                            continue;
+                        }
+                        let mut pts_cache = BTreeMap::new();
+                        let tabs_a: Vec<_> = ents_a
+                            .iter()
+                            .zip(tys_a)
+                            .map(|(&va, &ty)| {
+                                let epts = pts_cache
+                                    .entry(ty)
+                                    .or_insert_with(|| shared_entity_points(ty, degree));
+                                el_a.tabulate(&map_entity_points(cell_a, ty, va, epts), 0)
+                                    .unwrap()
+                            })
+                            .collect();
+                        let tabs_b: Vec<Vec<_>> = ents_b
+                            .iter()
+                            .zip(tys_b)
+                            .map(|(&vb, &ty)| {
+                                let epts = pts_cache
+                                    .entry(ty)
+                                    .or_insert_with(|| shared_entity_points(ty, degree));
+                                entity_symmetries(ty)
+                                    .into_iter()
+                                    .map(|sym| {
+                                        let mut vb_canon = vec![0usize; sym.len()];
+                                        for (pos, &c) in sym.iter().enumerate() {
+                                            vb_canon[c] = vb[pos];
+                                        }
+                                        let tab = el_b
+                                            .tabulate(
+                                                &map_entity_points(cell_b, ty, &vb_canon, epts),
+                                                0,
+                                            )
+                                            .unwrap();
+                                        (tab, trace_probes(family, cell_b, &vb_canon, ed))
+                                    })
+                                    .collect()
+                            })
+                            .collect();
+
+                        for (e_a, (&va, &ty_a)) in ents_a.iter().zip(tys_a).enumerate() {
+                            let ids_a = assign_vertex_ids(
+                                cell_a,
+                                va,
+                                &(0..va.len()).collect::<Vec<_>>(),
+                                100,
+                            );
+                            let probes_a = trace_probes(family, cell_a, va, ed);
+                            let syms = entity_symmetries(ty_a);
+                            for (e_b, (&vb, &ty_b)) in ents_b.iter().zip(tys_b).enumerate() {
+                                if ty_a != ty_b {
+                                    continue;
+                                }
+                                for (s_idx, sym) in syms.iter().enumerate() {
+                                    let ids_b = assign_vertex_ids(cell_b, vb, sym, 200);
+                                    let mut global_dofs = BTreeMap::new();
+                                    let ca = cell_local_coeffs(
+                                        &el_a,
+                                        &ids_a,
+                                        &mut global_dofs,
+                                        &mut rng,
+                                    );
+                                    let cb = cell_local_coeffs(
+                                        &el_b,
+                                        &ids_b,
+                                        &mut global_dofs,
+                                        &mut rng,
+                                    );
+                                    let (ta, (tb, probes_b)) = (&tabs_a[e_a], &tabs_b[e_b][s_idx]);
+                                    assert_eq!(ta.num_points, tb.num_points);
+                                    let va_v =
+                                        eval_vec_at_points(&ca, &ta.values, ta.num_points, td);
+                                    let vb_v =
+                                        eval_vec_at_points(&cb, &tb.values, tb.num_points, td);
+                                    let dot_traces =
+                                        |vecs: &[f64], probes: &[[f64; 3]]| -> Vec<f64> {
+                                            vecs.chunks_exact(td)
+                                                .flat_map(|u| {
+                                                    probes.iter().map(move |p| {
+                                                        (0..td).map(|c| u[c] * p[c]).sum()
+                                                    })
+                                                })
+                                                .collect()
+                                        };
+                                    let (tr_a, tr_b) =
+                                        (dot_traces(&va_v, &probes_a), dot_traces(&vb_v, probes_b));
+                                    let scale = tr_a
+                                        .iter()
+                                        .chain(&tr_b)
+                                        .fold(1.0_f64, |m, v| m.max(v.abs()));
+                                    for (idx, (&a, &b)) in tr_a.iter().zip(&tr_b).enumerate() {
+                                        let err = (a - b).abs() / scale;
+                                        assert!(
+                                            err <= TOL,
+                                            "{family:?} {cell_a:?}({e_a})/{cell_b:?}({e_b}) {ty_a:?} {sym:?} p={degree} [{idx}]: {a} vs {b} ({err:e})"
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// M12 acceptance A6: N1curl tangential continuity across shared entities to 1e-12 for p <= 6.
+#[test]
+#[ignore = "pending M12.T7"]
+fn n1curl_is_tangentially_continuous_across_shared_entities() {
+    check_vector_continuity(Family::N1curl, 0x51a7_c0de_2026_0012);
+}
+
+/// M12 acceptance A7: RT normal continuity across shared entities to 1e-12 for p <= 6.
+#[test]
+#[ignore = "pending M12.T7"]
+fn rt_is_normally_continuous_across_shared_entities() {
+    check_vector_continuity(Family::RaviartThomas, 0x51a7_c0de_2026_0112);
+}
+
+#[derive(Clone, Copy)]
+enum DiffOp {
+    Grad,
+    Rot2d,
+    Curl3d,
+    Div,
+}
+
+fn apply_diff_op(
+    op: DiffOp,
+    tab: &tetraloma_element::ElementTabulation,
+    td: usize,
+    k: usize,
+    out: &mut [f64],
+) {
+    let (npts, dim, vs) = (tab.num_points, tab.dim, tab.value_size);
+    let block = npts * dim * vs;
+    let dval = |d: usize, q: usize, c: usize| tab.values[(1 + d) * block + (q * dim + k) * vs + c];
+    for q in 0..npts {
+        match op {
+            DiffOp::Grad => (0..td).for_each(|d| out[q * td + d] = dval(d, q, 0)),
+            DiffOp::Rot2d => out[q] = dval(0, q, 1) - dval(1, q, 0),
+            DiffOp::Curl3d => {
+                out[q * 3] = dval(1, q, 2) - dval(2, q, 1);
+                out[q * 3 + 1] = dval(2, q, 0) - dval(0, q, 2);
+                out[q * 3 + 2] = dval(0, q, 1) - dval(1, q, 0);
+            }
+            DiffOp::Div => out[q] = (0..td).map(|d| dval(d, q, d)).sum(),
+        }
+    }
+}
+
+/// Shared de Rham inclusion check for M12 A8–A10 (`L²` residual <= 1e-12 over `gauss_rule(cell, 2p)`).
+fn check_de_rham_inclusion(src_key: ElementKey, dst_key: ElementKey, op: DiffOp) {
+    let (cell, td) = (src_key.cell, tdim(src_key.cell));
+    let (src, dst) = (
+        Element::get(src_key).unwrap(),
+        Element::get(dst_key).unwrap(),
+    );
+    let (src_dim, dst_dim, dst_vs) = (src.dim(), dst.dim(), dst.reference_value_size());
+    let pts_i = dst.interpolation_points();
+    let m_i = pts_i.len() / td;
+    let nz_mat = sparse_rows(dst.interpolation_matrix(), dst_dim, m_i * dst_vs);
+    let rule = gauss_rule(cell, 2 * src_key.degree);
+    let m_q = rule.weights.len();
+    let (src_at_i, src_at_q) = (
+        src.tabulate(pts_i, 1).unwrap(),
+        src.tabulate(&rule.points, 1).unwrap(),
+    );
+    let dst_at_q = dst.tabulate(&rule.points, 0).unwrap();
+
+    let col_len = m_q * dst_vs;
+    let mut dst_cols = vec![0.0; dst_dim * col_len];
+    for q in 0..m_q {
+        for j in 0..dst_dim {
+            let s = &dst_at_q.values[(q * dst_dim + j) * dst_vs..];
+            dst_cols[j * col_len + q * dst_vs..j * col_len + (q + 1) * dst_vs]
+                .copy_from_slice(&s[..dst_vs]);
+        }
+    }
+    let (mut deriv_i, mut deriv_q, mut approx_q) = (
+        vec![0.0; m_i * dst_vs],
+        vec![0.0; col_len],
+        vec![0.0; col_len],
+    );
+    let mut diff_q = vec![0.0; col_len];
+    let mut dofs = vec![0.0; dst_dim];
+    let mut checked = 0usize;
+
+    for k in 0..src_dim {
+        apply_diff_op(op, &src_at_q, td, k, &mut deriv_q);
+        let src_norm = weighted_dot(&rule.weights, &deriv_q, &deriv_q, dst_vs).sqrt();
+        if src_norm <= 1e-14 {
+            continue;
+        }
+        checked += 1;
+        apply_diff_op(op, &src_at_i, td, k, &mut deriv_i);
+        for (d, row) in dofs.iter_mut().zip(&nz_mat) {
+            *d = row.iter().map(|&(idx, w)| w * deriv_i[idx]).sum();
+        }
+        approx_q.fill(0.0);
+        for (j, &c) in dofs.iter().enumerate() {
+            if c != 0.0 {
+                for (a, &b) in approx_q
+                    .iter_mut()
+                    .zip(&dst_cols[j * col_len..(j + 1) * col_len])
+                {
+                    *a += c * b;
+                }
+            }
+        }
+        for ((d, &a), &v) in diff_q.iter_mut().zip(&approx_q).zip(&deriv_q) {
+            *d = a - v;
+        }
+        let rel = weighted_dot(&rule.weights, &diff_q, &diff_q, dst_vs).sqrt() / src_norm;
+        assert!(
+            rel <= TOL,
+            "{src_key:?} -> {dst_key:?} basis {k}: L2 residual {rel:e}"
+        );
+    }
+    assert!(
+        checked > 0,
+        "{src_key:?} -> {dst_key:?}: no nonzero derivatives"
+    );
+}
+
+/// M12 acceptance A8: gradients of Lagrange_p lie in N1curl_p to 1e-12 for p <= 8.
+#[test]
+#[ignore = "pending M12.T7"]
+fn gradients_of_lagrange_lie_in_n1curl() {
+    for cell in HCURL_HDIV_CELLS {
+        for degree in 1..=8 {
+            check_de_rham_inclusion(
+                lagrange_key(cell, degree, Variant::Nodal(NodeFamily::Gll)),
+                hcurl_hdiv_key(Family::N1curl, cell, degree),
+                DiffOp::Grad,
+            );
+        }
+    }
+}
+
+/// M12 acceptance A9: curl (3D) or rot (2D) of N1curl_p lies in RT_p or DG_{p-1} to 1e-12, p <= 8.
+#[test]
+#[ignore = "pending M12.T7"]
+fn curl_or_rot_of_n1curl_lies_in_rt_or_dg() {
+    for cell in HCURL_HDIV_CELLS {
+        for degree in 1..=8 {
+            let src = hcurl_hdiv_key(Family::N1curl, cell, degree);
+            let (dst, op) = if tdim(cell) == 2 {
+                (
+                    lagrange_key(cell, degree - 1, Variant::Legendre),
+                    DiffOp::Rot2d,
+                )
+            } else {
+                (
+                    hcurl_hdiv_key(Family::RaviartThomas, cell, degree),
+                    DiffOp::Curl3d,
+                )
+            };
+            check_de_rham_inclusion(src, dst, op);
+        }
+    }
+}
+
+/// M12 acceptance A10: divergence of RT_p lies in DG_{p-1} to 1e-12 for p <= 8.
+#[test]
+#[ignore = "pending M12.T7"]
+fn divergence_of_rt_lies_in_dg() {
+    for cell in HCURL_HDIV_CELLS {
+        for degree in 1..=8 {
+            check_de_rham_inclusion(
+                hcurl_hdiv_key(Family::RaviartThomas, cell, degree),
+                lagrange_key(cell, degree - 1, Variant::Legendre),
+                DiffOp::Div,
+            );
         }
     }
 }
