@@ -79,6 +79,8 @@ Option 2.
 For option 2. Each edit carries the marker `(ADR-0081)`.
 
 - **Design sections:**
+  - **Section 7, `GridError` milestone list:** add "M13 adds `UnsupportedQuadratureType { cell, kind }`, `UnsupportedDerivativeOrder(u32)` and `CellMismatch { expected, found }` (ADR-0081)."
+  - **Section 10, "Tabulation and quadrature", tensor rules bullet:** extend "Tensor rules (Gauss on quadrilaterals and hexahedra, triangle × Gauss on prisms)" to include "`GaussLobatto` on quadrilaterals and hexahedra and `Default`/`Symmetric` triangular facets on prisms (ADR-0081)".
   - **Section 18, crate table, row `tetraloma-geometry`, "Purpose":** add re-export of `QuadratureType` (`QuadratureType` re-exported from `tetraloma-refcell`, ADR-0081).
   - **Section 18, crate table, row `tetraloma`, "Purpose":** add re-exports of `QuadratureType` and `CellPoints` at the root and in `prelude` (ADR-0081).
   - **Section 27, Listing Q1 (`tetraloma-geometry`):** add `is_empty`, `cells`, `points` and `client` to `CellPoints` (`ADR-0081`):
@@ -97,9 +99,10 @@ For option 2. Each edit carries the marker `(ADR-0081)`.
     - `Default` on triangles and tetrahedra: "`Symmetric` for degree 1–30; `Gauss` for 0 and 31–60 (ADR-0081)".
     - `Symmetric` on triangles and tetrahedra: "fully symmetric compact-orbit positive-interior tables (Worku–Hicken–Zingg, `SummationByParts.jl`, MIT), degree 1–30 (ADR-0081)".
     - `GaussLobatto` on intervals, quadrilaterals and hexahedra: "`degree` 0–79 (`n = ⌈(degree + 3) / 2⌉` ∈ 2–41 points per direction, exact to degree 2n − 3) (ADR-0081)".
-    - Add sentence for `CellType::Point`: "`Point` accepts `Default` and `Gauss` for degrees 0–60 (one point of weight 1, empty coordinates) and rejects `Symmetric` and `GaussLobatto` (ADR-0081)."
+    - Add sentence for `CellType::Point`: "`Point` accepts every `QuadratureType` within that type's degree range (`0..=60` for `Default` and `Gauss`, `1..=30` for `Symmetric`, `0..=79` for `GaussLobatto`), returning one point of weight 1 with empty coordinates, so `FacetQuadRule::new` on intervals works uniformly for every rule type (ADR-0081)."
+  - **Section 27, "Behaviour and invariants", Table provenance:** state that each upstream licence notice file (e.g. `tables/LICENSE-SummationByParts.md`) is committed beside the tables and named in `tables/sources.json` (`license_file`), and that stored tables use a dependency-free format so `tetraloma-refcell` depends only on `tetraloma-dims` (ADR-0081).
   - **Section 27, "Behaviour and invariants", error paragraph:** replace "`RefCellError::UnsupportedDegree`, or `UnsupportedNodeFamily` for a type on a cell it does not cover" with:
-    - `RefCellError` is `#[non_exhaustive]` and adds `UnsupportedQuadratureType { cell: CellType, kind: QuadratureType }`, `InvalidSubEntity { cell: CellType, dim: usize, index: usize }`, `InvalidOrientationBits { entity: CellType, bits: u32 }`, `UnsymmetricRule { entity: CellType }`, `InvalidVertexPermutation { cell: CellType }`, and `CellMismatch { expected: CellType, found: CellType }` (ADR-0081).
+    - `RefCellError` is `#[non_exhaustive]` and adds `UnsupportedQuadratureType { cell: CellType, kind: QuadratureType }`, `InvalidSubEntity { cell: CellType, dim: usize, index: usize }`, `InvalidOrientationBits { entity: CellType, bits: u32 }`, `UnsymmetricRule { entity: CellType }`, `InvalidVertexPermutation { cell: CellType }`, and `CellMismatch { expected: CellType, found: CellType }`; `UnsupportedDegree`'s `Display` text drops `"(p >= 1 required)"` (ADR-0081).
     - `GridError` adds `UnsupportedQuadratureType { cell: &'static str, kind: &'static str }`, `UnsupportedDerivativeOrder(u32)`, and `CellMismatch { expected: &'static str, found: &'static str }` (ADR-0081).
     - `PointSet::len()` returns the number of points (`points.len() / TD::N`), even when `weights` is empty; passing a non-empty weightless `PointSet` to `measure_block` returns `GridError::LengthMismatch` (ADR-0081).
   - **Section 27, "Interior facets":**
@@ -114,7 +117,7 @@ For option 2. Each edit carries the marker `(ADR-0081)`.
   - `RefCellError` becomes `#[non_exhaustive]` with six new variants; `GridError` gains three new variants.
   - `CellPoints` gains `is_empty`, `cells`, `points`, `client`.
   - `tetraloma-geometry` re-exports `QuadratureType`; `tetraloma` and `tetraloma::prelude` re-export `QuadratureType` and `CellPoints`.
-- **Plans and tasks affected:** `docs/plans/M13.md` (T0–T5); M12's plan adds the N1curl/RT extension of A7 if M13 merges before M12.
+- **Plans and tasks affected:** `docs/plans/M13.md` (`T0a`, `T0b`, `T1`–`T5`); `docs/plans/M12.md` (M12 extends A7 to N1curl and RT if M13 merges first, and M12.T5 / M13.T3 coordinate replacing the private sub-entity map in `tetraloma-element/src/transform.rs`).
 - **New tasks:** none.
 
 ## Decision
