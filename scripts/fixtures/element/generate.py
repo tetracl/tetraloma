@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
-"""Generates the Basix oracle fixtures of M11 (docs/plans/M11.md, T1; docs/design.md, A.10, A.11).
+"""Generates the Basix (M11) and Symfem (M12) element oracle fixtures (docs/design.md, A.10, A.11).
 
-Writes two JSON files with the pinned Basix wheel (PyPI fenics-basix==0.11.0, installed in .venv),
-in Basix's own DOF order (the Rust tests apply Appendix A.11):
-- tetraloma-refcell/tests/fixtures/gll_isaac.json: gll_isaac points on triangles, tetrahedra and
-  prisms, p = 1..15.
-- tetraloma-element/tests/fixtures/lagrange_basix.json: values and first derivatives at eight
-  fixture points per cell for M11 A2 (none at the pyramid's apex).
+Writes three JSON files with the pinned Python wheels installed in .venv:
+- fenics-basix==0.11.0 (Basix's own DOF order; the Rust tests apply Appendix A.11):
+  - tetraloma-refcell/tests/fixtures/gll_isaac.json: gll_isaac points on triangles, tetrahedra and
+    prisms, p = 1..15.
+  - tetraloma-element/tests/fixtures/lagrange_basix.json: values and first derivatives at eight
+    fixture points per cell for M11 A2 (none at the pyramid's apex).
+- symfem==2025.12.0 (DefElement numbering, identical to tetraloma's, Appendix A.11):
+  - tetraloma-element/tests/fixtures/hcurl_hdiv_dofs_symfem.json: sub-entity DOF counts for N1curl
+    and RaviartThomas on triangles, quadrilaterals, tetrahedra and hexahedra, p = 1..8 (M12 A1).
 
 Usage:
     .venv/bin/python scripts/fixtures/element/generate.py          # (re)write the fixtures
-    .venv/bin/python scripts/fixtures/element/generate.py --check  # compare points (1e-15) and
-                                                                   # tabulations (1e-13)
+    .venv/bin/python scripts/fixtures/element/generate.py --check  # verify all three fixtures
 """
 
 import argparse
+from contextlib import contextmanager
 import json
 import sys
 from pathlib import Path
@@ -22,13 +25,22 @@ from pathlib import Path
 try:
     import basix
     import numpy as np
+    import symfem
+    from symfem.functionals import BaseFunctional, IntegralMoment
 except ImportError as e:
-    sys.exit(f"generate.py: {e}; install the pin: .venv/bin/pip install fenics-basix==0.11.0")
+    sys.exit(
+        f"generate.py: {e}; install the pins: "
+        ".venv/bin/pip install fenics-basix==0.11.0 symfem==2025.12.0"
+    )
 
-PINNED = "0.11.0"
+PINNED_BASIX = "0.11.0"
+PINNED_SYMFEM = "2025.12.0"
 REPO = Path(__file__).resolve().parents[3]
 GLL_ISAAC_PATH = REPO / "tetraloma-refcell" / "tests" / "fixtures" / "gll_isaac.json"
 LAGRANGE_BASIX_PATH = REPO / "tetraloma-element" / "tests" / "fixtures" / "lagrange_basix.json"
+SYMFEM_DOFS_PATH = (
+    REPO / "tetraloma-element" / "tests" / "fixtures" / "hcurl_hdiv_dofs_symfem.json"
+)
 POINT_TOL, TAB_TOL, NUM_POINTS = 1e-15, 1e-13, 8
 
 CELLS = {
@@ -37,6 +49,16 @@ CELLS = {
     "Prism": (basix.CellType.prism, 3),
     "Pyramid": (basix.CellType.pyramid, 3),
 }
+
+# Symfem cell name, topological dimension, expected sub-entity counts, and (N1curl, RT) names.
+# Symfem indexes all six families by polyset subdegree (order = p - 1 for superdegree p >= 1).
+SYMFEM_CELLS = {
+    "Triangle": ("triangle", 2, [3, 3, 1], {"N1curl": "N1curl", "RaviartThomas": "RT"}),
+    "Quadrilateral": ("quadrilateral", 2, [4, 4, 1], {"N1curl": "RTCE", "RaviartThomas": "RTCF"}),
+    "Tetrahedron": ("tetrahedron", 3, [4, 6, 4, 1], {"N1curl": "N1curl", "RaviartThomas": "RT"}),
+    "Hexahedron": ("hexahedron", 3, [8, 12, 6, 1], {"N1curl": "NCE", "RaviartThomas": "NCF"}),
+}
+SYMFEM_FAMILIES = ("N1curl", "RaviartThomas")
 
 # Eight points per cell (midpoint, interior, face on 3D, edge, vertex; none at pyramid apex).
 # Triangle and Tetrahedron match conformance/src/bin/export_fixtures.rs verbatim.
@@ -117,6 +139,71 @@ def generate_lagrange_basix():
     return out
 
 
+@contextmanager
+def _symfem_entity_dofs_only():
+    """Avoid eager symbolic basis inversion inside Symfem's IntegralMoment.__init__.
+
+    Symfem's make_integral_moment_dofs passes lazy ElementBasisFunction instances so creating an
+    element does not invert symbolic dual matrices, but IntegralMoment.__init__ eagerly evaluates
+    len(self.f) and maps self.f on 2D faces of 3D cells (triggering symbolic rational LU inversion
+    on e.g. RaviartThomas(quad, 6) for NCE_8). entity_dofs(d, e) only inspects each functional's
+    entity tuple, so skipping the unused weight-function mapping preserves entity_dofs, space_dim
+    and lagrange_superdegree identically while finishing in seconds.
+    """
+    orig_init = IntegralMoment.__init__
+
+    def _fast_init(self, reference, f_in, dof, entity, mapping="identity", map_function=True):
+        BaseFunctional.__init__(self, reference, entity, mapping)
+        self.dof = dof
+
+    IntegralMoment.__init__ = _fast_init
+    try:
+        yield
+    finally:
+        IntegralMoment.__init__ = orig_init
+
+
+def _symfem_counts(symfem_cell, symfem_family, td, sub_counts, p):
+    el = symfem.create_element(symfem_cell, symfem_family, p - 1)
+    assert el.lagrange_superdegree == p, f"{symfem_family} {symfem_cell} p={p}: superdegree {el.lagrange_superdegree}"
+    ref = el.reference
+    assert ref.tdim == td and [ref.sub_entity_count(d) for d in range(td + 1)] == sub_counts
+    all_dofs, counts = [], []
+    for d in range(td + 1):
+        row = []
+        for e in range(sub_counts[d]):
+            edofs = el.entity_dofs(d, e)
+            all_dofs.extend(edofs)
+            row.append(len(edofs))
+        counts.append(row)
+    assert sorted(all_dofs) == list(range(el.space_dim)), f"{symfem_family} {symfem_cell} p={p}: DOF partition"
+    return counts
+
+
+def generate_hcurl_hdiv_dofs_symfem():
+    # Spot-check that the fast IntegralMoment path matches unmodified Symfem verbatim on p = 1, 2.
+    unmodified = {
+        (fam, cell, p): _symfem_counts(sc, fams[fam], td, sub, p)
+        for fam in SYMFEM_FAMILIES
+        for cell, (sc, td, sub, fams) in SYMFEM_CELLS.items()
+        for p in (1, 2)
+    }
+    out = {}
+    with _symfem_entity_dofs_only():
+        for fam in SYMFEM_FAMILIES:
+            cells_out = {}
+            for cell, (sc, td, sub, fams) in SYMFEM_CELLS.items():
+                degs = {}
+                for p in range(1, 9):
+                    counts = _symfem_counts(sc, fams[fam], td, sub, p)
+                    if (fam, cell, p) in unmodified:
+                        assert counts == unmodified[(fam, cell, p)], f"{fam} {cell} p={p}: fast path mismatch"
+                    degs[str(p)] = counts
+                cells_out[cell] = degs
+            out[fam] = cells_out
+    return out
+
+
 def check_array(label, have, want, tol, errors, nblocks=1):
     if not isinstance(have, list) or len(have) != len(want):
         errors.append(f"{label}: length mismatch")
@@ -168,19 +255,69 @@ def check_tree(path, fresh, errors, tabulations=False):
                 )
 
 
+def check_symfem_dofs(path, fresh, errors):
+    if not path.is_file():
+        errors.append(f"missing {path}")
+        return
+    have = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(have, dict) or set(have) != set(fresh):
+        errors.append(f"{path.name}: family keys differ")
+        return
+    for fam_name, want_cells in fresh.items():
+        have_cells = have[fam_name]
+        if not isinstance(have_cells, dict) or set(have_cells) != set(want_cells):
+            errors.append(f"{path.name} {fam_name}: cell keys differ")
+            continue
+        for cell_name, want_degs in want_cells.items():
+            have_degs = have_cells[cell_name]
+            if not isinstance(have_degs, dict) or set(have_degs) != set(want_degs):
+                errors.append(f"{path.name} {fam_name} {cell_name}: degree keys differ")
+                continue
+            for deg, want_counts in want_degs.items():
+                have_counts = have_degs[deg]
+                valid = (
+                    isinstance(have_counts, list)
+                    and all(
+                        isinstance(row, list)
+                        and all(isinstance(x, int) and not isinstance(x, bool) for x in row)
+                        for row in have_counts
+                    )
+                )
+                if not valid or have_counts != want_counts:
+                    errors.append(
+                        f"{path.name} {fam_name} {cell_name} p={deg}: "
+                        f"{have_counts!r} != {want_counts!r}"
+                    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--check", action="store_true",
-                        help="regenerate and compare points (1e-15) and tabulations (1e-13)")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="regenerate and verify Basix (1e-15 / 1e-13) and Symfem (exact integer) fixtures",
+    )
     args = parser.parse_args()
-    if basix.__version__ != PINNED:
-        sys.exit(f"generate.py: Basix {basix.__version__}, need {PINNED}: "
-                 f".venv/bin/pip install fenics-basix=={PINNED}")
+    if basix.__version__ != PINNED_BASIX:
+        sys.exit(
+            f"generate.py: Basix {basix.__version__}, need {PINNED_BASIX}: "
+            f".venv/bin/pip install fenics-basix=={PINNED_BASIX}"
+        )
+    if symfem.__version__ != PINNED_SYMFEM:
+        sys.exit(
+            f"generate.py: Symfem {symfem.__version__}, need {PINNED_SYMFEM}: "
+            f".venv/bin/pip install symfem=={PINNED_SYMFEM}"
+        )
 
     gll_isaac = generate_gll_isaac()
     lagrange_basix = generate_lagrange_basix()
+    symfem_dofs = generate_hcurl_hdiv_dofs_symfem()
     if not args.check:
-        for path, data in ((GLL_ISAAC_PATH, gll_isaac), (LAGRANGE_BASIX_PATH, lagrange_basix)):
+        for path, data in (
+            (GLL_ISAAC_PATH, gll_isaac),
+            (LAGRANGE_BASIX_PATH, lagrange_basix),
+            (SYMFEM_DOFS_PATH, symfem_dofs),
+        ):
             path.parent.mkdir(parents=True, exist_ok=True)
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(data, f, sort_keys=True, separators=(",", ":"))
@@ -191,12 +328,16 @@ def main():
     errors = []
     check_tree(GLL_ISAAC_PATH, gll_isaac, errors, tabulations=False)
     check_tree(LAGRANGE_BASIX_PATH, lagrange_basix, errors, tabulations=True)
+    check_symfem_dofs(SYMFEM_DOFS_PATH, symfem_dofs, errors)
     if errors:
-        print("Basix fixtures differ from a fresh run (rerun generate.py and commit):", file=sys.stderr)
+        print("Element fixtures differ from a fresh run (rerun generate.py and commit):", file=sys.stderr)
         for err in errors:
             print(f"  {err}", file=sys.stderr)
         sys.exit(1)
-    print("Basix fixtures match a fresh run (gll_isaac <= 1e-15, lagrange_basix <= 1e-13)")
+    print(
+        "Element fixtures match a fresh run "
+        "(gll_isaac <= 1e-15, lagrange_basix <= 1e-13, hcurl_hdiv_dofs_symfem exact)"
+    )
 
 
 if __name__ == "__main__":
