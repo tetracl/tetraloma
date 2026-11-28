@@ -6,4 +6,5 @@ mod node_families;
 mod node_maps;
 mod polyset;
 mod quadrature;
+mod quadrature_tables;
 mod tabulation;
