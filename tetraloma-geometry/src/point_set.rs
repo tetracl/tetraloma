@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use cubecl::prelude::Client;
 use tetraloma_device::{DeviceBuffer, Real};
 use tetraloma_dims::{CellType, TopoDim};
+use tetraloma_element::Element;
 use tetraloma_refcell::LagrangeElement;
 use tetraloma_topology::Result;
 
@@ -350,6 +351,27 @@ impl<F: Real, TD: TopoDim> PointSet<F, TD> {
     /// [Tabulation]: https://tetracl.github.io/tetraloma/concepts/quadrature.html#tabulation
     pub fn tabulate_derivatives(&self, e: &CoordinateElement<TD>) -> Result<DeviceBuffer<F>> {
         self.cached(e, Table::Derivatives)
+    }
+
+    // Design: section 27 ("Quadrature rules and point sets"), Listing Q1; ADR-0081.
+    // Stub for M13.T0b; implemented and documented in M13.T5.
+    #[doc(hidden)]
+    pub fn from_points(
+        client: &Client,
+        cell: TD::Cell,
+        points: Vec<f64>,
+        weights: Vec<f64>,
+    ) -> Result<Self> {
+        let _ = (client, cell, points, weights);
+        unimplemented!("pending M13.T5")
+    }
+
+    // Design: section 27 ("Quadrature rules and point sets"), Listing Q1; ADR-0081.
+    // Stub for M13.T0b; implemented and documented in M13.T5.
+    #[doc(hidden)]
+    pub fn tabulate_element(&self, e: &Element, nderivs: u32) -> Result<DeviceBuffer<F>> {
+        let _ = (e, nderivs);
+        unimplemented!("pending M13.T5")
     }
 
     /// A share of the cached table of `e`, computed and uploaded on first use.

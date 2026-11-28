@@ -23,6 +23,7 @@ bench = []
 cubecl.workspace = true
 tetraloma-device = { path = "../tetraloma-device" }
 tetraloma-dims = { path = "../tetraloma-dims" }
+tetraloma-element = { path = "../tetraloma-element" }
 tetraloma-parallel = { path = "../tetraloma-parallel" }
 tetraloma-refcell = { path = "../tetraloma-refcell" }
 tetraloma-topology = { path = "../tetraloma-topology" }

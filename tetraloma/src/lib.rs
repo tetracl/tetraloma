@@ -131,6 +131,8 @@ pub use tetraloma_geometry::{
     facet_normals_block, jacobians_block, measure_block, normals_block, physical_points_block,
     pseudo_inverse_block, pull_back_block,
 };
+#[doc(hidden)]
+pub use tetraloma_geometry::{CellPoints, QuadratureType};
 pub use tetraloma_parallel::{
     IndexMap, ParallelError, ReverseOp, ScatterNumeric, Scatterer, Transport,
 };

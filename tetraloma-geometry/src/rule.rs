@@ -3,7 +3,7 @@
 use cubecl::prelude::Client;
 use tetraloma_device::{Real, check_precision};
 use tetraloma_dims::{CellType, TopoDim};
-use tetraloma_refcell::gauss_rule;
+use tetraloma_refcell::{QuadratureType, gauss_rule};
 use tetraloma_topology::{GridError, Result};
 
 use crate::names::cell_name;
@@ -52,6 +52,19 @@ pub struct QuadRule<F: Real, TD: TopoDim> {
 }
 
 impl<F: Real, TD: TopoDim> QuadRule<F, TD> {
+    // Design: section 27 ("Quadrature rules and point sets"), Listing Q1; ADR-0081.
+    // Stub for M13.T0b; implemented and documented in M13.T4.
+    #[doc(hidden)]
+    pub fn new(
+        client: &Client,
+        cells: &[TD::Cell],
+        degree: u32,
+        kind: QuadratureType,
+    ) -> Result<Self> {
+        let _ = (client, cells, degree, kind);
+        unimplemented!("pending M13.T4")
+    }
+
     /// Gauss rules exact for polynomials of `degree`, for the given cell types.
     ///
     /// Each rule has m = ⌊degree / 2⌋ + 1 points per direction. A repeated cell type gets one
