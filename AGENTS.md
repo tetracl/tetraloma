@@ -124,17 +124,6 @@ Project skills (tetraloma's own; not part of the template):
       reviewer, whose input the review skill fixes, and not a test runner) gets the task text, the
       design sections it depends on and this rule: "If the design is ambiguous or an API must change, stop and return
       an ADR draft instead of deviating." Subagents cannot ask the maintainer questions.
-    - **Reviewers.** Task reviews, plan reviews and both gate passes use Claude Opus at extra high
-      effort, each reviewer in a fresh read-only context. In T3 Code, start each brief as its own
-      delegated task (`delegate_task`, provider `claudeAgent`, the newest Claude Opus model,
-      `effort: xhigh`, isolation `worktree`), one task per reviewer and round, with the brief, the
-      commit, the base branch and the pull request description as a file. Where `delegate_task`
-      is not available, start a fresh read-only subagent with the same model and effort. If
-      Claude Opus cannot be started, use the strongest read-only reviewer available and say so
-      in the review comment. A plan pull request is reviewed with the brief
-      `.agents/skills/review/references/gate-architecture.md` in its plan scope, one round, posted
-      as in task mode; the plan pull request stays a draft until that round and its fixes are
-      done, then you tell the maintainer it is ready.
     - **Review focus.** Besides the briefs, reviewers check: dependencies follow design
       section 18, "Dependency rules" (runtime types only in tetraloma-device, runtime features
       only in tetraloma-testing-base, tetraloma-testing, examples, benchmarks and binaries, no MPI
@@ -191,6 +180,66 @@ Project skills (tetraloma's own; not part of the template):
         they live in `scripts/hpc/targets.env`, which git ignores.
       - If a remote target is unreachable, ask the maintainer to open the SSH connection
         (`ssh myriad true`) and continue with local work; do not retry more than twice.
+
+## Host
+
+Before you start the first reviewer or other helper agent of a session,
+find out where you run, and use that host's tools for every helper:
+
+| Host | You run there when | Helpers are started with |
+| --- | --- | --- |
+| T3 Code | the `t3-code` tools (`delegate_task`) are available | `delegate_task` |
+| Herdr | `$HC_TERMINAL_ID` is set and `hc` is on the path | `hc run` |
+| neither | none of the above | your own read-only subagents |
+
+`printenv HC_TERMINAL_ID; command -v hc` answers the Herdr question. If
+both T3 Code and Herdr apply, use T3 Code. Say in each review comment which
+host started the reviewers.
+
+When you run inside Herdr, run `~/.local/bin/hc --skill` at the start of
+the session and read its output. It teaches how to use Herdr's
+orchestration tools: starting agents, sending them tasks, waiting for them
+and collecting their results.
+
+## Reviewers
+
+Task reviews, plan reviews and both gate passes use Claude Opus at extra-high
+effort, each reviewer in a fresh read-only context, one per reviewer and
+round, given the brief, the commit, the base branch and the pull request
+description as a file.
+
+- **T3 Code.** Start each brief as its own delegated task
+  (`delegate_task`, provider `claudeAgent`, the newest Claude Opus model,
+  `effort: xhigh`, isolation `worktree`).
+- **Herdr.** Check out the commit in a worktree of its own,
+  `git worktree add --detach .claude/worktrees/<name> <commit>`, and start
+  the reviewer there as your child terminal, with the task in the launch:
+
+  ```sh
+  hc run --bg --name <name> --cwd .claude/worktrees/<name> \
+    claude --model opus --effort xhigh \
+    "Read and follow <brief>. Commit <sha>, base <branch>, pull request \
+  description in <file>. Read-only, start no agents. Send your report \
+  with hc send $HC_TERMINAL_ID when done or stuck."
+  ```
+
+  `<name>` is `r<pr>-<round>-<brief>`, for example `r12-1-adversarial`.
+  If the launch says `first_message.sent: false`, read the reviewer's
+  screen before you send anything. Wait with `hc wait --children all`,
+  never with sleep or polling. A reviewer that blocks on a permission
+  prompt or a trust dialog: show the maintainer its screen and let them
+  answer; never answer it yourself. When the reports are in, `hc kill`
+  and `hc rm` each reviewer and `git worktree remove` its worktree.
+- **Neither.** Start a fresh read-only subagent with the same model and
+  effort.
+
+If Claude Opus cannot be started, use the strongest read-only reviewer
+available and say so in the review comment.
+
+A plan pull request is reviewed with the brief
+`.agents/skills/review/references/gate-architecture.md` in its plan scope, one
+round, posted as in task mode; the plan pull request stays a draft until that
+round and its fixes are done, then you tell the maintainer it is ready.
 
 ## Merging
 

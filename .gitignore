@@ -20,6 +20,9 @@ scripts/hpc/targets.env
 # Personal Claude Code settings
 .claude/settings.local.json
 
+# Reviewer worktrees started from Herdr (AGENTS.md, Reviewers)
+.claude/worktrees/
+
 # macOS
 .DS_Store
 

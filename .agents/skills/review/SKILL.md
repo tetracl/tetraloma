@@ -14,9 +14,10 @@ Two modes. Say which one you are running.
   file. Never your reasoning or another reviewer's report.
 - Reviewers are read-only and need no network. They read the change with
   `git diff <base>...<commit>` and `git show <commit>:<path>`.
-- Start each reviewer in a fresh context: a read-only subagent if you have
-  one, otherwise ask the maintainer to run the brief in a new session and
-  paste the report.
+- Start each reviewer in a fresh context, with the tools of the host you
+  run in (`AGENTS.md`, Host and Reviewers). If no host tool and no
+  read-only subagent is available, ask the maintainer to run the brief in
+  a new session and paste the report.
 - Use the reviewer model that `AGENTS.md` names (Reviewers). Say which
   model reviewed.
 - Every report ends with what the reviewer read in full. If that is not
