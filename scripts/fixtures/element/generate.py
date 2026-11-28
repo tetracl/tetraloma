@@ -181,26 +181,32 @@ def _symfem_counts(symfem_cell, symfem_family, td, sub_counts, p):
 
 
 def generate_hcurl_hdiv_dofs_symfem():
-    # Spot-check that the fast IntegralMoment path matches unmodified Symfem verbatim on p = 1, 2.
-    unmodified = {
-        (fam, cell, p): _symfem_counts(sc, fams[fam], td, sub, p)
-        for fam in SYMFEM_FAMILIES
-        for cell, (sc, td, sub, fams) in SYMFEM_CELLS.items()
-        for p in (1, 2)
-    }
-    out = {}
+    # 2D cells run through unmodified Symfem for all p = 1..=8; 3D cells cross-check p = 1, 2
+    # against unmodified Symfem and use the fast IntegralMoment path for all p = 1..=8.
+    out = {fam: {} for fam in SYMFEM_FAMILIES}
+    unmodified_3d = {}
+    for fam in SYMFEM_FAMILIES:
+        for cell, (sc, td, sub, fams) in SYMFEM_CELLS.items():
+            if td == 2:
+                out[fam][cell] = {
+                    str(p): _symfem_counts(sc, fams[fam], td, sub, p) for p in range(1, 9)
+                }
+            else:
+                for p in (1, 2):
+                    unmodified_3d[(fam, cell, p)] = _symfem_counts(sc, fams[fam], td, sub, p)
+
     with _symfem_entity_dofs_only():
         for fam in SYMFEM_FAMILIES:
-            cells_out = {}
             for cell, (sc, td, sub, fams) in SYMFEM_CELLS.items():
+                if td != 3:
+                    continue
                 degs = {}
                 for p in range(1, 9):
                     counts = _symfem_counts(sc, fams[fam], td, sub, p)
-                    if (fam, cell, p) in unmodified:
-                        assert counts == unmodified[(fam, cell, p)], f"{fam} {cell} p={p}: fast path mismatch"
+                    if (fam, cell, p) in unmodified_3d:
+                        assert counts == unmodified_3d[(fam, cell, p)], f"{fam} {cell} p={p}: fast path mismatch"
                     degs[str(p)] = counts
-                cells_out[cell] = degs
-            out[fam] = cells_out
+                out[fam][cell] = degs
     return out
 
 

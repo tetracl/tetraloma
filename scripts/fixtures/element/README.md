@@ -38,7 +38,8 @@ Before writing, `generate.py` verifies:
 - Basix fixtures: contiguous `entity_dofs`, finite values, partition of unity, and zero derivative
   sums.
 - Symfem fixture: `lagrange_superdegree == p`, exact `tdim` and sub-entity counts, exact partition
-  of `0..space_dim`, and agreement with unmodified Symfem on `p = 1, 2`.
+  of `0..space_dim`, unmodified Symfem on 2D cells (`p = 1..=8`), and agreement with unmodified
+  Symfem on 3D cells at `p = 1, 2`.
 
 `--check` regenerates in memory and checks exact keys and lengths, comparing Basix points to
 `1e-15` (absolute), Basix tabulations to `1e-13` (relative to `max(1.0, max |block|)` per

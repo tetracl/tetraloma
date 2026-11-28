@@ -46,9 +46,9 @@ impl SplitMix64 {
         z ^ (z >> 31)
     }
 
-    /// Uniform `f64` strictly inside `(0, 1)`.
+    /// Uniform `f64` strictly inside `(0, 1)` (52 bits + 0.5, exact in IEEE-754 f64).
     fn next_unit(&mut self) -> f64 {
-        ((self.next_u64() >> 11) as f64 + 0.5) / ((1u64 << 53) as f64)
+        ((self.next_u64() >> 12) as f64 + 0.5) / ((1u64 << 52) as f64)
     }
 }
 
@@ -108,25 +108,38 @@ fn col_norm(col: &[f64]) -> f64 {
     col.iter().map(|&x| x * x).sum::<f64>().sqrt()
 }
 
-/// Column-pivoted Householder QR (`dgeqp3`) of a column-major `rows x cols` matrix (`rows >= cols`).
-/// Returns `(qr_data, tau, r_ratio)` where `r_ratio = min_i |R[i,i]| / |R[0,0]|` (`0.0` if
-/// degenerate or non-finite).
+/// Column-pivoted Householder QR (`dgeqp3`) of a column-major `rows x cols` matrix (`rows >= cols`)
+/// after scaling each column to unit 2-norm so `r_ratio = min_i |R[i,i]| / |R[0,0]|` measures
+/// linear dependence independently of column scaling (`0.0` if any column is zero or non-finite).
 fn pivoted_qr(mat: &[f64], rows: usize, cols: usize) -> (Vec<f64>, Vec<f64>, f64) {
     assert!(rows >= cols && cols >= 1, "invalid shape {rows} x {cols}");
     assert_eq!(mat.len(), rows * cols);
     let mut a = mat.to_vec();
+    for j in 0..cols {
+        let col = &mut a[j * rows..(j + 1) * rows];
+        let norm = col_norm(col);
+        if !norm.is_finite() || norm == 0.0 {
+            return (a, vec![0.0; cols], 0.0);
+        }
+        for x in col {
+            *x /= norm;
+        }
+    }
     let mut jpvt = vec![0i32; cols];
     let mut tau = vec![0.0_f64; cols];
     f64::geqp3(rows, cols, &mut a, rows, &mut jpvt, &mut tau).expect("LAPACK dgeqp3 failed");
 
+    if !a.iter().all(|x| x.is_finite()) {
+        return (a, tau, 0.0);
+    }
     let r0 = a[0].abs();
-    if !r0.is_finite() || r0 == 0.0 {
+    if r0 == 0.0 {
         return (a, tau, 0.0);
     }
     let r_min = (0..cols)
         .map(|i| a[i * rows + i].abs())
         .fold(f64::INFINITY, f64::min);
-    (a, tau, if r_min.is_finite() { r_min / r0 } else { 0.0 })
+    (a, tau, r_min / r0)
 }
 
 /// Maximum relative residual `max_j ||(I - Q_1 Q_1^T) v_j||_2 / ||v_j||_2`, computed directly from
@@ -251,7 +264,11 @@ fn check_element_spans<E: FiniteElement<T = f64, TGeo = f64>>(
         "{key:?}"
     );
 
-    let m_cell = MIN_POINTS.max(dim.div_ceil(td) + CELL_MARGIN_POINTS);
+    let m_cell = if dim >= MIN_POINTS * td {
+        dim.div_ceil(td) + CELL_MARGIN_POINTS
+    } else {
+        MIN_POINTS
+    };
     let mut rng = SplitMix64(case_seed(family, cell, degree));
     let pts = random_interior_points(cell, m_cell, &mut rng);
 
@@ -378,6 +395,17 @@ fn qr_span_helper_accepts_same_span_and_rejects_mismatches() {
     let (r1, r2) = check_same_span(&u, &v, rows, cols, RANK_TOL, SPAN_TOL).unwrap();
     assert!(r1 < 1e-13 && r2 < 1e-13, "residuals {r1:e}, {r2:e}");
 
+    // Extreme column scaling must not trigger a false rank-deficiency failure.
+    let mut v_scaled = v.clone();
+    for x in &mut v_scaled[0..rows] {
+        *x *= 1e-12;
+    }
+    let (rs1, rs2) = check_same_span(&u, &v_scaled, rows, cols, RANK_TOL, SPAN_TOL).unwrap();
+    assert!(
+        rs1 < 1e-13 && rs2 < 1e-13,
+        "scaled residuals {rs1:e}, {rs2:e}"
+    );
+
     let mut v_bad = v;
     v_bad[0] += 1e-6;
     assert!(check_same_span(&u, &v_bad, rows, cols, RANK_TOL, SPAN_TOL).is_err());
@@ -405,7 +433,7 @@ fn random_interior_points_lie_strictly_inside_each_cell() {
     }
 }
 
-fn smoke_check_nd<E: FiniteElement<T = f64, TGeo = f64>>(
+fn check_nd_counts_and_rank<E: FiniteElement<T = f64, TGeo = f64>>(
     family: Family,
     cell: CellType,
     degree: u32,
@@ -427,31 +455,25 @@ fn smoke_check_nd<E: FiniteElement<T = f64, TGeo = f64>>(
             .collect();
         assert_eq!(got, want, "{family:?} {cell:?} p={degree} dim {d}");
     }
-    let m_cell = MIN_POINTS.max(nd_el.dim().div_ceil(td) + CELL_MARGIN_POINTS);
     let pts = random_interior_points(
         cell,
-        m_cell,
+        MIN_POINTS,
         &mut SplitMix64(case_seed(family, cell, degree)),
     );
     let nd_data = tabulate_ndelement(nd_el, &pts, td);
-    for d in 0..=td {
-        let m = if d < td { MIN_POINTS } else { m_cell };
-        for e in 0..num_sub_entities(cell, d) {
-            let nd_dofs = nd_el.entity_closure_dofs(d, e).unwrap();
-            if !nd_dofs.is_empty() {
-                let v = pack_nd_cols(&nd_data, nd_dofs, m, td);
-                let (r1, r2) =
-                    check_same_span(&v, &v, m * td, nd_dofs.len(), RANK_TOL, SPAN_TOL).unwrap();
-                assert!(r1 < 1e-13 && r2 < 1e-13);
-            }
-        }
-    }
+    let cell_dofs = nd_el.entity_closure_dofs(td, 0).unwrap();
+    let v = pack_nd_cols(&nd_data, cell_dofs, MIN_POINTS, td);
+    let (_, _, ratio) = pivoted_qr(&v, MIN_POINTS * td, cell_dofs.len());
+    assert!(
+        ratio > RANK_TOL,
+        "{family:?} {cell:?} p={degree}: ratio {ratio:e}"
+    );
 }
 
-/// Fast smoke check: verifies the committed Symfem DOF-count fixture agrees with ndelement on
-/// p = 1..=2 and that ndelement's closure tabulations pass `check_same_span` against themselves.
+/// Verifies the Symfem DOF-count fixture agrees with ndelement on p = 1..=2 and that ndelement's
+/// cell basis has full numerical rank at the sampled interior points.
 #[test]
-fn symfem_fixture_and_ndelement_smoke_low_degree() {
+fn symfem_fixture_and_ndelement_rank_low_degree() {
     let path = format!(
         "{}/../tetraloma-element/tests/fixtures/hcurl_hdiv_dofs_symfem.json",
         env!("CARGO_MANIFEST_DIR")
@@ -466,7 +488,7 @@ fn symfem_fixture_and_ndelement_smoke_low_degree() {
                 for degree in 1..=2u32 {
                     let n1 =
                         nedelec::create::<f64, f64>(nd_cell, degree as usize, Continuity::Standard);
-                    smoke_check_nd(
+                    check_nd_counts_and_rank(
                         Family::N1curl,
                         cell,
                         degree,
@@ -478,7 +500,7 @@ fn symfem_fixture_and_ndelement_smoke_low_degree() {
                         degree as usize,
                         Continuity::Standard,
                     );
-                    smoke_check_nd(
+                    check_nd_counts_and_rank(
                         Family::RaviartThomas,
                         cell,
                         degree,
