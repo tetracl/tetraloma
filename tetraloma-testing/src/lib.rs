@@ -20,6 +20,7 @@
 //! [A first program]: https://tetracl.github.io/tetraloma/getting-started/first-program.html
 //! [Compute devices]: https://tetracl.github.io/tetraloma/devices.html#choosing-a-device-at-run-time
 
+pub mod facet_rule;
 pub mod io_parallel;
 mod meshes;
 pub mod oracle;

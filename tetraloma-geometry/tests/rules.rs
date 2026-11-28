@@ -5,7 +5,8 @@ use cubecl::prelude::Client;
 use tetraloma::DeviceGrid;
 use tetraloma_device::{DeviceScalar, Real};
 use tetraloma_dims::{Cell1, Cell2, Cell3, CellType, D1, D2, D3, TopoDim};
-use tetraloma_geometry::{CoordinateElement, FacetQuadRule, NodeFamily, QuadRule};
+use tetraloma_element::{Element, ElementError, ElementKey, Family, Variant};
+use tetraloma_geometry::{CoordinateElement, FacetQuadRule, NodeFamily, PointSet, QuadRule};
 use tetraloma_refcell::{
     LagrangeElement, facet_points_to_cell, gauss_rule, reference_facet_normals, sub_entity_types,
 };
@@ -355,4 +356,98 @@ fn facet_point_sets_tabulate_like_any_point_set() {
         let sum: f32 = row.iter().sum();
         assert!((f64::from(sum) - 1.0).abs() < TOL_F32);
     }
+}
+
+fn check_element_tab<F: Real + DeviceScalar, TD: TopoDim>(
+    ps: &PointSet<F, TD>,
+    el: &Element,
+    nderivs: u32,
+    check_cache: bool,
+) {
+    let want = el.tabulate(ps.points(), nderivs).unwrap();
+    let got: Vec<f64> = ps
+        .tabulate_element(el, nderivs)
+        .unwrap()
+        .to_host()
+        .unwrap()
+        .into_iter()
+        .map(Real::widen)
+        .collect();
+    assert_eq!(got.len(), want.values.len(), "{:?} nd={nderivs}", el.key());
+    for (i, (&g, &w)) in got.iter().zip(&want.values).enumerate() {
+        assert!(close(g, w, tol::<F>()), "{:?} [{i}]: {g} vs {w}", el.key());
+    }
+    if check_cache {
+        let seven = F::narrow(7.0);
+        let mut buf = ps.tabulate_element(el, nderivs).unwrap();
+        tetraloma_device::fill(&mut buf, seven).unwrap();
+        let again = ps.tabulate_element(el, nderivs).unwrap().to_host().unwrap();
+        assert!(
+            again.iter().all(|&x| x == seven),
+            "{:?}: not cached",
+            el.key()
+        );
+    }
+}
+
+fn tabulate_element_for<F: Real + DeviceScalar, TD: TopoDim>(
+    client: &Client,
+    cells: &[TD::Cell],
+) -> usize {
+    const FAMILIES: [Family; 3] = [Family::Lagrange, Family::N1curl, Family::RaviartThomas];
+    const VARIANTS: [Variant; 3] = [
+        Variant::Nodal(NodeFamily::Equispaced),
+        Variant::Nodal(NodeFamily::Gll),
+        Variant::Legendre,
+    ];
+    let rule = QuadRule::<F, TD>::gauss(client, cells, 3).unwrap();
+    let mut tested = 0usize;
+    for &cell in cells {
+        let c: CellType = cell.into();
+        let pts = tetraloma_testing::facet_rule::interior_points(c);
+        let custom = PointSet::<F, TD>::from_points(client, cell, pts, Vec::new()).unwrap();
+        for family in FAMILIES {
+            for variant in VARIANTS {
+                for degree in 0..=6 {
+                    let key = ElementKey {
+                        family,
+                        cell: c,
+                        degree,
+                        variant,
+                    };
+                    let Ok(el) = Element::get(key) else {
+                        assert!(matches!(
+                            Element::get(key),
+                            Err(ElementError::Unsupported { .. })
+                        ));
+                        continue;
+                    };
+                    tested += 1;
+                    for ps in [rule.get(cell).unwrap(), &custom] {
+                        for nderivs in [0u32, 1] {
+                            check_element_tab(ps, &el, nderivs, degree == 2);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    tested
+}
+
+fn tabulate_element_check<F: Real + DeviceScalar>(client: &Client) {
+    let tested = tabulate_element_for::<F, D1>(client, &CELLS1)
+        + tabulate_element_for::<F, D2>(client, &CELLS2)
+        + tabulate_element_for::<F, D3>(client, &CELLS3);
+    // All 140 M11 Lagrange elements for p <= 6, plus M12 N1curl/RT once merged (ADR-0081).
+    assert!(
+        tested >= 140,
+        "expected >= 140 supported elements, tested {tested}"
+    );
+}
+
+#[test]
+#[ignore = "pending M13.T5"]
+fn tabulate_element_matches_host_tabulation() {
+    both_precisions!(tabulate_element_check);
 }

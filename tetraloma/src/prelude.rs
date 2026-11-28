@@ -48,3 +48,5 @@ pub use crate::{
     ScatterNumeric, Scatterer, Serial, SurfaceMesh, TagRegistry, TopoDim, Transport, VolumeMesh,
     VtkWriter, gmsh, local_gpu_index, vtk, with_mesh,
 };
+#[doc(hidden)]
+pub use crate::{CellPoints, QuadratureType};

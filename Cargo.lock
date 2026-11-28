@@ -4513,6 +4513,7 @@ dependencies = [
  "tetraloma",
  "tetraloma-device",
  "tetraloma-dims",
+ "tetraloma-element",
  "tetraloma-parallel",
  "tetraloma-refcell",
  "tetraloma-testing",

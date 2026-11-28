@@ -4,7 +4,7 @@ use cubecl::prelude::Client;
 use tetraloma_device::{DeviceBuffer, Real, check_precision};
 use tetraloma_dims::{CellType, TopoDim};
 use tetraloma_refcell::{
-    facet_points_to_cell, gauss_rule, reference_facet_normals, sub_entity_types,
+    QuadratureType, facet_points_to_cell, gauss_rule, reference_facet_normals, sub_entity_types,
 };
 use tetraloma_topology::{GridError, Result};
 
@@ -207,6 +207,19 @@ pub struct FacetQuadRule<F: Real, TD: TopoDim> {
 }
 
 impl<F: Real, TD: TopoDim> FacetQuadRule<F, TD> {
+    // Design: section 27 ("Quadrature rules and point sets"), Listing Q1; ADR-0081.
+    // Stub for M13.T0b; implemented and documented in M13.T4.
+    #[doc(hidden)]
+    pub fn new(
+        client: &Client,
+        cells: &[TD::Cell],
+        degree: u32,
+        kind: QuadratureType,
+    ) -> Result<Self> {
+        let _ = (client, cells, degree, kind);
+        unimplemented!("pending M13.T4")
+    }
+
     /// Gauss rules of `degree` on every facet of the given cell types.
     ///
     /// A repeated cell type gets one facet point set; the sets keep the order of first

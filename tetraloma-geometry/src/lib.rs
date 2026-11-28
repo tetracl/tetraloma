@@ -48,6 +48,7 @@ mod basis_eval;
 #[doc(hidden)]
 #[cfg(feature = "bench")]
 pub mod bench;
+mod cell_points;
 mod cooperative;
 mod detj_pinv;
 mod element;
@@ -75,6 +76,8 @@ mod sumfact;
 #[cfg(feature = "testing")]
 pub mod testing;
 
+#[doc(hidden)]
+pub use cell_points::CellPoints;
 pub use detj_pinv::{detj_block, pseudo_inverse_block};
 pub use element::{CoordinateElement, GeometryBlock};
 pub use equispaced::equispaced_nodes;
@@ -97,3 +100,5 @@ pub use pull_back::{PullBack, PullBackOptions, pull_back_block};
 pub use rule::QuadRule;
 pub use shape::{FieldShape, JacShape, PinvShape, ScalarShape, VecShape};
 pub use tetraloma_refcell::NodeFamily;
+#[doc(hidden)]
+pub use tetraloma_refcell::QuadratureType;
