@@ -60,6 +60,7 @@ For Option 2. Every edit carries the marker `(ADR-0080)`.
 
 - **Design sections (`docs/design.md`):**
   - **Section 18, crate table, row `conformance/`:** update "Purpose" to state that `tetraloma-conformance` compares `tetraloma-refcell` and `tetraloma-element` with `ndelement` at the pinned commit, and add `tetraloma-element (path; ADR-0080)` to "Depends on".
+  - **Section 20, A.10 ("Conformance setup", bullet `tetraloma-conformance`):** update "depends on tetraloma-refcell by path" to "depends on tetraloma-dims, tetraloma-refcell and tetraloma-element by path (ADR-0077, ADR-0080)".
   - **Section 20, A.10 ("Fixtures"):** note that `scripts/fixtures/element/generate.py` also writes the Symfem DOF-count fixture (`hcurl_hdiv_dofs_symfem.json` in `tetraloma-element`) from the pinned Symfem and refuses any other version (ADR-0080).
   - **Section 20, A.10 ("Oracles for elements and grid functions"):**
     - **ndelement:** update to "JSON fixtures for Lagrange tabulations and base transformations on the cells it offers, and direct in-process `conformance/` tests for N1curl and RT sub-entity closure spans on all four cells up to p = 8 (ADR-0077, ADR-0080)."
@@ -73,8 +74,9 @@ For Option 2. Every edit carries the marker `(ADR-0080)`.
 - **Roadmap (`docs/roadmap.md`):**
   - **M12, acceptance bullet 2:** clarify `(max(100, ⌈dim / tdim⌉ + 20) for the cell closure when dim ≥ 100 · tdim)` and `, run in conformance/ (ADR-0080)`.
 - **Interfaces and tests** (in M12's task pull requests, not in this ADR):
-  - M12.T0 adds `pub negate: Vec<bool>` to `TensorFactors` (setting `vec![false]` on Lagrange elements), adds `tetraloma-element` (path) and `[profile.dev.package.*] opt-level = 3` to `conformance/Cargo.toml`, and adds the ignored A2 test in `conformance/tests/hcurl_hdiv.rs`.
-  - M12.T2–T6 implement the vector layouts, `RTCF`/`NCF` signs, and A1–A11.
+  - M12.T0 adds `pub negate: Vec<bool>` to `TensorFactors` (setting `vec![false]` on Lagrange elements).
+  - M12.T1 adds `tetraloma-element` (path) and `[profile.dev]` / `[profile.dev.package."*"]` `opt-level = 3` to `conformance/Cargo.toml`, and adds the ignored A2 test in `conformance/tests/hcurl_hdiv.rs`.
+  - M12.T2–T7 implement the vector layouts, `RTCF`/`NCF` signs, and A1–A11.
 - **Process documents:** `docs/adr/README.md` (add the ADR-0080 row in the second commit of this pull request).
 - **Plans and tasks affected:** `docs/plans/M12.md` (not yet merged; written against Option 2 in `Plan M12`).
 - **New tasks:** none.
