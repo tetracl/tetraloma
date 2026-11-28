@@ -1391,24 +1391,9 @@ fn hcurl_hdiv_interpolation_reproduces_orthonormal_basis() {
 #[ignore = "pending M12.T7"]
 fn hcurl_hdiv_tensor_base_transformations_are_signed_permutations() {
     let entity_generators = [
-        (
-            CellType::Interval,
-            Generator::Reversal,
-            [[-1.0, 0.0], [0.0, 0.0]],
-            -1.0,
-        ),
-        (
-            CellType::Quadrilateral,
-            Generator::Rotation,
-            [[0.0, 1.0], [-1.0, 0.0]],
-            1.0,
-        ),
-        (
-            CellType::Quadrilateral,
-            Generator::Reflection,
-            [[0.0, 1.0], [1.0, 0.0]],
-            -1.0,
-        ),
+        (CellType::Interval, Generator::Reversal),
+        (CellType::Quadrilateral, Generator::Rotation),
+        (CellType::Quadrilateral, Generator::Reflection),
     ];
 
     for family in HCURL_HDIV_FAMILIES {
@@ -1429,8 +1414,24 @@ fn hcurl_hdiv_tensor_base_transformations_are_signed_permutations() {
                     "{key:?}"
                 );
 
-                for (entity, generator, jg, det_jg) in entity_generators {
+                for (entity, generator) in entity_generators {
                     let ed = tdim(entity);
+                    // Reorientation pull-back convention (matching M11 A8 and transform.rs):
+                    // `s_local = G(s_canonical)` via `apply_generator`, with Jacobian `J_G = DG`
+                    // (unit area/length, `|det J_G| = 1`) derived from `apply_generator` on the
+                    // origin and unit axes. Each functional weight `w` at `E(s)` maps to `E(G(s))`
+                    // with `w_reor = J_E J_G J_E^T w` (covariant Piola, N1curl, orthonormal `J_E`
+                    // on quad/hex) or `w_reor = (det J_G) w` (contravariant Piola, RT), giving
+                    // `M_G[i, j] = l_i^G(φ_j) = ±δ_{perm[i], j}`.
+                    let (jg, det_jg): ([[f64; 2]; 2], f64) = if ed == 1 {
+                        let g = apply_generator(entity, generator, &[0.0, 1.0]);
+                        let d = g[1] - g[0];
+                        ([[d, 0.0], [0.0, 0.0]], d)
+                    } else {
+                        let g = apply_generator(entity, generator, &[0.0, 0.0, 1.0, 0.0, 0.0, 1.0]);
+                        let j = [[g[2] - g[0], g[4] - g[0]], [g[3] - g[1], g[5] - g[1]]];
+                        (j, j[0][0] * j[1][1] - j[0][1] * j[1][0])
+                    };
                     let rep = (ed < td)
                         .then(|| {
                             sub_entity_types(cell, ed)
