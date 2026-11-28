@@ -1,6 +1,6 @@
 # ADR-0080: M12, rules the design leaves open: `TensorFactors` signs, vector layouts and the A2 span oracle
 
-Status: Proposed
+Status: Accepted
 Date: 2026-11-28
 Decision issue: #143
 Raised by: the plan of M12 (`docs/plans/M12.md`), its open questions 1 to 3
@@ -81,4 +81,13 @@ For Option 2. Every edit carries the marker `(ADR-0080)`.
 
 ## Decision
 
-*Pending maintainer answer.*
+> 1. as recommended
+> 2. as recommended
+> 3. as recommended
+> 4. as recommended
+>
+> Please open ADR80 alongside teh plan
+
+Said to the agent in a session, 2026-11-28.
+
+Items 1 to 3 correspond to Option 2 (the recommendation), so the changes listed under "Changes if accepted" apply as written. Item 4 confirms pinning `symfem==2025.12.0` in `scripts/check-local-tools.sh` and `scripts/fixtures/element/generate.py` for M12.T1.

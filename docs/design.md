@@ -1907,7 +1907,7 @@ The crate graph keeps serial builds free of MPI and lets kernels live in the cra
 | tetraloma-foundation-tests (unpublished) | The tests of the foundation crates without a mesh crate in the build: primitives at 10^6 elements and the scatterer on thread ranks, through the checks of tetraloma-testing-base. No features: a run on a GPU backend names a runtime feature of tetraloma-testing-base (ADR-0075) | tetraloma-device, tetraloma-parallel, tetraloma-comm-testing, tetraloma-testing-base |
 | tetraloma-examples (unpublished) | The examples of the API walkthrough and the programs of the user book, each over a tested `run(&Client)`; forwards runtime features (ADR-0060); the doctest harness of the book (a `#[cfg(doctest)]` module that includes every chapter) and the figure generator (the binary `figures`, from tetraloma-refcell's tables) (ADR-0067) | tetraloma, tetraloma-refcell, tetraloma-element and tetraloma-function (for the book's examples of sections 26 to 32; ADR-0072), tetraloma-testing; cubecl with runtime features; mpi (optional) |
 | tetraloma-bench (unpublished) | Kernel benchmarks across vector sizes, tile widths and CPU block sizes; end-to-end throughput; JSON output for `docs/perf/`; the function families and the CEED BP1 and BP3 comparison benchmarks (sections 8, 29–30; ADR-0071) | tetraloma, tetraloma-device (feature `testing`), tetraloma-geometry (features `bench`, `testing`), tetraloma-dims, tetraloma-refcell, tetraloma-topology (feature `bench`), tetraloma-testing; cubecl with runtime features; serde_json, toml, bytemuck; mpi (optional, feature `mpi`, for `halo_exchange`; ADR-0060); dev: proptest (ADR-0039) |
-| conformance/ (tetraloma-conformance, outside the workspace) | Compares tetraloma-refcell with ndelement at the pinned commit and exports JSON fixtures, including those of tetraloma-element (A.10; ADR-0071). The only crate that depends on ndelement and BLAS/LAPACK. | tetraloma-dims and tetraloma-refcell (path), ndelement (git), rlst (ndelement's array type, for the exporter's tabulations), serde_json, blas-src, lapack-src, openblas-src (ADR-0077) |
+| conformance/ (tetraloma-conformance, outside the workspace) | Compares tetraloma-refcell and tetraloma-element with ndelement at the pinned commit and exports JSON fixtures, including those of tetraloma-element (A.10; ADR-0071, ADR-0080). The only crate that depends on ndelement and BLAS/LAPACK. | tetraloma-dims, tetraloma-refcell and tetraloma-element (path; ADR-0080), ndelement (git), rlst (ndelement's array type, for the exporter's tabulations), serde_json, blas-src, lapack-src, openblas-src (ADR-0077) |
 | tools/env-check (outside the workspace) | Probe of a development target: devices, properties, sample kernels in f32 and f64, MPI allreduce; JSON report. Built in E0. | cubecl with the target's runtime features; mpi (optional) |
 
 ### Dependency rules
@@ -2169,7 +2169,7 @@ Higher degrees are generated from each format's rules ("High-order node ordering
 
 - **tetraloma-refcell** holds tetraloma's constant tables, Lagrange generator and orientation-bit function. It depends only on tetraloma-dims.
 - **tetraloma-conformance** lives in `conformance/`, is excluded from the main workspace, has its own Cargo.lock and is never published. It depends on tetraloma-refcell by path, on ndelement by git at the pinned commit, and on BLAS/LAPACK source crates, because ndelement's own BLAS/LAPACK crates are dev-dependencies only.
-- **Fixtures:** the conformance crate exports JSON fixtures to `tetraloma-refcell/tests/fixtures/` and `tetraloma-element/tests/fixtures/`, together with the pinned commits of ndelement, Basix, DOLFINx and Symfem. `scripts/fixtures/element/generate.py` writes the Basix fixtures (`gll_isaac.json` in tetraloma-refcell, `lagrange_basix.json` in tetraloma-element) from the pinned Basix and refuses any other version. Both have a `--check` mode: hosted CI's conformance job runs the exporter's; the generator's needs the pinned Python environment (ADR-0077). The fixtures are committed, so ordinary `cargo test --workspace` needs neither BLAS nor a git dependency.
+- **Fixtures:** the conformance crate exports JSON fixtures to `tetraloma-refcell/tests/fixtures/` and `tetraloma-element/tests/fixtures/`, together with the pinned commits of ndelement, Basix, DOLFINx and Symfem. `scripts/fixtures/element/generate.py` writes the Basix fixtures (`gll_isaac.json` in tetraloma-refcell, `lagrange_basix.json` in tetraloma-element) from the pinned Basix and the Symfem DOF-count fixture (`hcurl_hdiv_dofs_symfem.json` in tetraloma-element) from the pinned Symfem, and refuses any other version (ADR-0077, ADR-0080). Both have a `--check` mode: hosted CI's conformance job runs the exporter's; the generator's needs the pinned Python environment (ADR-0077). The fixtures are committed, so ordinary `cargo test --workspace` needs neither BLAS nor a git dependency.
 - **CI:** a separate job runs the conformance suite nightly and on every ndelement pin bump. A failure means the convention moved, and calls for an explicit decision: follow the change (update tetraloma and re-export the fixtures) or keep the old pin.
 - **Scope of comparison:**
     - sub-entity tables and orientation bits for all eight cells;
@@ -2180,9 +2180,9 @@ Higher degrees are generated from each format's rules ("High-order node ordering
 
 **Oracles for elements and grid functions (ADR-0071):**
 
-- **ndelement** (the pin above): JSON fixtures for Lagrange tabulations and base transformations on the cells it offers, and for N1curl and RT spans and DOF counts (ADR-0077).
+- **ndelement** (the pin above): JSON fixtures for Lagrange tabulations and base transformations on the cells it offers, and direct in-process `conformance/` tests for N1curl and RT sub-entity closure spans on all four cells up to p = 8 (ADR-0077, ADR-0080).
 - **Basix** (pinned in the Python environment): Isaac GLL points (`gll_isaac`), and the Lagrange tabulations of the cells and families ndelement lacks; its triangle and tetrahedron numbering is converted with A.11 (ADR-0077).
-- **Symfem:** DOF counts and spans at low degree, in DefElement numbering.
+- **Symfem:** JSON fixture of sub-entity DOF counts for N1curl and RT on triangles, quadrilaterals, tetrahedra and hexahedra, p = 1–8, in DefElement numbering (`generate.py`; ADR-0080).
 - **DOLFINx** (pinned, ADR-0007): interpolation of expressions, point values, submesh transfers and L2 norms.
 - **Quadrature tables:** their sources and licences are recorded in `tetraloma-refcell/tables/sources.json`.
 - **DefElement verification:** tetraloma is registered there after M12.
@@ -2199,7 +2199,7 @@ tetraloma/                            main workspace
   tetraloma-element/
     tests/fixtures/*.json          exported by tetraloma-conformance and by scripts/fixtures/element/generate.py, committed (ADR-0077)
   scripts/fixtures/element/
-    generate.py                    the Basix fixtures (ADR-0077)
+    generate.py                    the Basix and Symfem fixtures (ADR-0077, ADR-0080)
   ...
   conformance/                     tetraloma-conformance: own Cargo.lock, never published
     Cargo.toml
@@ -2208,6 +2208,7 @@ tetraloma/                            main workspace
     tests/tables.rs                sub-entity tables, all eight cells
     tests/orientation.rs           bits vs ndelement::orientation::compute_orientation
     tests/lagrange.rs              point sets node by node, five cells, p <= 4
+    tests/hcurl_hdiv.rs            N1curl and RT sub-entity closure spans vs ndelement, p <= 8 (ADR-0080)
 ```
 
 ```toml
@@ -2220,6 +2221,7 @@ publish = false
 [dependencies]
 tetraloma-dims = { path = "../tetraloma-dims" }        # (ADR-0077)
 tetraloma-refcell = { path = "../tetraloma-refcell" }
+tetraloma-element = { path = "../tetraloma-element" }  # (ADR-0080)
 rlst = "0.6"                                           # ndelement's array type, for the exporter's tabulations (ADR-0077)
 serde_json = "1"
 
@@ -2531,14 +2533,16 @@ impl Element {
     pub fn discontinuous_only(&self) -> bool;
     /// The smallest Lagrange degree whose space contains this element's space.
     pub fn embedded_superdegree(&self) -> u32;
-    /// The basis in tetraloma-refcell's orthonormal set: [dim][polyset dim · reference value size].
+    /// The basis in tetraloma-refcell's orthonormal set: [dim][component][polyset] (row-major
+    /// [dim][reference value size · polyset dim]; ADR-0080).
     pub fn coefficients(&self) -> &[f64];
     /// [derivative][point][basis][component], derivatives in tetraloma-refcell's order; nderivs is 0 or 1
     /// (Derivative orders; ADR-0072). nderivs is checked first; a point array whose length is not a
     /// multiple of tdim gives ElementError::RefCell(PointsShape), and no points an empty table (ADR-0077).
     pub fn tabulate(&self, points: &[f64], nderivs: u32) -> Result<ElementTabulation, ElementError>;
-    /// Reference points [m][tdim] and the matrix [dim][m · reference value size] such that the
-    /// DOF values of a reference function û are M û(points).
+    /// Reference points [m][tdim] and the matrix [dim][point][component] (row-major
+    /// [dim][m · reference value size]; ADR-0080) such that the DOF values of a reference
+    /// function û are M û(points) with û(points) in [point][component] order.
     pub fn interpolation_points(&self) -> &[f64];
     pub fn interpolation_matrix(&self) -> &[f64];
     pub fn transformation_kind(&self) -> TransformationKind;
@@ -2572,6 +2576,8 @@ pub enum Factor1d { NodalH1(NodeFamily), MomentH1, LegendreL2 }
 pub struct TensorFactors {
     pub factors: Vec<Vec<(Factor1d, u32)>>,   // [component][direction]: kind and degree
     pub lexicographic: Vec<Vec<usize>>,       // [component][tensor index] -> element DOF
+    /// Per-component sign flip: if true, negate the tensor product for that component (ADR-0080).
+    pub negate: Vec<bool>,
 }
 impl TensorFactors {
     /// [derivative][point][basis] of one 1D factor at points of [0, 1].
@@ -2680,7 +2686,9 @@ With this convention, the traces of degree-p elements on a shared entity are the
 - `MomentH1`: endpoint evaluations plus interior Legendre moments up to degree d − 2; (`MomentH1`, p) is the factor of N1curl and RT of degree p in their continuous directions (ADR-0077).
 - `LegendreL2`: integral moments against an orthonormal Legendre basis of P_d; (`LegendreL2`, p − 1) is the factor of N1curl and RT of degree p in the remaining directions, and (`LegendreL2`, p) that of Legendre DG of degree p (ADR-0077).
 
-The product of the factors reproduces the element's tabulation to 10^−12 for p ≤ 8.
+On `RaviartThomas` tensor elements (`RTCF` on quadrilaterals, `NCF` on hexahedra), consistent facet-normal handedness (`(−t_y, t_x)` in 2D and `t_1 × t_2` in 3D, matching ndelement and Basix) gives component `0` of `RTCF` (`x`-faces) and component `1` of `NCF` (`y`-faces) a negative sign relative to the positive 1D factor product. Carrying that sign on the component's interior moments too lets every DOF of component `c` share one sign, recorded in `TensorFactors::negate[c]` (`true` for `RTCF` component `0` and `NCF` component `1`; `false` elsewhere) (ADR-0080).
+
+The product of the factors (negated where `negate[c]` is true; ADR-0080) reproduces the element's tabulation to 10^−12 for p ≤ 8.
 
 ### Out of scope
 
