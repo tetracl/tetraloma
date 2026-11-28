@@ -305,6 +305,37 @@ fn check_tensor_product(cell: CellType, degree: u32, kind: QuadratureType, rule:
             *i = 0;
         }
     }
+
+    // Fubini check over all (degree + 1)^td tensor products of the 1D orthonormal polyset:
+    // |I_1[0]^td - 1| <= 9e-15 and, for any multi-index with at least one k > 0,
+    // |prod I_1[k_d]| <= max_{k>0}|I_1[k]| * max_k|I_1[k]|^(td-1) <= 9e-15
+    // (leaving 1e-15 slack for the relative tensor-weight check above, bounding td-D error by 1e-14).
+    let nb1 = polyset::dim(CellType::Interval, degree);
+    let table1 = polyset::tabulate(CellType::Interval, degree, &r1.points, 0);
+    let integrals1: Vec<f64> = (0..nb1)
+        .map(|k| {
+            table1[k * n1..(k + 1) * n1]
+                .iter()
+                .zip(&r1.weights)
+                .map(|(&v, &w)| w * v)
+                .sum()
+        })
+        .collect();
+    let p0_err = (integrals1[0].powi(td as i32) - 1.0).abs();
+    assert!(
+        p0_err <= 9e-15,
+        "{kind:?} {cell:?} d={degree}: tensor Fubini psi_0 err {p0_err:e}"
+    );
+    let max_all = integrals1.iter().map(|v| v.abs()).fold(0.0_f64, f64::max);
+    let max_nonzero = integrals1[1..]
+        .iter()
+        .map(|v| v.abs())
+        .fold(0.0_f64, f64::max);
+    let prod_err = max_nonzero * max_all.powi(td as i32 - 1);
+    assert!(
+        prod_err <= 9e-15,
+        "{kind:?} {cell:?} d={degree}: tensor Fubini non-zero basis product err {prod_err:e}"
+    );
 }
 
 fn check_rule_integration(

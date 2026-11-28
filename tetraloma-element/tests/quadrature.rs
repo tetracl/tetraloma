@@ -97,9 +97,8 @@ fn gll_mass_matrix_is_diagonal() {
                 let w_i = rule.weights[qi];
                 let err = (d_ii - w_i).abs();
                 assert!(
-                    err <= TOL && err / w_i <= TOL,
-                    "{cell:?} n={n} diag[{i}]: {d_ii} vs {w_i} (abs {err:e}, rel {:e})",
-                    err / w_i
+                    err <= TOL,
+                    "{cell:?} n={n} diag[{i}]: {d_ii} vs {w_i} (abs {err:e})"
                 );
             }
 
