@@ -1328,12 +1328,21 @@ dependencies = [
  "rlst",
  "serde_json",
  "tetraloma-dims",
+ "tetraloma-element",
  "tetraloma-refcell",
 ]
 
 [[package]]
 name = "tetraloma-dims"
 version = "0.1.0"
+
+[[package]]
+name = "tetraloma-element"
+version = "0.1.0"
+dependencies = [
+ "tetraloma-dims",
+ "tetraloma-refcell",
+]
 
 [[package]]
 name = "tetraloma-refcell"
