@@ -395,7 +395,7 @@ Acceptance:
 - For every degree 4–30, the `Default` rule on triangles and on tetrahedra has fewer points than the `Gauss` rule.
 - The mass matrix of the `Nodal(Gll)` Lagrange element of degree n − 1 under the n-point `GaussLobatto` rule is diagonal to 10^−14 for n = 2–17 on intervals, quadrilaterals and hexahedra.
 - On meshes with randomly permuted vertex order (tetrahedra, hexahedra, the mixed box and a triangulated sphere), facet points mapped from both cells of every interior facet with `rule_permutation` coincide to 10^−12 in f64 and 10^−5 in f32, on 1–4 ranks.
-- `PointSet::tabulate_element` equals the host tabulation of every element of M11 and M12 with p ≤ 6 to 10^−12 in f64 and 10^−5 in f32.
+- `PointSet::tabulate_element` equals the host tabulation of every element of M11 (and M12 once M12 is merged; if M13 merges first, M12 extends the check to N1curl and RT) with p ≤ 6 to 10^−12 in f64 and 10^−5 in f32 (ADR-0081).
 - `permute_vertices` agrees with `physical_points` of a cell whose vertices are permuted, to 10^−12, for every cell type and geometry degree 1–3.
 - Every table in `tetraloma-refcell/tables/` has a source and licence entry in `tables/sources.json`.
 

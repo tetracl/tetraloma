@@ -1,6 +1,6 @@
 # ADR-0081: M13, rules the design leaves open: symmetric table source, error types, Listing Q1 contracts and parallel M12/M13 A7
 
-Status: Proposed
+Status: Accepted
 Date: 2026-11-28
 Decision issue: #144
 Raised by: the plan of M13 (`docs/plans/M13.md`)
@@ -122,4 +122,6 @@ For option 2. Each edit carries the marker `(ADR-0081)`.
 
 ## Decision
 
-> Pending maintainer acceptance of ADR-0081.
+> Accept ADR 81., 2026-11-28, said to the agent in a session.
+
+Option 2 (the recommendation) applies as written. The design, roadmap and ADR index edits are applied in this pull request; `docs/plans/M13.md` already reflects these rules on PR #148.
