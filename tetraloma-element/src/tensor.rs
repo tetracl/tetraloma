@@ -481,6 +481,7 @@ mod tests {
             key.cell,
             key.degree,
             dim,
+            1,
             &data.coefficients,
             points,
             nderivs,

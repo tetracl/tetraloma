@@ -1,23 +1,33 @@
 // Design: section 26 ("Finite elements"), Listing E1, "Construction", "Derivative orders",
-// "Variants"; ADR-0071, ADR-0072.
+// "Variants"; ADR-0071, ADR-0072, ADR-0080.
 //! Ciarlet element construction and tabulation over `tetraloma-refcell`'s orthonormal polynomial
 //! sets.
 
 use tetraloma_dims::CellType;
 use tetraloma_refcell::{
-    DenseLu, RefCellError, gauss_rule, lagrange_points, polyset, tdim, vertices,
+    DenseLu, QuadratureRule, RefCellError, gauss_rule, lagrange_points, polyset, tdim, vertices,
 };
 
 use crate::{ElementError, ElementKey, ElementTabulation, Family, Variant};
 
 /// Interpolation data and orthonormal-basis expansion coefficients from Ciarlet construction.
 pub(crate) struct CiarletData {
-    /// `[dim][polyset_dim * value_size]`.
+    /// `[dim][component][polyset]` (row-major `[dim][value_size * polyset_dim]`).
     pub(crate) coefficients: Vec<f64>,
     /// `[m][tdim]`.
     pub(crate) interpolation_points: Vec<f64>,
-    /// `[dim][m * value_size]`.
+    /// `[dim][point][component]` (row-major `[dim][m * value_size]`).
     pub(crate) interpolation_matrix: Vec<f64>,
+}
+
+/// One contiguous block of DOF functionals sharing a single set of reference sample points.
+pub(crate) struct FunctionalBlock<'a> {
+    /// Reference sample points in `[m_b][tdim]` order.
+    pub(crate) points: &'a [f64],
+    /// Functional weights in `[n_b][m_b][value_size]` order.
+    pub(crate) weights: &'a [f64],
+    /// Number of DOF rows (`n_b`) in this block.
+    pub(crate) num_dofs: usize,
 }
 
 /// Builds the row-major `n × n` identity matrix.
@@ -96,65 +106,264 @@ pub(crate) fn lagrange_interpolation(
     }
 }
 
-// M12 extends this with subspace span coefficients and the vector layout.
-/// Constructs scalar (`reference_value_size == 1`) Ciarlet basis coefficients in
-/// `tetraloma-refcell`'s orthonormal set from interpolation points (`[m][tdim]`) and matrix
-/// (`[dim][m]`).
+/// Orthonormalises a sequence of candidate vector polynomials over `polyset(cell, degree)` in
+/// `[basis][component][polyset]` layout using two-pass modified Gram–Schmidt under an exact
+/// quadrature `rule` (for example `gauss_rule(cell, 2 * degree)`).
 ///
-/// Forms `D[i, k] = l_i(ψ_k)`, solves `D Y = I` with `DenseLu`, and transposes `Y` into
-/// `[dim][polyset_dim]` order so `φ_j = Σ_k C[j, k] ψ_k`.
-pub(crate) fn solve_ciarlet_coefficients(
+/// `eval_candidate(i, &mut vals)` evaluates candidate `i` (`0..num_candidates`) at `rule.points`
+/// in `[point][component]` order (`vals.len() == rule.weights.len() * value_size`). `vals` is
+/// zero-initialised before each call, so callbacks need only write nonzero components. Candidates
+/// whose residual norm after projection or orthogonalisation is at most `1e-10 * original_norm`
+/// (or whose original norm is zero) are dropped as linearly dependent.
+///
+/// Returns `(num_basis, span)` with `span` in `[num_basis][value_size][n_poly]` layout.
+#[cfg_attr(not(test), expect(dead_code))] // wired in M12.T7
+pub(crate) fn orthonormalise_vector_basis(
+    cell: CellType,
+    degree: u32,
+    value_size: usize,
+    rule: &QuadratureRule,
+    num_candidates: usize,
+    mut eval_candidate: impl FnMut(usize, &mut [f64]),
+) -> (usize, Vec<f64>) {
+    const DROP_TOL: f64 = 1e-10;
+    let td = tdim(cell);
+    let nq = rule.weights.len();
+    assert_eq!(
+        rule.cell, cell,
+        "orthonormalise_vector_basis: rule cell {:?} does not match {cell:?}",
+        rule.cell
+    );
+    let min_rule_degree = degree
+        .checked_mul(2)
+        .expect("orthonormalise_vector_basis: 2 * degree overflows u32");
+    assert!(
+        rule.degree >= min_rule_degree,
+        "orthonormalise_vector_basis: rule degree {} is below 2 * {degree} ({min_rule_degree})",
+        rule.degree
+    );
+    assert!(
+        td > 0 && value_size > 0 && nq > 0 && rule.points.len() == nq * td,
+        "orthonormalise_vector_basis: invalid rule or value_size ({value_size})"
+    );
+    if num_candidates == 0 {
+        return (0, Vec::new());
+    }
+
+    let n_poly = polyset::dim(cell, degree);
+    let stride = value_size * n_poly;
+    let mut w_poly = polyset::tabulate(cell, degree, &rule.points, 0);
+    for row in w_poly.chunks_exact_mut(nq) {
+        for (v, &w) in row.iter_mut().zip(&rule.weights) {
+            *v *= w;
+        }
+    }
+
+    let mut vals = vec![0.0; nq * value_size];
+    let mut vals_t = vec![0.0; value_size * nq];
+    let mut cand = vec![0.0; stride];
+    let mut span = Vec::new();
+    let mut num_kept = 0usize;
+
+    for i in 0..num_candidates {
+        vals.fill(0.0);
+        eval_candidate(i, &mut vals);
+
+        let orig_norm_sq: f64 = vals
+            .chunks_exact(value_size)
+            .zip(&rule.weights)
+            .map(|(v, &w)| w * v.iter().map(|&x| x * x).sum::<f64>())
+            .sum();
+        let orig_norm = orig_norm_sq.sqrt();
+        if orig_norm == 0.0 {
+            continue;
+        }
+
+        transpose_block(&vals, nq, value_size, &mut vals_t);
+        for c in 0..value_size {
+            let vc = &vals_t[c * nq..(c + 1) * nq];
+            let dst = &mut cand[c * n_poly..(c + 1) * n_poly];
+            if vc.iter().all(|&v| v == 0.0) {
+                dst.fill(0.0);
+                continue;
+            }
+            for (d, wp_row) in dst.iter_mut().zip(w_poly.chunks_exact(nq)) {
+                *d = wp_row.iter().zip(vc).map(|(&wp, &v)| wp * v).sum();
+            }
+        }
+
+        let mut norm = cand.iter().map(|&x| x * x).sum::<f64>().sqrt();
+        if norm <= DROP_TOL * orig_norm {
+            continue;
+        }
+
+        let mut dependent = false;
+        for _ in 0..2 {
+            for qj in span.chunks_exact(stride) {
+                let h: f64 = cand.iter().zip(qj).map(|(&a, &b)| a * b).sum();
+                if h != 0.0 {
+                    for (a, &b) in cand.iter_mut().zip(qj) {
+                        *a -= h * b;
+                    }
+                }
+            }
+            norm = cand.iter().map(|&x| x * x).sum::<f64>().sqrt();
+            if norm <= DROP_TOL * orig_norm {
+                dependent = true;
+                break;
+            }
+        }
+        if dependent {
+            continue;
+        }
+
+        let inv = 1.0 / norm;
+        cand.iter_mut().for_each(|x| *x *= inv);
+        span.extend_from_slice(&cand);
+        num_kept += 1;
+    }
+
+    (num_kept, span)
+}
+
+/// Constructs Ciarlet basis coefficients in `[dim][component][polyset]` layout from per-entity
+/// functional blocks.
+///
+/// `span` supplies an orthonormal subspace basis `[dim][value_size][n_poly]`; `None` is the
+/// full-polyset scalar identity fast path (`value_size == 1`, `dim == n_poly`). Forms
+/// `D[i, j] = l_i(w_j)`, solves `D Y = I` with `DenseLu` (keeping the dual residual
+/// `l_i(φ_m) − δ_{i,m}` small even for ill-conditioned equispaced bases), and forms `C = Yᵀ S`
+/// (`Yᵀ` when `span` is `None`) so `φ_m = Σ_k C[m, c, k] ψ_k e_c`.
+pub(crate) fn solve_ciarlet_coefficients_from_blocks(
     cell: CellType,
     degree: u32,
     dim: usize,
-    interpolation_points: &[f64],
-    interpolation_matrix: &[f64],
+    value_size: usize,
+    span: Option<&[f64]>,
+    blocks: &[FunctionalBlock<'_>],
 ) -> Result<Vec<f64>, ElementError> {
     let td = tdim(cell);
     assert!(
-        td > 0 && !interpolation_points.is_empty() && interpolation_points.len().is_multiple_of(td),
-        "solve_ciarlet_coefficients: invalid point array length {} for tdim {td}",
-        interpolation_points.len()
+        td > 0 && value_size > 0 && dim > 0,
+        "solve_ciarlet_coefficients: invalid td={td}, value_size={value_size}, dim={dim}"
     );
-    let m = interpolation_points.len() / td;
     let n_poly = polyset::dim(cell, degree);
+    let stride = value_size * n_poly;
+    if let Some(s) = span {
+        assert_eq!(
+            s.len(),
+            dim * stride,
+            "solve_ciarlet_coefficients: expected {dim} x {value_size} x {n_poly} span, got {}",
+            s.len()
+        );
+    } else {
+        assert!(
+            value_size == 1 && dim == n_poly,
+            "solve_ciarlet_coefficients: span=None requires scalar full polyset (value_size=1, dim={n_poly}), got value_size={value_size}, dim={dim}"
+        );
+    }
+    let total_dofs: usize = blocks.iter().map(|b| b.num_dofs).sum();
     assert_eq!(
-        dim, n_poly,
-        "solve_ciarlet_coefficients: full scalar polyset expects dim == {n_poly}, got {dim}"
+        total_dofs, dim,
+        "solve_ciarlet_coefficients: functional blocks sum to {total_dofs} DOFs, expected {dim}"
     );
-    assert_eq!(
-        interpolation_matrix.len(),
-        dim * m,
-        "solve_ciarlet_coefficients: expected {dim} x {m} matrix, got {}",
-        interpolation_matrix.len()
-    );
-
-    let poly = polyset::tabulate(cell, degree, interpolation_points, 0);
-    let mut poly_t = vec![0.0; m * n_poly];
-    transpose_block(&poly, n_poly, m, &mut poly_t);
 
     let mut dual = vec![0.0; dim * dim];
-    for (d_row, m_row) in dual
-        .chunks_exact_mut(dim)
-        .zip(interpolation_matrix.chunks_exact(m))
-    {
-        for (p_row, &a) in poly_t.chunks_exact(n_poly).zip(m_row) {
-            if a != 0.0 {
-                for (dv, &pv) in d_row.iter_mut().zip(p_row) {
-                    *dv += a * pv;
+    let mut l_row = vec![0.0; stride];
+    let mut row_offset = 0usize;
+
+    for block in blocks {
+        if block.num_dofs == 0 {
+            continue;
+        }
+        assert!(
+            !block.points.is_empty() && block.points.len().is_multiple_of(td),
+            "solve_ciarlet_coefficients: invalid point array length {} for tdim {td}",
+            block.points.len()
+        );
+        let m_b = block.points.len() / td;
+        let row_len = m_b * value_size;
+        assert_eq!(
+            block.weights.len(),
+            block.num_dofs * row_len,
+            "solve_ciarlet_coefficients: expected {} x {m_b} x {value_size} weights, got {}",
+            block.num_dofs,
+            block.weights.len()
+        );
+
+        let poly = polyset::tabulate(cell, degree, block.points, 0);
+        let mut poly_t = vec![0.0; m_b * n_poly];
+        transpose_block(&poly, n_poly, m_b, &mut poly_t);
+        drop(poly);
+
+        for (r, w_row) in block.weights.chunks_exact(row_len).enumerate() {
+            let d_row = &mut dual[(row_offset + r) * dim..(row_offset + r + 1) * dim];
+            l_row.fill(0.0);
+            for (p_row, w_q) in poly_t
+                .chunks_exact(n_poly)
+                .zip(w_row.chunks_exact(value_size))
+            {
+                for (c, &a) in w_q.iter().enumerate() {
+                    if a != 0.0 {
+                        for (dst, &pv) in l_row[c * n_poly..(c + 1) * n_poly].iter_mut().zip(p_row)
+                        {
+                            *dst += a * pv;
+                        }
+                    }
                 }
             }
+            if let Some(s) = span {
+                for (dv, s_row) in d_row.iter_mut().zip(s.chunks_exact(stride)) {
+                    *dv = l_row.iter().zip(s_row).map(|(&a, &b)| a * b).sum();
+                }
+            } else {
+                d_row.copy_from_slice(&l_row);
+            }
         }
+        row_offset += block.num_dofs;
     }
-    drop((poly, poly_t));
 
     let lu = DenseLu::factor(dual, dim)?;
     let mut inv = identity(dim);
     lu.solve(&mut inv, dim);
+    drop(lu);
 
-    let mut coefficients = vec![0.0; dim * dim];
-    transpose_block(&inv, dim, dim, &mut coefficients);
+    let mut coefficients = vec![0.0; dim * stride];
+    if let Some(s) = span {
+        for (j, s_row) in s.chunks_exact(stride).enumerate() {
+            let inv_row = &inv[j * dim..(j + 1) * dim];
+            for (c_row, &y) in coefficients.chunks_exact_mut(stride).zip(inv_row) {
+                if y != 0.0 {
+                    for (dst, &sv) in c_row.iter_mut().zip(s_row) {
+                        *dst += y * sv;
+                    }
+                }
+            }
+        }
+    } else {
+        transpose_block(&inv, dim, dim, &mut coefficients);
+    }
     Ok(coefficients)
+}
+
+/// Constructs Ciarlet basis coefficients in `tetraloma-refcell`'s orthonormal set
+/// (`[dim][component][polyset]`) from flat interpolation points (`[m][tdim]`) and matrix
+/// (`[dim][point][component]`).
+pub(crate) fn solve_ciarlet_coefficients(
+    cell: CellType,
+    degree: u32,
+    dim: usize,
+    value_size: usize,
+    span: Option<&[f64]>,
+    interpolation_points: &[f64],
+    interpolation_matrix: &[f64],
+) -> Result<Vec<f64>, ElementError> {
+    let block = FunctionalBlock {
+        points: interpolation_points,
+        weights: interpolation_matrix,
+        num_dofs: dim,
+    };
+    solve_ciarlet_coefficients_from_blocks(cell, degree, dim, value_size, span, &[block])
 }
 
 /// Runs the dense Ciarlet construction for a validated Lagrange element key.
@@ -169,6 +378,8 @@ pub(crate) fn build_lagrange_dense(
         key.cell,
         key.degree,
         dim,
+        1,
+        None,
         &interpolation_points,
         &interpolation_matrix,
     )?;
@@ -205,17 +416,30 @@ pub(crate) fn validate_tabulate_args(
     Ok(points.len().checked_div(td).unwrap_or(1))
 }
 
-/// Tabulates a scalar (`reference_value_size == 1`) element from its `polyset` expansion
-/// `coefficients` (`[dim][n_poly]`) into `[derivative][point][basis][component]` order.
+/// Tabulates an element with `value_size` reference components from its `polyset` expansion
+/// `coefficients` (`[dim][component][polyset]`) into `[derivative][point][basis][component]` order.
 pub(crate) fn tabulate_from_coefficients(
     cell: CellType,
     degree: u32,
     dim: usize,
+    value_size: usize,
     coefficients: &[f64],
     points: &[f64],
     nderivs: u32,
 ) -> Result<ElementTabulation, ElementError> {
     let num_points = validate_tabulate_args(cell, points, nderivs)?;
+    assert!(
+        value_size > 0,
+        "tabulate_from_coefficients: value_size must be positive"
+    );
+    let n_poly = polyset::dim(cell, degree);
+    let stride = value_size * n_poly;
+    assert_eq!(
+        coefficients.len(),
+        dim * stride,
+        "tabulate_from_coefficients: expected {dim} x {value_size} x {n_poly} coefficients, got {}",
+        coefficients.len()
+    );
     let td = tdim(cell);
     let num_derivs = if nderivs == 0 { 1 } else { 1 + td };
     if num_points == 0 {
@@ -223,23 +447,18 @@ pub(crate) fn tabulate_from_coefficients(
             nderivs,
             num_points: 0,
             dim,
-            value_size: 1,
+            value_size,
             values: Vec::new(),
         });
     }
 
-    let n_poly = polyset::dim(cell, degree);
-    assert_eq!(
-        coefficients.len(),
-        dim * n_poly,
-        "tabulate_from_coefficients: expected {dim} x {n_poly} coefficients, got {}",
-        coefficients.len()
-    );
     let poly = polyset::tabulate(cell, degree, points, nderivs);
-    let mut values = vec![0.0; num_derivs * num_points * dim];
+    let point_stride = dim * value_size;
+    let deriv_stride = num_points * point_stride;
+    let mut values = vec![0.0; num_derivs * deriv_stride];
     let mut poly_t = vec![0.0; num_points * n_poly];
 
-    for (d, out_block) in values.chunks_exact_mut(num_points * dim).enumerate() {
+    for (d, out_block) in values.chunks_exact_mut(deriv_stride).enumerate() {
         transpose_block(
             &poly[d * n_poly * num_points..(d + 1) * n_poly * num_points],
             n_poly,
@@ -248,10 +467,15 @@ pub(crate) fn tabulate_from_coefficients(
         );
         for (p_row, out_q) in poly_t
             .chunks_exact(n_poly)
-            .zip(out_block.chunks_exact_mut(dim))
+            .zip(out_block.chunks_exact_mut(point_stride))
         {
-            for (dst, c_row) in out_q.iter_mut().zip(coefficients.chunks_exact(n_poly)) {
-                *dst = c_row.iter().zip(p_row).map(|(&c, &p)| c * p).sum();
+            for (out_basis, c_basis) in out_q
+                .chunks_exact_mut(value_size)
+                .zip(coefficients.chunks_exact(stride))
+            {
+                for (dst, c_comp) in out_basis.iter_mut().zip(c_basis.chunks_exact(n_poly)) {
+                    *dst = c_comp.iter().zip(p_row).map(|(&c, &p)| c * p).sum();
+                }
             }
         }
     }
@@ -260,7 +484,7 @@ pub(crate) fn tabulate_from_coefficients(
         nderivs,
         num_points,
         dim,
-        value_size: 1,
+        value_size,
         values,
     })
 }
@@ -458,6 +682,8 @@ mod tests {
             CellType::Interval,
             1,
             2,
+            1,
+            None,
             &[0.5, 0.5],
             &[1.0, 0.0, 0.0, 1.0],
         )
@@ -482,5 +708,456 @@ mod tests {
         let mut empty = [];
         transpose_block(&[], 0, 3, &mut empty);
         transpose_block(&[], 3, 0, &mut empty);
+    }
+
+    fn assert_span_orthonormal(span: &[f64], dim: usize, stride: usize) {
+        for i in 0..dim {
+            for j in 0..dim {
+                let dot: f64 = span[i * stride..(i + 1) * stride]
+                    .iter()
+                    .zip(&span[j * stride..(j + 1) * stride])
+                    .map(|(&a, &b)| a * b)
+                    .sum();
+                let want = f64::from(u8::from(i == j));
+                assert!((dot - want).abs() < 1e-13, "({i},{j}): {dot}");
+            }
+        }
+    }
+
+    #[test]
+    fn orthonormalise_vector_basis_drops_dependent_and_is_l2_orthonormal() {
+        let tri_rule = gauss_rule(CellType::Triangle, 4);
+        assert_eq!(
+            orthonormalise_vector_basis(CellType::Triangle, 2, 2, &tri_rule, 0, |_, _| {}),
+            (0, Vec::new())
+        );
+
+        // Triangle P_2^2 with monomials plus zero, duplicate, near-collinear (two-pass MGS) and
+        // linear-combination candidates.
+        let nq = tri_rule.weights.len();
+        let mut cands = Vec::new();
+        for c in 0..2 {
+            for i in 0..=2usize {
+                for j in 0..=(2 - i) {
+                    let mut v = vec![0.0; nq * 2];
+                    for q in 0..nq {
+                        let (x, y) = (tri_rule.points[2 * q], tri_rule.points[2 * q + 1]);
+                        v[2 * q + c] = x.powi(i as i32) * y.powi(j as i32);
+                    }
+                    cands.push(v);
+                }
+            }
+        }
+        let lin_comb: Vec<f64> = cands[1]
+            .iter()
+            .zip(&cands[4])
+            .map(|(&a, &b)| 2.5 * a - 1.75 * b)
+            .collect();
+        let near: Vec<f64> = cands[0]
+            .iter()
+            .zip(&cands[1])
+            .map(|(&a, &b)| a + 1e-6 * b)
+            .collect();
+        let mut all = vec![cands[0].clone(), vec![0.0; nq * 2], cands[0].clone(), near];
+        all.extend(cands.into_iter().skip(1));
+        all.push(lin_comb);
+
+        let (dim, span) =
+            orthonormalise_vector_basis(CellType::Triangle, 2, 2, &tri_rule, all.len(), |i, d| {
+                d.copy_from_slice(&all[i]);
+            });
+        let n_poly = polyset::dim(CellType::Triangle, 2);
+        assert_eq!((dim, span.len()), (2 * n_poly, 4 * n_poly * n_poly));
+        assert_span_orthonormal(&span, dim, 2 * n_poly);
+
+        // Cross-check orthonormality and exact candidate reproduction by quadrature of tabulated
+        // basis functions (including the dropped linear combination).
+        let tab =
+            tabulate_from_coefficients(CellType::Triangle, 2, dim, 2, &span, &tri_rule.points, 0)
+                .unwrap();
+        for i in 0..dim {
+            for j in 0..dim {
+                let q_dot: f64 = (0..nq)
+                    .map(|q| {
+                        let (bi, bj) = ((q * dim + i) * 2, (q * dim + j) * 2);
+                        tri_rule.weights[q]
+                            * (tab.values[bi] * tab.values[bj]
+                                + tab.values[bi + 1] * tab.values[bj + 1])
+                    })
+                    .sum();
+                assert!(
+                    (q_dot - f64::from(u8::from(i == j))).abs() < 1e-13,
+                    "({i},{j}): {q_dot}"
+                );
+            }
+        }
+        for (idx, cand) in all.iter().enumerate() {
+            let proj: Vec<f64> = (0..dim)
+                .map(|j| {
+                    (0..nq)
+                        .map(|q| {
+                            let bj = (q * dim + j) * 2;
+                            tri_rule.weights[q]
+                                * (cand[2 * q] * tab.values[bj]
+                                    + cand[2 * q + 1] * tab.values[bj + 1])
+                        })
+                        .sum()
+                })
+                .collect();
+            for q in 0..nq {
+                for c in 0..2 {
+                    let recon: f64 = (0..dim)
+                        .map(|j| proj[j] * tab.values[(q * dim + j) * 2 + c])
+                        .sum();
+                    assert!(
+                        (recon - cand[2 * q + c]).abs() < 1e-12,
+                        "cand {idx} q={q} c={c}: {recon} vs {}",
+                        cand[2 * q + c]
+                    );
+                }
+            }
+        }
+
+        // 3D strict subspace: Tetrahedron N1curl_2 = P_1^3 ⊕ (x × P_1^3), dim = 20 (with x × x = 0).
+        let tet_rule = gauss_rule(CellType::Tetrahedron, 4);
+        let (nq3, n_p1) = (
+            tet_rule.weights.len(),
+            polyset::dim(CellType::Tetrahedron, 1),
+        );
+        let p1 = polyset::tabulate(CellType::Tetrahedron, 1, &tet_rule.points, 0);
+        let eval_tet_cand = |idx: usize, dst: &mut [f64]| {
+            let (m, c) = ((idx / 3) % n_p1, idx % 3);
+            if idx < 3 * n_p1 {
+                for q in 0..nq3 {
+                    dst[3 * q + c] = p1[m * nq3 + q];
+                }
+            } else {
+                let (a, b) = ((c + 1) % 3, (c + 2) % 3);
+                for q in 0..nq3 {
+                    let (x, pm) = (&tet_rule.points[3 * q..3 * (q + 1)], p1[m * nq3 + q]);
+                    (dst[3 * q + a], dst[3 * q + b]) = (x[b] * pm, -x[a] * pm);
+                }
+            }
+        };
+        let (dim3, span3) = orthonormalise_vector_basis(
+            CellType::Tetrahedron,
+            2,
+            3,
+            &tet_rule,
+            6 * n_p1,
+            eval_tet_cand,
+        );
+        assert_eq!(dim3, 20);
+        assert_span_orthonormal(&span3, dim3, 3 * polyset::dim(CellType::Tetrahedron, 2));
+        // Verify span3 reproduces its 3D cross-product candidates by L² projection.
+        let tab3 = tabulate_from_coefficients(
+            CellType::Tetrahedron,
+            2,
+            dim3,
+            3,
+            &span3,
+            &tet_rule.points,
+            0,
+        )
+        .unwrap();
+        let mut sample_cand = vec![0.0; nq3 * 3];
+        for idx in [0, 3 * n_p1, 3 * n_p1 + 4, 6 * n_p1 - 1] {
+            sample_cand.fill(0.0);
+            eval_tet_cand(idx, &mut sample_cand);
+            let proj: Vec<f64> = (0..dim3)
+                .map(|j| {
+                    (0..nq3)
+                        .map(|q| {
+                            let bj = (q * dim3 + j) * 3;
+                            tet_rule.weights[q]
+                                * (0..3)
+                                    .map(|c| sample_cand[3 * q + c] * tab3.values[bj + c])
+                                    .sum::<f64>()
+                        })
+                        .sum()
+                })
+                .collect();
+            for q in 0..nq3 {
+                for c in 0..3 {
+                    let recon: f64 = (0..dim3)
+                        .map(|j| proj[j] * tab3.values[(q * dim3 + j) * 3 + c])
+                        .sum();
+                    assert!(
+                        (recon - sample_cand[3 * q + c]).abs() < 1e-12,
+                        "tet cand {idx} q={q} c={c}: {recon} vs {}",
+                        sample_cand[3 * q + c]
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn generalised_ciarlet_solve_and_tabulate_on_synthetic_vector_spaces() {
+        // 1. P_p^2 on Triangle (p = 1..=3) and P_p^3 on Tetrahedron (p = 1..=2): flat vs
+        //    multi-block FunctionalBlock solve, M*B = I, and vector polynomial reproduction.
+        let tri_test = [0.11, 0.23, 0.57, 0.19, 0.31, 0.43];
+        let tet_test = [0.11, 0.17, 0.23, 0.37, 0.19, 0.21];
+        for (cell, max_p, test_pts) in [
+            (CellType::Triangle, 3u32, &tri_test[..]),
+            (CellType::Tetrahedron, 2u32, &tet_test[..]),
+        ] {
+            let td = tdim(cell);
+            for p in 1..=max_p {
+                let pts = lagrange_points(cell, p, NodeFamily::Gll).unwrap();
+                let m = pts.len() / td;
+                let (dim, span) = (td * m, identity(td * polyset::dim(cell, p)));
+                let mut mat = vec![0.0; dim * m * td];
+                for q in 0..m {
+                    for c in 0..td {
+                        mat[((q * td + c) * m + q) * td + c] = 1.0;
+                    }
+                }
+                let flat =
+                    solve_ciarlet_coefficients(cell, p, dim, td, Some(&span), &pts, &mat).unwrap();
+                let id_td = identity(td);
+                let mut blocks = vec![FunctionalBlock {
+                    points: &[],
+                    weights: &[],
+                    num_dofs: 0,
+                }];
+                blocks.extend((0..m).map(|q| FunctionalBlock {
+                    points: &pts[td * q..td * (q + 1)],
+                    weights: &id_td,
+                    num_dofs: td,
+                }));
+                let blocked =
+                    solve_ciarlet_coefficients_from_blocks(cell, p, dim, td, Some(&span), &blocks)
+                        .unwrap();
+                assert!(
+                    flat.iter()
+                        .zip(&blocked)
+                        .all(|(&a, &b)| (a - b).abs() < 1e-13)
+                );
+
+                let tab = tabulate_from_coefficients(cell, p, dim, td, &flat, &pts, 0).unwrap();
+                for i in 0..dim {
+                    for j in 0..dim {
+                        let s: f64 = (0..m)
+                            .flat_map(|q| (0..td).map(move |c| (q, c)))
+                            .map(|(q, c)| {
+                                mat[(i * m + q) * td + c] * tab.values[(q * dim + j) * td + c]
+                            })
+                            .sum();
+                        assert!((s - f64::from(u8::from(i == j))).abs() < 1e-12);
+                    }
+                }
+                let eval_u = |x: &[f64]| -> Vec<f64> {
+                    (0..td)
+                        .map(|c| {
+                            x[c].powi(p as i32) + (c as f64 + 1.0) * x[(c + 1) % td]
+                                - 0.5 * (c as f64)
+                        })
+                        .collect()
+                };
+                let dofs: Vec<f64> = (0..m)
+                    .flat_map(|q| eval_u(&pts[td * q..td * (q + 1)]))
+                    .collect();
+                let ev = tabulate_from_coefficients(cell, p, dim, td, &flat, test_pts, 0).unwrap();
+                for q in 0..(test_pts.len() / td) {
+                    for (c, &wc) in eval_u(&test_pts[td * q..td * (q + 1)]).iter().enumerate() {
+                        let got: f64 = (0..dim)
+                            .map(|j| dofs[j] * ev.values[(q * dim + j) * td + c])
+                            .sum();
+                        assert!(
+                            (got - wc).abs() < 1e-12,
+                            "{cell:?} p={p} q={q} c={c}: {got} vs {wc}"
+                        );
+                    }
+                }
+            }
+        }
+
+        // 2. P_2^3 on Tetrahedron via L²-moment functionals (coefficients must recover identity).
+        let rule3 = gauss_rule(CellType::Tetrahedron, 4);
+        let (nq3, np3) = (rule3.weights.len(), polyset::dim(CellType::Tetrahedron, 2));
+        let (dim3, span3) = (3 * np3, identity(3 * np3));
+        let poly3 = polyset::tabulate(CellType::Tetrahedron, 2, &rule3.points, 0);
+        let mut mat3 = vec![0.0; dim3 * nq3 * 3];
+        for c in 0..3 {
+            for k in 0..np3 {
+                for q in 0..nq3 {
+                    mat3[((c * np3 + k) * nq3 + q) * 3 + c] = rule3.weights[q] * poly3[k * nq3 + q];
+                }
+            }
+        }
+        let c3 = solve_ciarlet_coefficients(
+            CellType::Tetrahedron,
+            2,
+            dim3,
+            3,
+            Some(&span3),
+            &rule3.points,
+            &mat3,
+        )
+        .unwrap();
+        assert!(c3.iter().zip(&span3).all(|(&g, &w)| (g - w).abs() < 1e-13));
+
+        // 3. Strict subspaces (dim < value_size * n_poly): RT_1 = P_0^d ⊕ x P_0 on Triangle
+        //    (dim = 3 < 6) and Tetrahedron (dim = 4 < 12) via facet-midpoint normal-flux blocks,
+        //    checking both l_i(φ_j) = δ_{ij} and reproduction of a + b·x.
+        let tri_mids: &[&[f64]] = &[&[0.5, 0.5], &[0.0, 0.5], &[0.5, 0.0]];
+        let tri_norms: &[&[f64]] = &[&[1.0, 1.0], &[-1.0, 0.0], &[0.0, -1.0]];
+        let tet_mids: &[&[f64]] = &[
+            &[1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0],
+            &[0.0, 1.0 / 3.0, 1.0 / 3.0],
+            &[1.0 / 3.0, 0.0, 1.0 / 3.0],
+            &[1.0 / 3.0, 1.0 / 3.0, 0.0],
+        ];
+        let tet_norms: &[&[f64]] = &[
+            &[0.5, 0.5, 0.5],
+            &[-0.5, 0.0, 0.0],
+            &[0.0, -0.5, 0.0],
+            &[0.0, 0.0, -0.5],
+        ];
+        for (cell, mids, norms, eval_pts) in [
+            (CellType::Triangle, tri_mids, tri_norms, &tri_test[..]),
+            (CellType::Tetrahedron, tet_mids, tet_norms, &tet_test[..]),
+        ] {
+            let td = tdim(cell);
+            let rt_dim_want = td + 1;
+            let rule = gauss_rule(cell, 2);
+            let nq = rule.weights.len();
+            let (rt_dim, rt_span) =
+                orthonormalise_vector_basis(cell, 1, td, &rule, rt_dim_want, |idx, dst| {
+                    for q in 0..nq {
+                        if idx < td {
+                            dst[td * q + idx] = 1.0;
+                        } else {
+                            for c in 0..td {
+                                dst[td * q + c] = rule.points[td * q + c];
+                            }
+                        }
+                    }
+                });
+            assert_eq!(rt_dim, rt_dim_want);
+            let blocks: Vec<_> = (0..rt_dim)
+                .map(|f| FunctionalBlock {
+                    points: mids[f],
+                    weights: norms[f],
+                    num_dofs: 1,
+                })
+                .collect();
+            let rt_c = solve_ciarlet_coefficients_from_blocks(
+                cell,
+                1,
+                rt_dim,
+                td,
+                Some(&rt_span),
+                &blocks,
+            )
+            .unwrap();
+            let flat_mids: Vec<f64> = mids.iter().flat_map(|m| m.iter().copied()).collect();
+            let rt_tab =
+                tabulate_from_coefficients(cell, 1, rt_dim, td, &rt_c, &flat_mids, 0).unwrap();
+            for (i, n) in norms.iter().enumerate() {
+                for j in 0..rt_dim {
+                    let flux: f64 = (0..td)
+                        .map(|c| n[c] * rt_tab.values[(i * rt_dim + j) * td + c])
+                        .sum();
+                    assert!((flux - f64::from(u8::from(i == j))).abs() < 1e-13);
+                }
+            }
+            // Reproduce u(x) = a + b * x (an arbitrary RT_1 field) at interior points.
+            let a_vec = [1.25, -0.75, 0.5];
+            let b_scale = 2.5;
+            let dofs: Vec<f64> = (0..rt_dim)
+                .map(|f| {
+                    (0..td)
+                        .map(|c| norms[f][c] * (a_vec[c] + b_scale * mids[f][c]))
+                        .sum()
+                })
+                .collect();
+            let ev = tabulate_from_coefficients(cell, 1, rt_dim, td, &rt_c, eval_pts, 0).unwrap();
+            for q in 0..(eval_pts.len() / td) {
+                for c in 0..td {
+                    let want = a_vec[c] + b_scale * eval_pts[td * q + c];
+                    let got: f64 = (0..rt_dim)
+                        .map(|j| dofs[j] * ev.values[(q * rt_dim + j) * td + c])
+                        .sum();
+                    assert!(
+                        (got - want).abs() < 1e-12,
+                        "{cell:?} RT_1 q={q} c={c}: {got} vs {want}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn vector_tabulate_derivatives_match_central_differences_and_errors() {
+        let h = 1e-6;
+        for (cell, pt, p) in [
+            (CellType::Triangle, &[0.27, 0.31][..], 3u32),
+            (CellType::Tetrahedron, &[0.21, 0.23, 0.19][..], 2u32),
+        ] {
+            let (td, n_poly) = (tdim(cell), polyset::dim(cell, p));
+            let (dim, coeffs) = (td * n_poly, identity(td * n_poly));
+            let tab = tabulate_from_coefficients(cell, p, dim, td, &coeffs, pt, 1).unwrap();
+            assert_eq!(
+                (tab.nderivs, tab.num_points, tab.dim, tab.value_size),
+                (1, 1, dim, td)
+            );
+            let block = dim * td;
+            for d in 0..td {
+                let (mut xp, mut xm) = (pt.to_vec(), pt.to_vec());
+                (xp[d], xm[d]) = (xp[d] + h, xm[d] - h);
+                let tp = tabulate_from_coefficients(cell, p, dim, td, &coeffs, &xp, 0).unwrap();
+                let tm = tabulate_from_coefficients(cell, p, dim, td, &coeffs, &xm, 0).unwrap();
+                let deriv = &tab.values[(1 + d) * block..(2 + d) * block];
+                let scale = deriv.iter().fold(1.0_f64, |m, v| m.max(v.abs()));
+                for (idx, &dv) in deriv.iter().enumerate() {
+                    let fd = (tp.values[idx] - tm.values[idx]) / (2.0 * h);
+                    assert!((fd - dv).abs() < 1e-6 * scale * ((p * p) as f64));
+                }
+            }
+            for nd in [0, 1] {
+                let e = tabulate_from_coefficients(cell, p, dim, td, &coeffs, &[], nd).unwrap();
+                assert_eq!(
+                    (e.nderivs, e.num_points, e.dim, e.value_size),
+                    (nd, 0, dim, td)
+                );
+                assert!(e.values.is_empty());
+            }
+            assert_eq!(
+                tabulate_from_coefficients(cell, p, dim, td, &coeffs, &[], 2),
+                Err(ElementError::RefCell(
+                    RefCellError::UnsupportedDerivativeOrder(2)
+                ))
+            );
+            assert_eq!(
+                tabulate_from_coefficients(cell, p, dim, td, &coeffs, &[0.1], 0),
+                Err(ElementError::RefCell(RefCellError::PointsShape {
+                    len: 1,
+                    tdim: td
+                }))
+            );
+        }
+        let span = identity(6);
+        assert_eq!(
+            solve_ciarlet_coefficients(
+                CellType::Triangle,
+                1,
+                6,
+                2,
+                Some(&span),
+                &[0.25, 0.25],
+                &[1.0; 12]
+            )
+            .unwrap_err(),
+            ElementError::RefCell(RefCellError::Singular)
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "below 2 * 2")]
+    fn orthonormalise_vector_basis_rejects_under_integrating_rule() {
+        let rule = gauss_rule(CellType::Triangle, 3);
+        let _ = orthonormalise_vector_basis(CellType::Triangle, 2, 2, &rule, 0, |_, _| {});
     }
 }
