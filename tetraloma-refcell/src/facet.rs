@@ -3,7 +3,7 @@
 
 use tetraloma_dims::CellType;
 
-use crate::{sub_entities, sub_entity_types, tdim, vertices};
+use crate::{RefCellError, sub_entities, sub_entity_types, tdim, vertices};
 
 /// The centroid of the vertices `list` of `cell`.
 fn centroid(cell: CellType, list: &[usize]) -> Vec<f64> {
@@ -155,6 +155,19 @@ pub fn facet_points_to_cell(cell: CellType, facet: usize, points: &[f64]) -> Vec
         }
     }
     out
+}
+
+// Design: section 27 ("Quadrature rules and point sets"), Listing Q1; ADR-0081.
+// Stub for M13.T0a; implemented and documented in M13.T3.
+#[doc(hidden)]
+pub fn sub_entity_points_to_cell(
+    cell: CellType,
+    d: usize,
+    e: usize,
+    points: &[f64],
+) -> Result<Vec<f64>, RefCellError> {
+    let _ = (cell, d, e, points);
+    unimplemented!("pending M13.T3")
 }
 
 #[cfg(test)]

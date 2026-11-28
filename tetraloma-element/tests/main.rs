@@ -2,3 +2,4 @@
 
 mod accept;
 mod fixtures;
+mod quadrature;
