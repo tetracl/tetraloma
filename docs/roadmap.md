@@ -370,7 +370,7 @@ Depends on: M11
 Design: 26
 Acceptance:
 - For N1curl and RT on triangles, quadrilaterals, tetrahedra and hexahedra, p = 1–8, the number of DOFs on each sub-entity equals Symfem's.
-- For the same elements and degrees, the span of the basis functions associated with each sub-entity closure equals ndelement's (Basix's where ndelement lacks the element), by a rank test at 100 random points with tolerance 10^−10.
+- For the same elements and degrees, the span of the basis functions associated with each sub-entity closure equals ndelement's (Basix's where ndelement lacks the element), by a rank test at 100 random points (max(100, ⌈dim / tdim⌉ + 20) for the cell closure when dim ≥ 100 · tdim) with tolerance 10^−10, run in conformance/ (ADR-0080).
 - For the same elements with p ≤ 10, applying the interpolation to the basis gives the identity to 10^−12.
 - For the same elements with p ≤ 10, interpolation reproduces every member of an orthonormal basis of the space to 10^−11.
 - Every base transformation of N1curl and RT on quadrilaterals and hexahedra with p ≤ 10 is classified as a signed permutation.
