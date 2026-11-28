@@ -1,5 +1,9 @@
-//! M1b acceptance: quadrature integrates monomials (rationomials on pyramids) up to its degree
+//! M1b acceptance: `gauss_rule` integrates monomials (rationomials on pyramids) up to its degree
 //! to 1e-13, relative to the exact integral (docs/plans/M1b.md, questions 10 and 11).
+//! M13 acceptance (A1–A4): `quadrature_rule` integrates orthonormal polysets to 1e-14 (A1),
+//! keeps Gauss/Symmetric/Default points strictly interior with positive weights (A2), keeps
+//! Symmetric simplex rules invariant under all vertex permutations to 1e-15 (A3), and gives
+//! strictly fewer points for Default than Gauss on triangles and tetrahedra for degrees 4–30 (A4).
 
 use tetraloma_dims::CellType;
 use tetraloma_refcell::{
@@ -289,7 +293,7 @@ fn check_tensor_product(cell: CellType, degree: u32, kind: QuadratureType, rule:
             w_want *= r1.weights[i];
         }
         assert!(
-            (rule.weights[q] - w_want).abs() <= 1e-15,
+            (rule.weights[q] - w_want).abs() <= 1e-15 * w_want,
             "{kind:?} {cell:?} d={degree} q={q}: w={} vs {w_want}",
             rule.weights[q]
         );
