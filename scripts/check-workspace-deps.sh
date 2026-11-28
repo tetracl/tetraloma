@@ -15,6 +15,7 @@
 # Usage: scripts/check-workspace-deps.sh [--no-cubecl CRATE]... [--no-mesh CRATE]...
 #                                        [--element-only CRATE]... [--foundation-only CRATE]...
 #                                        [CARGO-TREE-ARGS...]
+#        scripts/check-workspace-deps.sh --self-test
 #   --no-cubecl CRATE        add CRATE to the cubecl-free list (repeatable; default:
 #                            tetraloma-element, tetraloma-comm, tetraloma-partition); e.g.
 #                            `--no-cubecl tetraloma-geometry` must fail.
@@ -27,10 +28,13 @@
 #   --foundation-only CRATE  add CRATE to the foundation-only list (repeatable; default:
 #                            tetraloma-foundation-tests); e.g. `--foundation-only tetraloma-testing`
 #                            must fail.
+#   --self-test              run built-in self-tests (direct and transitive dev-dependency-only
+#                            `--no-mesh` negative controls on ephemeral manifests) and exit.
 #   Extra arguments go to the workspace `cargo tree`; e.g. `--features tetraloma-mpi-tests/mpi`
 #   must fail.
 #
-# Exit status: 0 if no forbidden crate is found, 3 if one is, anything else on an error.
+# Exit status: 0 if no forbidden crate is found (or self-tests pass), 3 if one is, anything else
+# on an error.
 set -euo pipefail
 
 script_path="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
@@ -42,6 +46,10 @@ no_mesh_crates=("tetraloma-comm" "tetraloma-device" "tetraloma-parallel" "tetral
 element_only_crates=("tetraloma-element")
 foundation_only_crates=("tetraloma-foundation-tests")
 tree_args=()
+self_test=0
+explicit_opt=0
+self_test_tmp=""
+self_test_active_err=""
 
 has_item() {
     local needle=$1 item
@@ -60,6 +68,7 @@ fmt_list() {
 add_opt() {
     local opt=$1 val=$2
     [[ -n "$val" ]] || { echo "check-workspace-deps: $opt requires a crate name" >&2; exit 2; }
+    explicit_opt=1
     case "$opt" in
         --no-cubecl) has_item "$val" ${no_cubecl_crates[@]+"${no_cubecl_crates[@]}"} || no_cubecl_crates+=("$val") ;;
         --no-mesh) has_item "$val" ${no_mesh_crates[@]+"${no_mesh_crates[@]}"} || no_mesh_crates+=("$val") ;;
@@ -77,6 +86,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-cubecl=* | --no-mesh=* | --element-only=* | --foundation-only=*)
             add_opt "${1%%=*}" "${1#*=}"
+            shift
+            ;;
+        --self-test)
+            self_test=1
             shift
             ;;
         -h | --help)
@@ -99,6 +112,128 @@ report_hits() {
     failed=1
 }
 
+mesh_re='^(tetraloma|tetraloma-(dims|refcell|topology|geometry|io|element|function))$'
+check_no_mesh_crate() {
+    local crate=$1
+    shift
+    local deps
+    deps=$(cargo tree ${1+"$@"} -p "$crate" --all-features --target all -e normal,build,dev --prefix none --format '{p}' |
+        awk -v self="$crate" 'NF && $1 != self { print $1 }' | sort -u)
+    report_hits "$crate depends on mesh crates (rule 9)" "$(grep -E "$mesh_re" <<<"$deps" || true)"
+}
+
+cleanup_self_test() {
+    local rc=$?
+    if [[ "$rc" -ne 0 && -n "$self_test_active_err" && -s "$self_test_active_err" ]]; then
+        cat "$self_test_active_err" >&3
+    fi
+    [[ -z "$self_test_tmp" ]] || rm -rf "$self_test_tmp"
+}
+
+run_self_test() {
+    exec 3>&2
+    trap cleanup_self_test EXIT
+    self_test_tmp=$(mktemp -d "${TMPDIR:-/tmp}/check-workspace-deps-self-test.XXXXXX")
+
+    mkdir -p \
+        "$self_test_tmp/tetraloma-dims/src" \
+        "$self_test_tmp/dev-helper/src" \
+        "$self_test_tmp/dev-direct-probe/src" \
+        "$self_test_tmp/dev-transitive-probe/src" \
+        "$self_test_tmp/clean-probe/src"
+    cat >"$self_test_tmp/Cargo.toml" <<'TOML'
+[workspace]
+resolver = "3"
+members = ["tetraloma-dims", "dev-helper", "dev-direct-probe", "dev-transitive-probe", "clean-probe"]
+TOML
+    cat >"$self_test_tmp/tetraloma-dims/Cargo.toml" <<'TOML'
+[package]
+name = "tetraloma-dims"
+version = "0.1.0"
+edition = "2024"
+TOML
+    cat >"$self_test_tmp/dev-helper/Cargo.toml" <<'TOML'
+[package]
+name = "dev-helper"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tetraloma-dims = { path = "../tetraloma-dims" }
+TOML
+    cat >"$self_test_tmp/dev-direct-probe/Cargo.toml" <<'TOML'
+[package]
+name = "dev-direct-probe"
+version = "0.1.0"
+edition = "2024"
+
+[dev-dependencies]
+tetraloma-dims = { path = "../tetraloma-dims" }
+TOML
+    cat >"$self_test_tmp/dev-transitive-probe/Cargo.toml" <<'TOML'
+[package]
+name = "dev-transitive-probe"
+version = "0.1.0"
+edition = "2024"
+
+[dev-dependencies]
+dev-helper = { path = "../dev-helper" }
+TOML
+    cat >"$self_test_tmp/clean-probe/Cargo.toml" <<'TOML'
+[package]
+name = "clean-probe"
+version = "0.1.0"
+edition = "2024"
+TOML
+    local pkg
+    for pkg in tetraloma-dims dev-helper dev-direct-probe dev-transitive-probe clean-probe; do
+        : >"$self_test_tmp/$pkg/src/lib.rs"
+    done
+
+    local manifest="$self_test_tmp/Cargo.toml" probe normal_deps err_file
+    for probe in dev-direct-probe dev-transitive-probe; do
+        normal_deps=$(cargo tree --manifest-path "$manifest" --offline -p "$probe" \
+            --all-features --target all -e normal,build --prefix none --format '{p}' |
+            awk -v self="$probe" 'NF && $1 != self { print $1 }' | sort -u)
+        if [[ -n "$normal_deps" ]]; then
+            echo "check-workspace-deps: self-test setup error: $probe has normal/build deps: $normal_deps" >&2
+            exit 1
+        fi
+        failed=0
+        err_file="$self_test_tmp/$probe.err"
+        self_test_active_err="$err_file"
+        check_no_mesh_crate "$probe" --manifest-path "$manifest" --offline 2>"$err_file"
+        self_test_active_err=""
+        if [[ "$failed" -ne 1 ]] || ! grep -qx '  tetraloma-dims' "$err_file"; then
+            echo "check-workspace-deps: self-test failed: $probe dev-dependency on tetraloma-dims was not caught" >&2
+            cat "$err_file" >&2
+            exit 1
+        fi
+    done
+
+    failed=0
+    err_file="$self_test_tmp/clean-probe.err"
+    self_test_active_err="$err_file"
+    check_no_mesh_crate clean-probe --manifest-path "$manifest" --offline 2>"$err_file"
+    self_test_active_err=""
+    if [[ "$failed" -ne 0 ]] || grep -q '^check-workspace-deps:' "$err_file"; then
+        echo "check-workspace-deps: self-test failed: clean-probe was rejected" >&2
+        cat "$err_file" >&2
+        exit 1
+    fi
+
+    echo "check-workspace-deps: self-test ok"
+}
+
+if [[ "$self_test" -eq 1 ]]; then
+    if [[ "$explicit_opt" -ne 0 || ${#tree_args[@]} -gt 0 ]]; then
+        echo "check-workspace-deps: --self-test takes no other arguments" >&2
+        exit 2
+    fi
+    run_self_test
+    exit 0
+fi
+
 forbidden='^(ndelement|.*(blas|lapack|mkl|netlib).*|accelerate-src|mpi(-.*)?)$'
 crates=$(cargo tree --workspace --target all -e normal,build,dev --prefix none --format '{p}' ${tree_args[@]+"${tree_args[@]}"} |
     awk 'NF { print $1 }' | sort -u)
@@ -110,11 +245,8 @@ for crate in ${no_cubecl_crates[@]+"${no_cubecl_crates[@]}"}; do
     report_hits "$crate depends on cubecl" "$(grep -E '^cubecl(-.*)?$' <<<"$deps" || true)"
 done
 
-mesh_re='^(tetraloma|tetraloma-(dims|refcell|topology|geometry|io|element|function))$'
 for crate in ${no_mesh_crates[@]+"${no_mesh_crates[@]}"}; do
-    deps=$(cargo tree -p "$crate" --all-features --target all -e normal,build,dev --prefix none --format '{p}' |
-        awk -v self="$crate" 'NF && $1 != self { print $1 }' | sort -u)
-    report_hits "$crate depends on mesh crates (rule 9)" "$(grep -E "$mesh_re" <<<"$deps" || true)"
+    check_no_mesh_crate "$crate"
 done
 
 element_allowed_re='^tetraloma-(dims|refcell)$'

@@ -77,19 +77,26 @@ jobs:
       # Rustdoc without warnings and every public item documented (ADR-0060 item 7); the
       # partitioner and I/O features in ptscotch.yml.
       - run: scripts/check-docs.sh default
-      # Default workspace dependency checks, and guard that tetraloma-element stays on the default
-      # no-CubeCL and rule-8 allowlist checks (M11 A13, G11).
+      # Default workspace dependency checks, and guard that every required crate stays on the
+      # default lists (M11 A13, G11; M18 A1, A2, A6, G2).
       - run: |
           out=$(scripts/check-workspace-deps.sh)
           echo "$out"
-          grep -Eq '^check-workspace-deps: ok \(.*free of cubecl: ([^;]*, )?tetraloma-element(,|;|\))' <<<"$out" || {
-            echo "::error::check-workspace-deps.sh default no-cubecl list must include tetraloma-element" >&2
-            exit 1
+          guard_list() {
+            local label=$1 crate=$2
+            grep -Eq "^check-workspace-deps: ok \(.*; ${label}: ([^;)]*, )?${crate}(,|;|\))" <<<"$out" || {
+              echo "::error::check-workspace-deps.sh default '${label}' list must include ${crate}" >&2
+              exit 1
+            }
           }
-          grep -Eq '^check-workspace-deps: ok \(.*element-only: ([^;]*, )?tetraloma-element(,|;|\))' <<<"$out" || {
-            echo "::error::check-workspace-deps.sh default element-only list must include tetraloma-element" >&2
-            exit 1
-          }
+          for crate in tetraloma-element tetraloma-comm tetraloma-partition; do
+            guard_list "free of cubecl" "$crate"
+          done
+          for crate in tetraloma-comm tetraloma-device tetraloma-parallel tetraloma-partition; do
+            guard_list "free of mesh" "$crate"
+          done
+          guard_list "element-only" tetraloma-element
+          guard_list "foundation-only" tetraloma-foundation-tests
       # Negative check: the script must still find MPI (exit 3) when a feature pulls it in.
       - run: |
           rc=0
@@ -105,6 +112,8 @@ jobs:
           rc=0
           scripts/check-workspace-deps.sh --no-mesh tetraloma-topology || rc=$?
           test "$rc" -eq 3
+      # Self-test: --no-mesh must catch direct and transitive dev-dependency-only mesh edges (M18 G14).
+      - run: scripts/check-workspace-deps.sh --self-test
       # Negative check: the script must find disallowed normal/build dependencies (exit 3) under --element-only (rule 8; M11 G11).
       - run: |
           rc=0
@@ -118,8 +127,17 @@ jobs:
           rc=0
           scripts/check-workspace-deps.sh --foundation-only tetraloma-testing || rc=$?
           test "$rc" -eq 3
-      # Public names of the four foundation crates (M18 A3; ADR-0074).
-      - run: scripts/check-foundation-names.sh
+      # Public names of the four foundation crates, and guard that all four stay in DEFAULT_CRATES
+      # (M18 A3, G2; ADR-0074).
+      - run: |
+          out=$(scripts/check-foundation-names.sh)
+          echo "$out"
+          for crate in tetraloma-comm tetraloma-device tetraloma-parallel tetraloma-partition; do
+            grep -Eq "^check-foundation-names: ok \([1-9][0-9]* items across ([^)]*, )?${crate}, ([^)]*, )?none forbidden\)$" <<<"$out" || {
+              echo "::error::check-foundation-names.sh default crate list must include ${crate}" >&2
+              exit 1
+            }
+          done
       # Negative check: the script must find forbidden names (exit 3) on a mesh crate (M18 A3).
       - run: |
           rc=0
