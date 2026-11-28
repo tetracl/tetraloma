@@ -19,6 +19,17 @@ pub(crate) fn lagrange_max_degree(cell: CellType) -> Option<u32> {
     }
 }
 
+/// Maximum supported degree for `Family::N1curl` and `Family::RaviartThomas` on `cell`, or `None`
+/// for cells that do not offer those families.
+#[cfg_attr(not(test), expect(dead_code))] // wired in M12.T7
+pub(crate) fn hcurl_hdiv_max_degree(cell: CellType) -> Option<u32> {
+    match cell {
+        CellType::Triangle | CellType::Tetrahedron => Some(15),
+        CellType::Quadrilateral | CellType::Hexahedron => Some(20),
+        CellType::Point | CellType::Interval | CellType::Prism | CellType::Pyramid => None,
+    }
+}
+
 /// Checks `key` against the table of supported elements.
 pub(crate) fn validate_key(key: ElementKey) -> Result<(), ElementError> {
     let unsupported = || ElementError::Unsupported {
@@ -84,6 +95,73 @@ pub(crate) fn build_lagrange_layout(key: ElementKey) -> DofLayout {
     DofLayout {
         dim,
         discontinuous_only,
+        entity_dofs,
+        entity_closure_dofs,
+    }
+}
+
+/// Number of interior DOFs on each sub-entity of dimension `d` for a validated `N1curl` or
+/// `RaviartThomas` key.
+#[cfg_attr(not(test), expect(dead_code))] // wired in M12.T7
+fn hcurl_hdiv_entity_dof_count(family: Family, cell: CellType, degree: u32, d: usize) -> usize {
+    let p = degree as usize;
+    match (family, cell, d) {
+        (_, _, 0) => 0,
+        (
+            Family::N1curl,
+            CellType::Triangle
+            | CellType::Quadrilateral
+            | CellType::Tetrahedron
+            | CellType::Hexahedron,
+            1,
+        )
+        | (Family::RaviartThomas, CellType::Triangle | CellType::Quadrilateral, 1) => p,
+        (Family::RaviartThomas, CellType::Tetrahedron | CellType::Hexahedron, 1) => 0,
+        (Family::N1curl | Family::RaviartThomas, CellType::Triangle, 2)
+        | (Family::N1curl, CellType::Tetrahedron, 2) => p * (p - 1),
+        (Family::N1curl | Family::RaviartThomas, CellType::Quadrilateral, 2)
+        | (Family::N1curl, CellType::Hexahedron, 2) => 2 * p * (p - 1),
+        (Family::RaviartThomas, CellType::Tetrahedron, 2) => p * (p + 1) / 2,
+        (Family::RaviartThomas, CellType::Hexahedron, 2) => p * p,
+        (Family::N1curl, CellType::Tetrahedron, 3) => p * (p - 1) * p.saturating_sub(2) / 2,
+        (Family::N1curl, CellType::Hexahedron, 3) => 3 * p * (p - 1) * (p - 1),
+        (Family::RaviartThomas, CellType::Tetrahedron, 3) => p * (p - 1) * (p + 1) / 2,
+        (Family::RaviartThomas, CellType::Hexahedron, 3) => 3 * (p - 1) * p * p,
+        _ => unreachable!("unsupported ({family:?}, {cell:?}, d={d})"),
+    }
+}
+
+/// Builds the DOF layout of a validated `N1curl` or `RaviartThomas` element key.
+///
+/// DOFs are assigned contiguously to sub-entities in ascending `(d, e)` order and partition
+/// `0..dim`.
+#[cfg_attr(not(test), expect(dead_code))] // wired in M12.T7
+pub(crate) fn build_hcurl_hdiv_layout(key: ElementKey) -> DofLayout {
+    assert!(
+        matches!(key.family, Family::N1curl | Family::RaviartThomas)
+            && key.variant == Variant::Legendre
+            && hcurl_hdiv_max_degree(key.cell)
+                .is_some_and(|max_p| key.degree >= 1 && key.degree <= max_p),
+        "build_hcurl_hdiv_layout: unsupported key {key:?}"
+    );
+    let td = tdim(key.cell);
+    let mut next_dof = 0usize;
+    let entity_dofs: Vec<Vec<Vec<usize>>> = (0..=td)
+        .map(|d| {
+            let count = hcurl_hdiv_entity_dof_count(key.family, key.cell, key.degree, d);
+            (0..num_sub_entities(key.cell, d))
+                .map(|_| {
+                    let start = next_dof;
+                    next_dof += count;
+                    (start..next_dof).collect()
+                })
+                .collect()
+        })
+        .collect();
+    let entity_closure_dofs = build_closure_dofs(key.cell, &entity_dofs);
+    DofLayout {
+        dim: next_dof,
+        discontinuous_only: false,
         entity_dofs,
         entity_closure_dofs,
     }
@@ -299,5 +377,101 @@ mod tests {
             Variant::Nodal(eq),
         ));
         assert_eq!(tet2.entity_closure_dofs[1][5], &[2, 3, 9]);
+    }
+
+    #[test]
+    fn hcurl_hdiv_max_degree_and_layouts_cover_all_supported_cells_and_degrees() {
+        assert_eq!(hcurl_hdiv_max_degree(CellType::Triangle), Some(15));
+        assert_eq!(hcurl_hdiv_max_degree(CellType::Tetrahedron), Some(15));
+        assert_eq!(hcurl_hdiv_max_degree(CellType::Quadrilateral), Some(20));
+        assert_eq!(hcurl_hdiv_max_degree(CellType::Hexahedron), Some(20));
+        for cell in [
+            CellType::Point,
+            CellType::Interval,
+            CellType::Prism,
+            CellType::Pyramid,
+        ] {
+            assert_eq!(hcurl_hdiv_max_degree(cell), None, "{cell:?}");
+        }
+
+        let cells = [
+            CellType::Triangle,
+            CellType::Quadrilateral,
+            CellType::Tetrahedron,
+            CellType::Hexahedron,
+        ];
+        for family in [Family::N1curl, Family::RaviartThomas] {
+            for cell in cells {
+                let (td, max_p) = (tdim(cell), hcurl_hdiv_max_degree(cell).unwrap());
+                for degree in 1..=max_p {
+                    let p = degree as usize;
+                    let key = make_key(family, cell, degree, Variant::Legendre);
+                    let layout = build_hcurl_hdiv_layout(key);
+                    assert!(!layout.discontinuous_only, "{key:?}");
+                    let want_dim = match (family, cell) {
+                        (Family::N1curl | Family::RaviartThomas, CellType::Triangle) => p * (p + 2),
+                        (Family::N1curl | Family::RaviartThomas, CellType::Quadrilateral) => {
+                            2 * p * (p + 1)
+                        }
+                        (Family::N1curl, CellType::Tetrahedron) => p * (p + 2) * (p + 3) / 2,
+                        (Family::RaviartThomas, CellType::Tetrahedron) => p * (p + 1) * (p + 3) / 2,
+                        (Family::N1curl, CellType::Hexahedron) => 3 * p * (p + 1) * (p + 1),
+                        (Family::RaviartThomas, CellType::Hexahedron) => 3 * p * p * (p + 1),
+                        _ => unreachable!(),
+                    };
+                    assert_eq!(layout.dim, want_dim, "{key:?}");
+
+                    let flat: Vec<usize> = (0..=td)
+                        .flat_map(|d| layout.entity_dofs[d].iter().flatten().copied())
+                        .collect();
+                    let expected: Vec<usize> = (0..layout.dim).collect();
+                    assert_eq!(flat, expected, "{key:?}");
+                    assert_eq!(layout.entity_closure_dofs[td][0], expected, "{key:?}");
+                    assert!(layout.entity_dofs[0].iter().all(Vec::is_empty));
+                    assert!(layout.entity_closure_dofs[0].iter().all(Vec::is_empty));
+
+                    let want_edge = usize::from(!(family == Family::RaviartThomas && td == 3)) * p;
+                    for (ed, ec) in layout.entity_dofs[1]
+                        .iter()
+                        .zip(&layout.entity_closure_dofs[1])
+                    {
+                        assert_eq!(ed.len(), want_edge, "{key:?}");
+                        assert_eq!(ec, ed, "{key:?}");
+                    }
+                    if td == 3 {
+                        for (f, &fty) in sub_entity_types(cell, 2).iter().enumerate() {
+                            let c = &layout.entity_closure_dofs[2][f];
+                            assert!(c.windows(2).all(|w| w[0] < w[1]), "{key:?} f={f}");
+                            let want_c = match (family, fty) {
+                                (Family::N1curl, CellType::Triangle) => p * (p + 2),
+                                (Family::N1curl, CellType::Quadrilateral) => 2 * p * (p + 1),
+                                (Family::RaviartThomas, CellType::Triangle) => p * (p + 1) / 2,
+                                (Family::RaviartThomas, CellType::Quadrilateral) => p * p,
+                                _ => unreachable!(),
+                            };
+                            assert_eq!(c.len(), want_c, "{key:?} f={f}");
+                            if family == Family::RaviartThomas {
+                                assert_eq!(c, &layout.entity_dofs[2][f], "{key:?} f={f}");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Literal spot checks at low degrees and upper bounds.
+        for (fam, cell, deg, want) in [
+            (Family::N1curl, CellType::Triangle, 1, 3),
+            (Family::N1curl, CellType::Triangle, 15, 255),
+            (Family::N1curl, CellType::Quadrilateral, 20, 840),
+            (Family::N1curl, CellType::Tetrahedron, 1, 6),
+            (Family::N1curl, CellType::Tetrahedron, 15, 2295),
+            (Family::N1curl, CellType::Hexahedron, 20, 26_460),
+            (Family::RaviartThomas, CellType::Tetrahedron, 1, 4),
+            (Family::RaviartThomas, CellType::Tetrahedron, 15, 2160),
+            (Family::RaviartThomas, CellType::Hexahedron, 20, 25_200),
+        ] {
+            let l = build_hcurl_hdiv_layout(make_key(fam, cell, deg, Variant::Legendre));
+            assert_eq!(l.dim, want, "{fam:?} {cell:?} p={deg}");
+        }
     }
 }
