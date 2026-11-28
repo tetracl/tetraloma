@@ -1,4 +1,5 @@
-// Design: section 26 ("Finite elements", "Tensor factors"), Listing E1; ADR-0071, ADR-0072.
+// Design: section 26 ("Finite elements", "Tensor factors"), Listing E1; ADR-0071, ADR-0072,
+// ADR-0080.
 //! Tensor-product factorisation of finite elements on quadrilaterals and hexahedra.
 
 use tetraloma_dims::CellType;
@@ -31,15 +32,15 @@ pub enum Factor1d {
     LegendreL2,
 }
 
-// Design: section 26 ("Finite elements", "Tensor factors"), Listing E1.
+// Design: section 26 ("Finite elements", "Tensor factors"), Listing E1; ADR-0080.
 /// Tensor-product decomposition of a quadrilateral or hexahedron element into one-dimensional
 /// factors.
 ///
 /// Returned by [`Element::tensor_factors`]. For each reference component `c`, `factors[c]` lists
-/// the `(Factor1d, degree)` pair along each coordinate direction `0..tdim`, and
-/// `lexicographic[c]` maps each x-fastest tensor multi-index
-/// `a₀ + n₀ a₁ (+ n₀ n₁ a₂)` (where `n_d` is the basis count of direction `d`) to the element's
-/// local DOF index. See [Tensor factors].
+/// the `(Factor1d, degree)` pair along each coordinate direction `0..tdim`, `lexicographic[c]`
+/// maps each x-fastest tensor multi-index `a₀ + n₀ a₁ (+ n₀ n₁ a₂)` (where `n_d` is the basis
+/// count of direction `d`) to the element's local DOF index, and `negate[c]` records whether the
+/// tensor product for component `c` is negated. See [Tensor factors].
 ///
 /// # Example
 ///
@@ -63,6 +64,7 @@ pub enum Factor1d {
 ///     ]]
 /// );
 /// assert_eq!(tf.lexicographic[0].len(), el.dim());
+/// assert_eq!(tf.negate, vec![false]);
 /// # Ok::<(), tetraloma_element::ElementError>(())
 /// ```
 ///
@@ -74,6 +76,9 @@ pub struct TensorFactors {
     /// Per-component map from x-fastest tensor index to local element DOF:
     /// `[component][tensor_index] -> dof`.
     pub lexicographic: Vec<Vec<usize>>,
+    // Design: section 26 ("Tensor factors"), Listing E1; ADR-0080.
+    /// Per-component sign flip: if `true`, negate the tensor product for that component.
+    pub negate: Vec<bool>,
 }
 
 impl TensorFactors {
@@ -281,6 +286,7 @@ pub(crate) fn build_lagrange_tensor_factors(
     Ok(TensorFactors {
         factors: vec![vec![(factor1d, key.degree); td]],
         lexicographic: vec![lexicographic],
+        negate: vec![false],
     })
 }
 
@@ -520,6 +526,7 @@ mod tests {
                     let el = Element::get(key).unwrap();
                     let tf = el.tensor_factors().expect("tensor cell has tensor factors");
                     assert_eq!((tf.factors.len(), tf.factors[0].len()), (1, td));
+                    assert_eq!(tf.negate, vec![false]);
 
                     let t1d: Vec<Vec<f64>> = (0..td)
                         .map(|d| tf.tabulate_1d(0, d, &per_dir[d], 1))
@@ -699,6 +706,7 @@ mod tests {
             vec![vec![(Factor1d::NodalH1(NodeFamily::Gll), 0); 2]]
         );
         assert_eq!(tf.lexicographic, vec![vec![0]]);
+        assert_eq!(tf.negate, vec![false]);
         assert!(tf.tabulate_1d(0, 0, &[], 0).is_empty() && tf.tabulate_1d(0, 0, &[], 1).is_empty());
         assert_eq!(
             tf.tabulate_1d(0, 0, &[0.1, 0.9], 1),
@@ -739,6 +747,7 @@ mod tests {
         let tf = TensorFactors {
             factors: vec![vec![(Factor1d::MomentH1, 1)]],
             lexicographic: vec![vec![0, 1]],
+            negate: vec![false],
         };
         let _ = tf.tabulate_1d(0, 0, &[0.5], 0);
     }
@@ -749,6 +758,7 @@ mod tests {
         let tf = TensorFactors {
             factors: vec![vec![(Factor1d::NodalH1(NodeFamily::Gll), 21)]],
             lexicographic: vec![Vec::new()],
+            negate: vec![false],
         };
         let _ = tf.tabulate_1d(0, 0, &[0.5], 0);
     }
@@ -759,6 +769,7 @@ mod tests {
         let tf = TensorFactors {
             factors: vec![vec![(Factor1d::LegendreL2, 21)]],
             lexicographic: vec![Vec::new()],
+            negate: vec![false],
         };
         let _ = tf.tabulate_1d(0, 0, &[0.5], 0);
     }
@@ -799,5 +810,124 @@ mod tests {
             interval_factor_key(2, Variant::Legendre),
             lagrange(CellType::Interval, 2, Variant::Legendre)
         );
+    }
+
+    /// Reference dense vector construction for tensor cells (section 26: "used there only by
+    /// tests, for p <= 8").
+    fn dense_vector_tabulate(
+        _key: ElementKey,
+        _points: &[f64],
+        _nderivs: u32,
+    ) -> ElementTabulation {
+        unimplemented!("pending M12.T5: dense vector tensor-cell reference construction")
+    }
+
+    /// Internal builder hook for M12 A11 before `Element::get` enables `N1curl` and
+    /// `RaviartThomas` in T7.
+    fn hcurl_hdiv_factors_for_test(_key: ElementKey) -> (usize, TensorFactors) {
+        unimplemented!("pending M12.T5: vector tensor-factor builder")
+    }
+
+    /// M12 acceptance A11: on quadrilaterals and hexahedra, the product of the tensor factors
+    /// (negated where `negate[c]` is true) reproduces the dense construction's values and first
+    /// derivatives to 1e-12 for p <= 8.
+    #[test]
+    #[ignore = "pending M12.T5"]
+    fn hcurl_hdiv_factors_reproduce_dense_construction() {
+        let coords_1d = [0.0, 0.19, 0.63, 1.0];
+
+        for cell in [CellType::Quadrilateral, CellType::Hexahedron] {
+            let td = tdim(cell);
+            let points = tensor_grid(&coords_1d, td);
+            let npts = points.len() / td;
+            let per_dir: Vec<Vec<f64>> = (0..td)
+                .map(|d| (0..npts).map(|q| points[q * td + d]).collect())
+                .collect();
+
+            for family in [Family::N1curl, Family::RaviartThomas] {
+                let want_negate: &[bool] = match (cell, family) {
+                    (CellType::Quadrilateral, Family::N1curl) => &[false, false],
+                    (CellType::Quadrilateral, Family::RaviartThomas) => &[true, false],
+                    (CellType::Hexahedron, Family::N1curl) => &[false, false, false],
+                    (CellType::Hexahedron, Family::RaviartThomas) => &[false, true, false],
+                    _ => unreachable!(),
+                };
+
+                for degree in 1..=8 {
+                    let key = ElementKey {
+                        family,
+                        cell,
+                        degree,
+                        variant: Variant::Legendre,
+                    };
+                    let (dim, tf) = hcurl_hdiv_factors_for_test(key);
+                    assert_eq!(tf.factors.len(), td, "{key:?}");
+                    assert_eq!(tf.lexicographic.len(), td, "{key:?}");
+                    assert_eq!(tf.negate.as_slice(), want_negate, "{key:?}");
+
+                    let dense = dense_vector_tabulate(key, &points, 1);
+                    assert_eq!(
+                        (dense.nderivs, dense.num_points, dense.dim, dense.value_size),
+                        (1, npts, dim, td)
+                    );
+
+                    let mut seen = vec![false; dim];
+                    let mut got = vec![0.0; (1 + td) * npts * dim * td];
+                    for c in 0..td {
+                        assert_eq!(tf.factors[c].len(), td, "{key:?} comp {c}");
+                        let t1d: Vec<Vec<f64>> = (0..td)
+                            .map(|d| tf.tabulate_1d(c, d, &per_dir[d], 1))
+                            .collect();
+                        let n_dir: Vec<usize> = t1d.iter().map(|t| t.len() / (2 * npts)).collect();
+                        let comp_dim: usize = n_dir.iter().product();
+                        assert_eq!(tf.lexicographic[c].len(), comp_dim, "{key:?} comp {c}");
+                        let sign = if tf.negate[c] { -1.0 } else { 1.0 };
+
+                        for &dof in &tf.lexicographic[c] {
+                            assert!(dof < dim && !seen[dof], "{key:?}: duplicate/bad dof {dof}");
+                            seen[dof] = true;
+                        }
+
+                        for q in 0..npts {
+                            for (lex, &dof) in tf.lexicographic[c].iter().enumerate() {
+                                let mut rem = lex;
+                                let mut a = [0usize; 3];
+                                for d in 0..td {
+                                    a[d] = rem % n_dir[d];
+                                    rem /= n_dir[d];
+                                }
+                                let val_at = |d: usize, deriv: usize| {
+                                    t1d[d][(deriv * npts + q) * n_dir[d] + a[d]]
+                                };
+                                got[(q * dim + dof) * td + c] =
+                                    sign * (0..td).map(|d| val_at(d, 0)).product::<f64>();
+                                for deriv_dir in 0..td {
+                                    let prod: f64 = (0..td)
+                                        .map(|d| val_at(d, usize::from(d == deriv_dir)))
+                                        .product();
+                                    got[(((1 + deriv_dir) * npts + q) * dim + dof) * td + c] =
+                                        sign * prod;
+                                }
+                            }
+                        }
+                    }
+                    assert!(seen.iter().all(|&b| b), "{key:?}: missing DOFs");
+
+                    let block = npts * dim * td;
+                    for d in 0..=td {
+                        let want = &dense.values[d * block..(d + 1) * block];
+                        let actual = &got[d * block..(d + 1) * block];
+                        let scale = want.iter().fold(1.0_f64, |m, v| m.max(v.abs()));
+                        for (idx, (&g, &w)) in actual.iter().zip(want).enumerate() {
+                            let err = (g - w).abs() / scale;
+                            assert!(
+                                err <= TOL,
+                                "{key:?} deriv {d} entry {idx}: {g} vs {w} (rel err {err:e})"
+                            );
+                        }
+                    }
+                }
+            }
+        }
     }
 }

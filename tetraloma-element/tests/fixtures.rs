@@ -1,15 +1,20 @@
-//! M11 acceptance tests against committed oracle fixtures from ndelement and Basix
-//! (docs/design.md, A.10, A.11; docs/plans/M11.md, A1, A2 and A9).
+//! M11 and M12 acceptance tests against committed oracle fixtures from ndelement, Basix and
+//! Symfem (docs/design.md, A.10, A.11; docs/plans/M11.md, A1, A2, A9; docs/plans/M12.md, A1).
 //!
-//! Expected JSON schemas (exported in M11.T1):
+//! Expected JSON schemas:
 //!
-//! - `lagrange_ndelement.json` and `lagrange_basix.json`:
+//! - `lagrange_ndelement.json` and `lagrange_basix.json` (M11.T1):
 //!   `{ "<Cell>": { "points": [f64; 8 * tdim], "<Variant>": { "<p>": [f64; (1 + tdim) * 8 * dim] } } }`
 //!   with tabulation entries in `[derivative][point][basis]` order. Basix files use Basix's DOF
 //!   order, converted here with Appendix A.11.
-//! - `base_transformations_ndelement.json`:
+//! - `base_transformations_ndelement.json` (M11.T1):
 //!   `{ "<Cell>": { "<Variant>": { "<p>": { "<Entity>": { "<Transform>": { "kind": "Identity" } | { "kind": "Permutation", "perm": [u32; n] } } } } } }`
 //!   where `perm` is expanded from ndelement's swap list so that `(M * x)[i] = x[perm[i]]`.
+//! - `hcurl_hdiv_dofs_symfem.json` (M12.T1):
+//!   `{ "<Family>": { "<Cell>": { "<p>": [[usize; num_sub_entities(cell, d)]; tdim + 1] } } }`
+//!   giving Symfem's sub-entity DOF counts in DefElement numbering (identical to tetraloma's,
+//!   Appendix A.11) for `N1curl` and `RaviartThomas` on `Triangle`, `Quadrilateral`,
+//!   `Tetrahedron` and `Hexahedron`, `p = 1..=8`.
 
 use serde_json::{Map, Value};
 use tetraloma_dims::CellType;
@@ -390,6 +395,69 @@ fn lagrange_base_transformations_match_ndelement() {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/// M12 acceptance A1: for N1curl and RT on triangles, quadrilaterals, tetrahedra and hexahedra,
+/// p = 1–8, the number of DOFs on each sub-entity equals Symfem's.
+#[test]
+#[ignore = "pending M12.T7"]
+fn hcurl_hdiv_dofs_match_symfem() {
+    let data = fixture("hcurl_hdiv_dofs_symfem.json");
+    let families = data.as_object().unwrap();
+    assert_eq!(sorted_keys(families), ["N1curl", "RaviartThomas"]);
+
+    for (fname, cells_val) in families {
+        let family = match fname.as_str() {
+            "N1curl" => Family::N1curl,
+            "RaviartThomas" => Family::RaviartThomas,
+            other => panic!("unexpected family {other}"),
+        };
+        let cells = cells_val.as_object().unwrap();
+        assert_eq!(
+            sorted_keys(cells),
+            ["Hexahedron", "Quadrilateral", "Tetrahedron", "Triangle"],
+            "cells of {fname}"
+        );
+
+        for (cname, degrees_val) in cells {
+            let c = cell(cname);
+            let td = tdim(c);
+            let degrees = degrees_val.as_object().unwrap();
+            let ps = sorted_degrees(degrees);
+            assert_eq!(ps, [1, 2, 3, 4, 5, 6, 7, 8], "degrees of {fname} {cname}");
+
+            for p in ps {
+                let key = ElementKey {
+                    family,
+                    cell: c,
+                    degree: p,
+                    variant: Variant::Legendre,
+                };
+                let el = Element::get(key).unwrap();
+                let by_dim = degrees[&p.to_string()].as_array().unwrap();
+                assert_eq!(by_dim.len(), td + 1, "{key:?}: fixture dim count");
+                let mut total = 0usize;
+                for (d, dim_val) in by_dim.iter().enumerate() {
+                    let counts = dim_val.as_array().unwrap();
+                    assert_eq!(
+                        counts.len(),
+                        num_sub_entities(c, d),
+                        "{key:?} dim {d}: entity count"
+                    );
+                    for (e, c_val) in counts.iter().enumerate() {
+                        let want = usize::try_from(c_val.as_u64().unwrap()).unwrap();
+                        assert_eq!(
+                            el.entity_dofs(d, e).len(),
+                            want,
+                            "{key:?} entity ({d}, {e})"
+                        );
+                        total += want;
+                    }
+                }
+                assert_eq!(el.dim(), total, "{key:?}: total dim");
             }
         }
     }
