@@ -2,7 +2,7 @@
 
 use tetraloma_dims::CellType;
 
-use crate::{sub_entities, sub_entity_types, tdim, vertices};
+use crate::{QuadratureRule, RefCellError, sub_entities, sub_entity_types, tdim, vertices};
 
 // Design: Appendix A, A.6 (including its worked example).
 /// The permutation info of a cell: one bit per edge, then three bits per face, with
@@ -149,6 +149,42 @@ pub fn canonical_order(entity: CellType, ids: &[i64]) -> Vec<usize> {
     let (a, b) = (lowest ^ 1, lowest ^ 2);
     let (lower, other) = if ids[a] < ids[b] { (a, b) } else { (b, a) };
     vec![lowest, lower, other, lowest ^ 3]
+}
+
+// Design: section 27 ("Quadrature rules and point sets"), Listing Q1; ADR-0081.
+// Stub for M13.T0a; implemented and documented in M13.T3.
+#[doc(hidden)]
+pub fn rule_permutation(
+    entity: CellType,
+    rule: &QuadratureRule,
+    bits: u32,
+) -> Result<Vec<u32>, RefCellError> {
+    let _ = (entity, rule, bits);
+    unimplemented!("pending M13.T3")
+}
+
+// Design: section 27 ("Quadrature rules and point sets"), Listing Q1; ADR-0081.
+// Stub for M13.T0a; implemented and documented in M13.T3.
+#[doc(hidden)]
+pub fn permute_vertices(
+    cell: CellType,
+    perm: &[usize],
+    points: &[f64],
+) -> Result<Vec<f64>, RefCellError> {
+    let _ = (cell, perm, points);
+    unimplemented!("pending M13.T3")
+}
+
+// Permanent `#[doc(hidden)] pub` helper (docs/plans/M13.md, "Hidden items"; dependency rule 7).
+// Not part of the stable public API. Implemented in M13.T3.
+#[doc(hidden)]
+pub fn reorient_sub_entity_points(
+    entity: CellType,
+    bits: u32,
+    points: &[f64],
+) -> Result<Vec<f64>, RefCellError> {
+    let _ = (entity, bits, points);
+    unimplemented!("pending M13.T3")
 }
 
 #[cfg(test)]

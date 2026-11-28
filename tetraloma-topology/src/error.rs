@@ -242,6 +242,25 @@ pub enum GridError {
     // ADR-0039.
     /// The manifold cannot be oriented consistently, as a Möbius strip.
     NonOrientable,
+    // Design: sections 7 and 27; ADR-0081.
+    /// The requested quadrature rule type is not offered on this cell type.
+    UnsupportedQuadratureType {
+        /// The name of the cell type.
+        cell: &'static str,
+        /// The name of the quadrature rule type.
+        kind: &'static str,
+    },
+    // Design: sections 7 and 27; ADR-0081.
+    /// Tabulation supports derivative orders 0 and 1 only.
+    UnsupportedDerivativeOrder(u32),
+    // Design: sections 7 and 27; ADR-0081.
+    /// Two cell types that must agree differ.
+    CellMismatch {
+        /// The name of the expected cell type.
+        expected: &'static str,
+        /// The name of the cell type given.
+        found: &'static str,
+    },
 }
 
 impl fmt::Display for GridError {
@@ -338,6 +357,15 @@ impl fmt::Display for GridError {
                 f.write_str("outward orientation of an open component needs a reference point")
             }
             GridError::NonOrientable => f.write_str("the manifold is not orientable"),
+            GridError::UnsupportedQuadratureType { cell, kind } => {
+                write!(f, "quadrature type {kind} is not supported on {cell} cells")
+            }
+            GridError::UnsupportedDerivativeOrder(order) => {
+                write!(f, "derivative order {order} is not supported (0 or 1)")
+            }
+            GridError::CellMismatch { expected, found } => {
+                write!(f, "cell mismatch: expected {expected}, found {found}")
+            }
         }
     }
 }
@@ -430,6 +458,34 @@ impl From<ParallelError> for GridError {
 #[cfg(test)]
 mod tests {
     use super::GridError;
+
+    /// The `Display` lines of the M13 variants (ADR-0081).
+    #[test]
+    fn m13_variants_display() {
+        let cases = [
+            (
+                GridError::UnsupportedQuadratureType {
+                    cell: "Pyramid",
+                    kind: "Symmetric",
+                },
+                "quadrature type Symmetric is not supported on Pyramid cells",
+            ),
+            (
+                GridError::UnsupportedDerivativeOrder(2),
+                "derivative order 2 is not supported (0 or 1)",
+            ),
+            (
+                GridError::CellMismatch {
+                    expected: "Triangle",
+                    found: "Quadrilateral",
+                },
+                "cell mismatch: expected Triangle, found Quadrilateral",
+            ),
+        ];
+        for (e, want) in cases {
+            assert_eq!(e.to_string(), want);
+        }
+    }
 
     /// The `Display` lines of the M9 variants (ADR-0039).
     #[test]

@@ -61,6 +61,8 @@ mod tabulation;
 
 pub use cell::{num_sub_entities, sub_entities, sub_entity_types, tdim, vertices};
 pub use error::RefCellError;
+#[doc(hidden)]
+pub use facet::sub_entity_points_to_cell;
 pub use facet::{facet_points_to_cell, reference_facet_normals};
 pub use lagrange::{
     NodeFamily, lagrange_entity_nodes, lagrange_points, num_interior_lagrange_nodes,
@@ -69,7 +71,11 @@ pub use lagrange::{
 pub use lu::DenseLu;
 pub use node_maps::{gmsh_to_internal, vtk_to_internal};
 pub use orientation::{canonical_order, orientation_bits};
+#[doc(hidden)]
+pub use orientation::{permute_vertices, reorient_sub_entity_points, rule_permutation};
 pub use polynomials::polyset;
 pub use quadrature::{QuadratureRule, gauss_rule};
+#[doc(hidden)]
+pub use quadrature::{QuadratureType, quadrature_rule};
 pub use serendipity::{SerendipityUpgrade, serendipity_upgrade};
 pub use tabulation::{LagrangeElement, Tabulation};

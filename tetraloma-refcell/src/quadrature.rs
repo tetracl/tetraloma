@@ -2,7 +2,33 @@
 
 use tetraloma_dims::CellType;
 
+use crate::RefCellError;
 use crate::jacobi::gauss_jacobi;
+
+// Design: section 27 ("Quadrature rules and point sets"), Listing Q1; ADR-0081.
+// Stub for M13.T0a; `#[doc(hidden)]` is removed and user documentation is added in M13.T2.
+#[doc(hidden)]
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum QuadratureType {
+    #[default]
+    Default,
+    Gauss,
+    Symmetric,
+    GaussLobatto,
+}
+
+// Design: section 27 ("Quadrature rules and point sets"), Listing Q1; ADR-0081.
+// Stub for M13.T0a; implemented and documented in M13.T2.
+#[doc(hidden)]
+pub fn quadrature_rule(
+    cell: CellType,
+    degree: u32,
+    kind: QuadratureType,
+) -> Result<QuadratureRule, RefCellError> {
+    let _ = (cell, degree, kind);
+    unimplemented!("pending M13.T2")
+}
 
 /// A quadrature rule on a reference cell, in f64.
 ///
